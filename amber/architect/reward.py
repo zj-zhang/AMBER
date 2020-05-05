@@ -122,7 +122,7 @@ class LossAucReward(Reward):
         return reward, loss_and_metrics, reward_metrics
 
 
-def Mock_Reward(train_history_list, metric, stringify_states, metric_name_dict, Lambda=1.):
+def MockReward(train_history_list, metric, stringify_states, metric_name_dict, Lambda=1.):
     train_history_df = read_history(train_history_list, metric_name_dict=metric_name_dict)
 
     def get_mock_reward(model_states, train_history_df, metric, stringify_states=False):

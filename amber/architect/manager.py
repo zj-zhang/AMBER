@@ -33,7 +33,6 @@ class GeneralManager(BaseNetworkManager):
                  model_fn,
                  reward_fn,
                  store_fn,
-                 model_compile_dict,
                  working_dir='.',
                  save_full_model=False,
                  epochs=5,
@@ -46,7 +45,7 @@ class GeneralManager(BaseNetworkManager):
         self.working_dir = working_dir
         if not os.path.exists(self.working_dir):
             os.makedirs(self.working_dir)
-        self.model_compile_dict = model_compile_dict
+        self.model_compile_dict = model_fn.model_compile_dict
 
         self.save_full_model = save_full_model
         self.epochs = epochs

@@ -14,7 +14,7 @@ from tkinter import messagebox
 
 from .config import *
 from .widgets import create_widget
-from .._wrapper import gui_mapper
+from .._getter import gui_mapper
 
 matplotlib.use("TkAgg")
 
