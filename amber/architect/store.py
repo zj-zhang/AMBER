@@ -1,0 +1,189 @@
+# -*- coding: UTF-8 -*-
+
+import shutil
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from ..plots import plot_hessian, plot_training_history
+
+
+def get_store_fn(arg):
+    if callable(arg) is True:
+        return arg
+    elif arg is None:
+        return None
+    elif arg.lower() == 'store_general' or arg.lower() == 'general':
+        return store_general
+    elif arg.lower() == 'store_regression' or arg.lower() == 'regression':
+        return store_regression
+    elif arg.lower() == 'store_with_hessian' or arg.lower() == 'hessian':
+        return store_with_hessian
+    elif arg.lower() == 'store_with_model_plot' or arg.lower() == 'model_plot':
+        return store_with_model_plot
+    elif arg.lower() == 'store_minimal' or arg.lower() == 'minimal':
+        return store_minimal
+    else:
+        raise Exception('cannot understand store_fn: %s' % arg)
+
+
+def store_with_model_plot(
+        trial,
+        model,
+        hist,
+        data,
+        pred,
+        loss_and_metrics,
+        working_dir='.',
+        save_full_model=False,
+        *args, **kwargs
+):
+    par_dir = os.path.join(working_dir, 'weights', 'trial_%s' % trial)
+    store_general(trial=trial,
+                  model=model,
+                  hist=hist,
+                  data=data,
+                  pred=pred,
+                  loss_and_metrics=loss_and_metrics,
+                  working_dir=working_dir,
+                  save_full_model=save_full_model
+                  )
+    from keras.utils import plot_model
+    plot_model(model, to_file=os.path.join(par_dir, "model_arc.png"))
+
+
+def store_with_hessian(
+        trial,
+        model,
+        hist,
+        data,
+        pred,
+        loss_and_metrics,
+        working_dir='.',
+        save_full_model=False,
+        knowledge_func=None
+):
+    assert knowledge_func is not None, "`store_with_hessian` requires parsing the" \
+                                       "knowledge function used."
+    par_dir = os.path.join(working_dir, 'weights', 'trial_%s' % trial)
+    store_general(trial=trial,
+                  model=model,
+                  hist=hist,
+                  data=data,
+                  pred=pred,
+                  loss_and_metrics=loss_and_metrics,
+                  working_dir=working_dir,
+                  save_full_model=save_full_model
+                  )
+    # plot_training_history(hist, par_dir)
+    from keras.utils import plot_model
+    plot_model(model, to_file=os.path.join(par_dir, "model_arc.png"))
+
+    plot_hessian(knowledge_func, os.path.join(par_dir, "hess.png"))
+    knowledge_func._reset()
+    plt.close('all')
+    return
+
+
+def store_general(
+        trial,
+        model,
+        hist,
+        data,
+        pred,
+        loss_and_metrics,
+        working_dir='.',
+        save_full_model=False,
+        *args, **kwargs
+):
+    par_dir = os.path.join(working_dir, 'weights', 'trial_%s' % trial)
+    if os.path.isdir(par_dir):
+        shutil.rmtree(par_dir)
+    os.mkdir(par_dir)
+    if save_full_model:
+        model.save(os.path.join(working_dir, 'weights', 'trial_%s' % trial, 'full_bestmodel.h5'))
+    plot_training_history(hist, par_dir)
+    if os.path.isfile(os.path.join(working_dir, 'temp_network.h5')):
+        shutil.move(os.path.join(working_dir, 'temp_network.h5'), os.path.join(par_dir, 'bestmodel.h5'))
+    metadata = data[2] if len(data) > 2 else None
+    obs = data[1]
+    write_pred_to_disk(
+        os.path.join(par_dir, 'pred.txt'),
+        pred, obs, metadata,
+        loss_and_metrics
+    )
+
+
+def store_minimal(
+        trial,
+        model,
+        working_dir='.',
+        save_full_model=False,
+        **kwargs
+):
+    par_dir = os.path.join(working_dir, 'weights', 'trial_%s' % trial)
+    if os.path.isdir(par_dir):
+        shutil.rmtree(par_dir)
+    os.mkdir(par_dir)
+    if save_full_model:
+        model.save(os.path.join(working_dir, 'weights', 'trial_%s' % trial, 'full_bestmodel.h5'))
+    if os.path.isfile(os.path.join(working_dir, 'temp_network.h5')):
+        shutil.move(os.path.join(working_dir, 'temp_network.h5'), os.path.join(par_dir, 'bestmodel.h5'))
+
+
+def write_pred_to_disk(fn, y_pred, y_obs, metadata=None, metrics=None):
+    with open(fn, 'w') as f:
+        if metrics is not None:
+            f.write('\n'.join(['# {}: {}'.format(x, metrics[x]) for x in metrics]) + '\n')
+        if type(y_pred) is list:
+            y_pred = np.concatenate(y_pred, axis=1)
+            y_obs = np.concatenate(y_obs, axis=1)
+        if len(np.unique(y_obs)) < 10:  # is categorical
+            str_format = "%i"
+        else:
+            str_format = "%.3f'"
+
+        f.write('pred\tobs\tmetadata\n')
+        for i in range(len(y_pred)):
+            if len(y_pred[i].shape) > 1 or y_pred[i].shape[0] > 1:
+                y_pred_i = ','.join(['%.3f' % x for x in np.array(y_pred[i])])
+                y_obs_i = ','.join([str_format % x for x in np.array(y_obs[i])])
+            else:
+                y_pred_i = '%.3f' % y_pred[i]
+                y_obs_i = str_format % y_obs[i]
+            if metadata:
+                f.write('%s\t%s\t%s\n' % (y_pred_i, y_obs_i, metadata[i]))
+            else:
+                f.write('%s\t%s\t%s\n' % (y_pred_i, y_obs_i, 'NA'))
+
+
+def write_pred_to_disk_regression(fn, y_pred, y_obs, eid_list, metrics=None):
+    with open(fn, 'w') as f:
+        if metrics is not None:
+            f.write('\n'.join(['# {}: {}'.format(x, metrics[x]) for x in metrics]) + '\n')
+        f.write('pred\tobs\teid\n')
+        for i in range(len(y_pred)):
+            # f.write('%f\t%f\t%s\n'%(expit(y_pred[i]), expit(y_obs[i]), eid_list[i]))
+            f.write('%f\t%f\t%s\n' % (y_pred[i], y_obs[i], eid_list[i]))
+
+        os.system('Rscript plotPredScatter.R %s %s' % (fn, fn.rstrip('txt') + 'pdf'))
+
+
+def store_regression(trial, model, train_hist, val_data, val_pred, val_metrics):
+    pearson = val_metrics[-3]
+    lins_con = val_metrics[-2]
+    r2 = val_metrics[-1]
+    _, y_val, eid_val, x_test, y_test, eid_test = val_data
+    metrics = {'r2': r2, 'pearson': pearson, 'lins_con': lins_con}
+    par_dir = os.path.join('weights', 'trial_%i' % trial)
+    if os.path.isdir(par_dir):
+        shutil.rmtree(par_dir)
+    os.mkdir(par_dir)
+    write_pred_to_disk_regression(os.path.join(par_dir, 'val.txt'), val_pred, y_val, eid_val, metrics)
+    shutil.move('temp_network.h5', os.path.join(par_dir, 'bestmodel.h5'))
+    plot_training_history(train_hist, par_dir)
+
+    test_metrics_list = model.evaluate(x_test, y_test)
+    y_test_pred = model.predict(x_test).flatten()
+    test_metrics = {'r2': test_metrics_list[-1], 'pearson': test_metrics_list[-3],
+                    'lines_con': test_metrics_list[-2]}
+    write_pred_to_disk_regression(os.path.join(par_dir, 'test.txt'), y_test_pred, y_test, eid_test, test_metrics)
