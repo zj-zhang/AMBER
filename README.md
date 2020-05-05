@@ -1,2 +1,5 @@
-# DeepAmbre
-Deep Automated Modelling for Biological Research
+# AMBER
+
+Automated Modelling for Biological Evidence-based Research
+
+May, 2020
