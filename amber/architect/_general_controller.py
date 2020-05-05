@@ -93,7 +93,7 @@ class GeneralController(BaseController):
                  use_ppo_loss=False, kl_threshold=0.05, skip_connection_unique_connection=False, buffer_size=15,
                  batch_size=5, session=None, train_pi_iter=20, lstm_size=32, lstm_num_layers=2, lstm_keep_prob=1.0,
                  tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=0.5,
-                 name="controller", **kwargs):
+                 rescale_advantage_by_reward=False, name="controller", **kwargs):
         super().__init__(**kwargs)
 
         self.model_space = model_space
@@ -112,7 +112,7 @@ class GeneralController(BaseController):
                                 ewa_beta=max(1 - 1. / buffer_size, 0.9),
                                 discount_factor=0.,
                                 is_squeeze_dim=True,
-                                rescale_advantage_by_reward=(not use_ppo_loss))
+                                rescale_advantage_by_reward=rescale_advantage_by_reward)
         self.batch_size = batch_size
 
         # need to use the same session throughout one App; ZZ 2020.3.2

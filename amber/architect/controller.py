@@ -21,7 +21,6 @@ from ._operation_controller import OperationController
 
 
 __all__ = [
-    'BaseController',
     'GeneralController',
     'MultiInputController',
     'MultiIOController',

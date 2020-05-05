@@ -10,6 +10,7 @@ from amber import Amber
 from amber.architect import ModelSpace, Operation
 from deepsea_keras.read_data import read_train_data, read_val_data
 
+
 def get_model_space(out_filters=64, num_layers=9):
     model_space = ModelSpace()
     num_pool = 4
@@ -28,6 +29,7 @@ def get_model_space(out_filters=64, num_layers=9):
         if i in expand_layers:
             out_filters *= 2
     return model_space
+
 
 # First, define the components we need to use
 type_dict = {
@@ -65,6 +67,7 @@ specs = {
             'kl_threshold': 0.01,
             'train_pi_iter': 10,
             'optim_algo': 'adam',
+            'rescale_rewar'
             'temperature': 2.,
             'lr_init': 0.001,
             'tanh_constant': 1.5,
@@ -92,10 +95,8 @@ specs = {
 
     'manager': {
         'data': {
-            #'train_data': '/mnt/ceph/users/zzhang/DeepSEA/data/deepsea_train/train.mat',
-            'train_data': read_train_data(),
-            #'validation_data': './mnt/ceph/users/zzhang/DeepSEA/data/deepsea_train/valid.mat'
-            'validation_data': read_val_data()
+            'train_data': read_train_data('/mnt/ceph/users/zzhang/DeepSEA/data/deepsea_train/train.mat'),
+            'validation_data': read_val_data('./mnt/ceph/users/zzhang/DeepSEA/data/deepsea_train/valid.mat')
         },
         'params': {
             'epochs': 1,
