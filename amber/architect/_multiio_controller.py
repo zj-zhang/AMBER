@@ -97,8 +97,6 @@ class MultiInputController(GeneralController):
     # overwrite
     def _build_sampler(self):
         """Build the sampler ops and the log_prob ops."""
-        # print("-" * 80)
-        # print("Build controller sampler")
         anchors = []
         anchors_w_1 = []
 
@@ -283,8 +281,6 @@ class MultiInputController(GeneralController):
 
     # overwrite
     def _build_trainer(self):
-        # print("-" * 80)
-        # print("Build controller trainer")
         anchors = []
         anchors_w_1 = []
         probs_ = []
@@ -527,8 +523,6 @@ class MultiIOController(MultiInputController):
                  with_output_blocks=True,
                  output_block_unique_connection=True,
                  **kwargs):
-        print("-" * 80)
-        print("Building MultiIO Controller")
 
         # Attributes unique to the derived class:
         self.with_skip_connection = True

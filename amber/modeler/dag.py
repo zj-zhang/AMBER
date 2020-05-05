@@ -1066,6 +1066,7 @@ class EnasConv1dDAG:
         self.vars = []
         if controller is None:
             self.controller = None
+            print("this EnasDAG instance did not connect a controller; pleaes make sure you are only training a fixed architecture.")
         else:
             self.controller = controller
             self._build_sample_arc()

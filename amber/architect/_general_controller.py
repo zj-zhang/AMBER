@@ -95,8 +95,6 @@ class GeneralController(BaseController):
                  tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=0.5,
                  name="controller", **kwargs):
         super().__init__(**kwargs)
-        print("-" * 80)
-        print("Building General Controller")
 
         self.model_space = model_space
         # -----
@@ -216,8 +214,6 @@ class GeneralController(BaseController):
 
     def _build_sampler(self):
         """Build the sampler ops and the log_prob ops."""
-        # print("-" * 80)
-        # print("Build controller sampler")
         anchors = []
         anchors_w_1 = []
 
@@ -347,8 +343,6 @@ class GeneralController(BaseController):
         self.sample_probs = probs_
 
     def _build_trainer(self):
-        # print("-" * 80)
-        # print("Build controller trainer")
         anchors = []
         anchors_w_1 = []
         probs_ = []

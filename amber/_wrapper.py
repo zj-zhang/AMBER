@@ -53,15 +53,18 @@ class Amber:
 
     def from_dict(self, d):
         assert type(d) is dict
+        print("BUILDING")
+        print("-"*10)
         self.model_space = _getter.get_model_space(d['model_space'])
         self.controller = _getter.get_controller(controller_type=self.type_dict['controller_type'],
                                                  model_space=self.model_space,
                                                  session=self.session,
                                                  **d['controller'])
 
-        self.model_fn = _getter.get_modeler(model_fn_type=self.type_dict['model_fn_type'],
+        self.model_fn = _getter.get_modeler(model_fn_type=self.type_dict['modeler_type'],
                                             model_space=self.model_space,
                                             session=self.session,
+                                            controller=self.controller,
                                             **d['model_builder'])
 
         self.knowledge_fn = _getter.get_knowledge_fn(knowledge_fn_type=self.type_dict['knowledge_fn_type'],

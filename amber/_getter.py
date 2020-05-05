@@ -24,6 +24,8 @@ class DataToParse:
             self.method = 'numpy'
         elif ext in ('.h5', '.hdf5'):
             self.method = 'hdf5'
+        else:
+            raise Exception("Unknown data format: %s"% self.path)
 
     def __str__(self):
         s = "DataToParse-%s" % self.path
@@ -32,6 +34,7 @@ class DataToParse:
     def unpack(self):
         assert os.path.isfile(self.path), "File does not exist: %s" % self.path
         assert self.method is not None, "Cannot determine parse method for file: %s" % self.path
+        print("unpacking data.. %s" % self.path)
         if self.method == 'pickle':
             import pickle
             return pickle.load(open(self.path, 'rb'))
@@ -47,6 +50,9 @@ def load_data_dict(d):
     for k, v in d.items():
         if type(v) is DataToParse:
             d[k] = v.unpack()
+        elif type(v) is str:
+            assert os.path.isfile(v), "cannot find file: %s" % v
+            d[k] = DataToParse(v).unpack()
     return d
 
 
@@ -62,25 +68,27 @@ def get_train_env(env_type, controller, manager, *args, **kwargs):
                            *args, **kwargs)
     else:
         raise Exception("cannot understand manager type: %s" % env_type)
+    print("env_type = %s" % env_type)
     return env
 
 
 # controller; needs model_space
 def get_controller(controller_type, model_space, session, *args, **kwargs):
     if controller_type == 'General' or controller_type == 'GeneralController':
-        from architect import GeneralController
+        from .architect import GeneralController
         controller = GeneralController(model_space, session=session, *args, **kwargs)
     elif controller_type == 'Operation' or controller_type == 'OperationController':
-        from architect import OperationController
+        from .architect import OperationController
         controller = OperationController(model_space, *args, **kwargs)
     else:
         raise Exception('cannot understand controller type: %s' % controller_type)
+    print("controller = %s" % controller_type)
     return controller
 
 
 # model_space
 def get_model_space(arg):
-    from architect.model_space import ModelSpace
+    from .architect.model_space import ModelSpace
     if type(arg) is str:
         if arg == 'Default ANN':
             from .bootstrap.dense_skipcon_space import get_model_space as ms_ann
@@ -103,7 +111,7 @@ def get_model_space(arg):
 def get_manager(manager_type, model_fn, reward_fn, data_dict, session, *args, **kwargs):
     data_dict = load_data_dict(data_dict)
     if manager_type == 'General' or manager_type == 'GeneralManager':
-        from architect.manager import GeneralManager
+        from .architect.manager import GeneralManager
         manager = GeneralManager(model_fn=model_fn,
                                  reward_fn=reward_fn,
                                  train_data=data_dict['train_data'],
@@ -112,12 +120,12 @@ def get_manager(manager_type, model_fn, reward_fn, data_dict, session, *args, **
                                  **kwargs
                                  )
     elif manager_type == 'EnasManager' or manager_type == 'Enas':
-        from architect.manager import EnasManager
+        from .architect.manager import EnasManager
         manager = EnasManager(
             model_fn=model_fn,
             reward_fn=reward_fn,
-            train_data=DataToParse(data_dict['train_data']).unpack() if type(data_dict['train_data']) is str and os.path.isfile(data_dict['train_data']) else data_dict['train_data'],
-            validation_data=DataToParse(data_dict['validation_data']).unpack() if type(data_dict['validation_data']) is str and os.path.isfile(data_dict['validation_data']) else data_dict['validation_data'],
+            train_data=data_dict['train_data'],
+            validation_data=data_dict['validation_data'],
             session=session,
             *args,
             **kwargs
@@ -132,6 +140,7 @@ def get_manager(manager_type, model_fn, reward_fn, data_dict, session, *args, **
         )
     else:
         raise Exception("cannot understand manager type: %s" % manager_type)
+    print("manager = %s" % manager_type)
     return manager
 
 
@@ -140,9 +149,11 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
     if model_fn_type == 'DAG' or model_fn_type == 'DAGModelBuilder':
         from .architect.model_space import State
         from modeler import DAGModelBuilder
-        assert 'input_states' in kwargs and 'output_state' in kwargs
-        inputs_op = [State(**x) for x in kwargs['input_states']]
-        output_op = State(**kwargs['output_state'])
+        assert 'inputs_op' in kwargs and 'outputs_op' in kwargs
+        inp_op_list = kwargs.pop("inputs_op")
+        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        out_op_list = kwargs.pop("outputs_op")
+        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
         model_fn = DAGModelBuilder(
             model_space=model_space,
             num_layers=len(model_space),
@@ -153,8 +164,10 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
     elif model_fn_type == 'Enas' or model_fn_type == 'EnasAnnModelBuilder':
         from .architect.model_space import State
         from modeler import EnasAnnModelBuilder
-        inputs_op = [State(**x) for x in kwargs['input_states']]
-        output_op = State(**kwargs['output_state'])
+        inp_op_list = kwargs.pop("inputs_op")
+        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        out_op_list = kwargs.pop("outputs_op")
+        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
         model_fn = EnasAnnModelBuilder(
             model_space=model_space,
             num_layers=len(model_space),
@@ -164,18 +177,23 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
             *args, **kwargs)
     elif model_fn_type == 'EnasCnnModelBuilder':
         from .architect.model_space import State
-        from modeler import EnasCnnModelBuilder
-        inputs_op = [State(**x) for x in kwargs['input_states']]
-        output_op = State(**kwargs['output_state'])
+        from .modeler import EnasCnnModelBuilder
+        inp_op_list = kwargs.pop("inputs_op")
+        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        out_op_list = kwargs.pop("outputs_op")
+        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
+        controller = kwargs.pop('controller')
         model_fn = EnasCnnModelBuilder(
             model_space=model_space,
             num_layers=len(model_space),
             inputs_op=inputs_op,
             output_op=output_op,
             session=session,
+            controller=controller,
             *args, **kwargs)
     else:
         raise Exception('cannot understand model_builder type: %s' % model_fn_type)
+    print("modeler = %s" % model_fn_type)
     return model_fn
 
 
@@ -198,12 +216,14 @@ def get_reward_fn(reward_fn_type, knowledge_fn, *args, **kwargs):
         reward_fn = LossAucReward(*args, **kwargs)
     else:
         raise Exception("cannot understand reward_fn type: %s" % reward_fn_type)
+    print("reward = %s" % reward_fn_type)
     return reward_fn
 
 
 # knowledge_fn
 def get_knowledge_fn(knowledge_fn_type, knowledge_data_dict, *args, **kwargs):
-    knowledge_data_dict = load_data_dict(knowledge_data_dict)
+    if knowledge_data_dict is not None:
+        knowledge_data_dict = load_data_dict(knowledge_data_dict)
     if knowledge_fn_type == 'ght' or knowledge_fn_type == 'GraphHierarchyTree':
         from .objective import GraphHierarchyTree
         k_fn = GraphHierarchyTree(*args, **kwargs)
@@ -219,6 +239,7 @@ def get_knowledge_fn(knowledge_fn_type, knowledge_data_dict, *args, **kwargs):
         raise Exception("cannot understand knowledge_fn type: %s" % knowledge_fn_type)
     if k_fn is not None:
         k_fn.knowledge_encoder(**knowledge_data_dict)
+    print("knowledge = %s" % knowledge_fn_type)
     return k_fn
 
 

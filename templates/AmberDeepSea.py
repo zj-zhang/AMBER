@@ -8,10 +8,12 @@ ZZ, May 5, 2020
 
 from amber import Amber
 from amber.architect import ModelSpace, Operation
+from deepsea_keras.read_data import read_train_data, read_val_data
 
 def get_model_space(out_filters=64, num_layers=9):
     model_space = ModelSpace()
     num_pool = 4
+    expand_layers = [num_layers//4-1, num_layers//4*2-1, num_layers//4*3-1]
     for i in range(num_layers):
         model_space.add_layer(i, [
             Operation('conv1d', filters=out_filters, kernel_size=8, activation='relu'),
@@ -29,7 +31,7 @@ def get_model_space(out_filters=64, num_layers=9):
 
 # First, define the components we need to use
 type_dict = {
-    'architect_type': 'GeneralController',
+    'controller_type': 'GeneralController',
     'modeler_type': 'EnasCnnModelBuilder',
     'knowledge_fn_type': 'zero',
     'reward_fn_type': 'LossAucReward',
@@ -39,20 +41,42 @@ type_dict = {
 
 
 # Next, define the specifics
-input_node = Operation('input', shape=(1000, 4), name="input", dtype=tf.float32)
+wd = "./outputs/AmberDeepSea/"
+input_node = Operation('input', shape=(1000, 4), name="input")
 output_node = Operation('dense', units=919, activation='sigmoid')
 model_compile_dict = {
     'loss': 'binary_crossentropy',
     'optimizer': 'adam',
 }
+model_space = get_model_space(out_filters=32, num_layers=12)
+
 specs = {
-    'model_space': get_model_space(out_filters=32, num_layers=12, num_pool=4),
+    'model_space': model_space,
+    
+    'controller': {
+            'share_embedding': {i:0 for i in range(1, len(model_space))},
+            'with_skip_connection': True,
+            'num_input_blocks': 1,
+            'skip_connection_unique_connection': False,
+            'skip_weight': 1.0,
+            'skip_target': 0.4,
+            'lstm_size': 64,
+            'lstm_num_layers': 1,
+            'kl_threshold': 0.01,
+            'train_pi_iter': 10,
+            'optim_algo': 'adam',
+            'temperature': 2.,
+            'lr_init': 0.001,
+            'tanh_constant': 1.5,
+            'buffer_size': 1,  
+            'batch_size': 20
+    },
 
     'model_builder': {
         'dag_func': 'EnasConv1dDAG',
         'batch_size': 1000,
         'inputs_op': [input_node],
-        'output_op': [output_node],
+        'outputs_op': [output_node],
         'model_compile_dict': model_compile_dict,
          'dag_kwargs': {
             'stem_config': {
@@ -62,14 +86,16 @@ specs = {
         }
     },
 
-    'knowedge_fn': {'data': None, 'params': None},
+    'knowledge_fn': {'data': None, 'params': {}},
 
     'reward_fn': {'method': 'auc'},
 
     'manager': {
         'data': {
-            'train_data': 'data/train_mat.h5',
-            'val_data': 'data/val_mat.h5'
+            #'train_data': '/mnt/ceph/users/zzhang/DeepSEA/data/deepsea_train/train.mat',
+            'train_data': read_train_data(),
+            #'validation_data': './mnt/ceph/users/zzhang/DeepSEA/data/deepsea_train/valid.mat'
+            'validation_data': read_val_data()
         },
         'params': {
             'epochs': 1,
@@ -91,3 +117,8 @@ specs = {
         'child_warm_up_epochs': 1
     }
 }
+
+
+# finally, run program
+amb = Amber(types=type_dict, specs=specs)
+amb.run()
