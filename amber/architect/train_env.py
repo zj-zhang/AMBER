@@ -2,7 +2,6 @@
 
 import csv
 import datetime
-import logging
 import shutil
 import warnings
 
@@ -13,27 +12,7 @@ from ._operation_controller import *
 from ..utils.io import save_action_weights, save_stats
 from ..plots import plot_stats2, plot_environment_entropy, plot_controller_performance, \
     plot_action_weights, plot_wiring_weights
-
-
-def setup_logger(working_dir='.', verbose_level=logging.INFO):
-    # setup logger
-    logger = logging.getLogger('AMBER')
-    logger.setLevel(verbose_level)
-    # create file handler which logs even debug messages
-    fh = logging.FileHandler(os.path.join(working_dir, 'log.AMBER.txt'))
-    fh.setLevel(verbose_level)
-    # create console handler with a higher log level
-    ch = logging.StreamHandler()
-    ch.setLevel(verbose_level)
-    # create formatter and add it to the handlers
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s -\n %(message)s')
-    fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
-    # add the handlers to the logger
-    logger.addHandler(fh)
-    logger.addHandler(ch)
-    return logger
-
+from ..utils.logging import setup_logger
 
 def get_controller_states(model):
     return [K.get_value(s) for s, _ in model.state_updates]
@@ -80,7 +59,7 @@ class ControllerTrainEnvironment:
                  initial_buffering_queue=15,
                  working_dir='.', entropy_converge_epsilon=0.01,
                  squeezed_action=True,
-                 with_input_blocks=True,
+                 with_input_blocks=False,
                  with_skip_connection=True,
                  save_controller=False,
                  continuous_run=False,
@@ -464,3 +443,21 @@ class EnasTrainEnv(ControllerTrainEnvironment):
         for p in ep_p:
             act_idx.append(np.argmax(p))
         return act_idx
+
+
+class MultiManagerEnasEnvironment(EnasTrainEnv):
+    """
+    MultiManagerEnvironment is an environment that allows one controller to interact with multiple EnasManagers
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(MultiManagerEnasEnvironment, self).__init__(*args, **kwargs)
+        assert type(self.manager) is list, \
+            "MultiManagerEnasEnvironment must have a List of manager instances, got %s" % type(self.manager)
+
+        self.manager_cnt = len(self.manager)
+        for i in range(self.manager_cnt):
+            assert isinstance(self.manager[i], EnasTrainEnv), \
+                "MultiManagerEnasEnvironment expects a List of EnasManager instances, " \
+                "got %s for %i-th element" % (type(self.manager[i]), i)
+

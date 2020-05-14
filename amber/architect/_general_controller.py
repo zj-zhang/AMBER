@@ -92,7 +92,7 @@ class GeneralController(BaseController):
     def __init__(self, model_space, buffer_type='ordinal', with_skip_connection=True, share_embedding=None,
                  use_ppo_loss=False, kl_threshold=0.05, skip_connection_unique_connection=False, buffer_size=15,
                  batch_size=5, session=None, train_pi_iter=20, lstm_size=32, lstm_num_layers=2, lstm_keep_prob=1.0,
-                 tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=0.5,
+                 tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=None,
                  rescale_advantage_by_reward=False, name="controller", **kwargs):
         super().__init__(**kwargs)
 
@@ -130,6 +130,8 @@ class GeneralController(BaseController):
 
         self.skip_target = skip_target
         self.skip_weight = skip_weight
+        if self.skip_weight is not None:
+            assert self.with_skip_connection, "If skip_weight is not None, must have with_skip_connection=True"
 
         self.optim_algo = optim_algo
         self.name = name
@@ -529,7 +531,7 @@ class GeneralController(BaseController):
             optim_algo=self.optim_algo
         )
 
-    def get_action(self, **kwargs):
+    def get_action(self, *args, **kwargs):
         probs, onehots = self.session.run([self.sample_probs, self.sample_arc])
         return onehots, probs
 
@@ -557,7 +559,6 @@ class GeneralController(BaseController):
 
                 self.session.run(self.train_op, feed_dict=feed_dict)
                 curr_loss, curr_kl, curr_ent = self.session.run([self.loss, self.kl_div, self.ent], feed_dict=feed_dict)
-
                 aloss += curr_loss
                 kl_sum += curr_kl
                 ent_sum += curr_ent

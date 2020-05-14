@@ -11,6 +11,12 @@ from keras.models import Model
 
 from .store import get_store_fn
 
+__all__ = [
+    'BaseNetworkManager',
+    'NetworkManager',
+    'GeneralManager'
+]
+
 
 class BaseNetworkManager:
     def __init__(self, *args, **kwargs):
