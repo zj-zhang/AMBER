@@ -368,7 +368,11 @@ class GeneralController(BaseController):
                   range(self.lstm_num_layers)]
         prev_h = [tf.zeros([batch_size, self.lstm_size], tf.float32) for _ in
                   range(self.lstm_num_layers)]
-        inputs = tf.matmul(tf.ones((batch_size, 1)), self.g_emb)
+        # only expand `g_emb` if necessary
+        if self.g_emb.shape[0].value == 1:
+            inputs = tf.matmul(tf.ones((batch_size, 1)), self.g_emb)
+        else:
+            inputs = self.g_emb
         skip_targets = tf.constant([1.0 - self.skip_target, self.skip_target],
                                    dtype=tf.float32)
 
@@ -578,8 +582,8 @@ class GeneralController(BaseController):
 
         return aloss / g_t
 
-    def store(self, state, prob, action, reward):
-        self.buffer.store(state, prob, action, reward)
+    def store(self, state, prob, action, reward, *args, **kwargs):
+        self.buffer.store(state=state, prob=prob, action=action, reward=reward)
         return
 
     def remove_files(self, files, working_dir='.'):

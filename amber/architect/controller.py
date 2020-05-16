@@ -18,11 +18,13 @@ History
 from ._general_controller import BaseController, GeneralController
 from ._multiio_controller import MultiInputController, MultiIOController
 from ._operation_controller import OperationController
+from ._zero_shot_controller import ZeroShotController
 
 
 __all__ = [
     'GeneralController',
     'MultiInputController',
     'MultiIOController',
-    'OperationController'
+    'OperationController',
+    'ZeroShotController'
 ]
