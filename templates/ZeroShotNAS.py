@@ -110,8 +110,9 @@ def main():
     feed_dict.update({controller.reward: nr_batch})
     feed_dict.update({controller.data_descriptive_feature: desc_batch})
 
-    controller.session.run(controller.train_op, feed_dict=feed_dict)
-    curr_loss, curr_kl, curr_ent = controller.session.run([controller.loss, controller.kl_div, controller.ent], feed_dict=feed_dict)
+    for i in range(100):
+        _ = controller.session.run(controller.train_op, feed_dict=feed_dict)
+        curr_loss, curr_kl, curr_ent = controller.session.run([controller.loss, controller.kl_div, controller.ent], feed_dict=feed_dict)
 
 
 if __name__ == "__main__":

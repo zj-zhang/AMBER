@@ -506,7 +506,7 @@ class MultiManagerEnasEnvironment(EnasTrainEnv):
                         ep_probs.append(probs)
                         # LOGGER.debug the action probabilities
                         action_list = parse_action_str_squeezed(arc_seq, self.controller.state_space)
-                        self.logger.debug("Predicted actions : {}".format([str(x) for x in action_list]))
+                        self.logger.debug("Manager {}, Predicted actions : {}".format(j, [str(x) for x in action_list]))
 
                         # build a model, train and get reward and accuracy from the network manager
                         reward, loss_and_metrics = self.manager.get_rewards(
