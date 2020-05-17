@@ -170,12 +170,16 @@ def simdata_reader(fn, targets):
         a tuple of (X, y) in np.array format
     """
     assert len(targets) == len(set(targets)), Exception('List `targets` must be unique, found duplication')
-    f = gzip.GzipFile(fn, 'rb') if fn.endswith('gz') else open(fn, 'r')
+    GZIPPED = True if fn.endswith("gz") else False
+    f = gzip.GzipFile(fn, 'rb') if GZIPPED else open(fn, 'r')
     f.readline()  # skip the header
     tmp_X = []
     tmp_y = []
     for line in f:
-        line = line.decode('UTF-8').strip()
+        if GZIPPED:
+            line = line.decode('UTF-8').strip()
+        else:
+            line = line.strip()
         ele = line.split('\t')
         seqName, seq = ele[0], ele[1]
         embeddings = ele[2] if len(ele) > 2 else ''

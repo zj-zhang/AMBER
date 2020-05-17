@@ -13,6 +13,8 @@ from ..utils.io import save_action_weights, save_stats
 from ..plots import plot_stats2, plot_environment_entropy, plot_controller_performance, \
     plot_action_weights, plot_wiring_weights
 from ..utils.logging import setup_logger
+from .manager import BaseNetworkManager, EnasManager
+
 
 def get_controller_states(model):
     return [K.get_value(s) for s, _ in model.state_updates]
@@ -89,7 +91,7 @@ class ControllerTrainEnvironment:
         try:
             self.last_actionState_size = len(self.controller.state_space[-1])
         except Exception as e:
-            warnings.warn("DEPRECATED Exception in ControllerTrainEnv: %s" % e)
+            warnings.warn("DEPRECATED Exception in ControllerTrainEnv: %s" % e, stacklevel=2)
             self.last_actionState_size = 1
 
         if resume_prev_run:
@@ -98,9 +100,12 @@ class ControllerTrainEnvironment:
             self.clean()
         self.resume_prev_run = resume_prev_run
         self.logger = logger if logger else setup_logger(working_dir)
-        if os.path.realpath(manager.working_dir) != os.path.realpath(self.working_dir):
-            warnings.warn("manager working dir and environment working dir are different.")
-
+        if issubclass(type(manager), BaseNetworkManager):
+            if os.path.realpath(manager.working_dir) != os.path.realpath(self.working_dir):
+                warnings.warn("manager working dir and environment working dir are different.", stacklevel=2)
+        else:
+            warnings.warn("ControllerTrainEnvironment: input manager is not a subclass of BaseNetworkManager; please make sure this intended", stacklevel=2)
+    
     def __str__(self):
         s = 'ControllerTrainEnv for %i max steps, %i child mod. each step' % (self.max_episode, self.max_step_per_ep)
         return s
@@ -309,8 +314,11 @@ class EnasTrainEnv(ControllerTrainEnvironment):
         self.save_controller_every = kwargs.pop('save_controller_every', None)
         super().__init__(*args, **kwargs)
         self.initial_buffering_queue = 0
-        if self.manager.model_fn.controller is None:
-            self.manager.model_fn.set_controller(self.controller)
+        if issubclass(type(self.manager), BaseNetworkManager):
+            if self.manager.model_fn.controller is None:
+                self.manager.model_fn.set_controller(self.controller)
+        else:
+            warnings.warn("EnasTrainEnv: input manager is not a subclass of BaseNetworkManager; please make sure this intended", stacklevel=2)
         if self.time_budget is None:
             pass
         elif type(self.time_budget) is str:
@@ -457,7 +465,7 @@ class MultiManagerEnasEnvironment(EnasTrainEnv):
 
         self.manager_cnt = len(self.manager)
         for i in range(self.manager_cnt):
-            assert isinstance(self.manager[i], EnasTrainEnv), \
+            assert isinstance(self.manager[i], EnasManager), \
                 "MultiManagerEnasEnvironment expects a List of EnasManager instances, " \
                 "got %s for %i-th element" % (type(self.manager[i]), i)
 
@@ -483,23 +491,22 @@ class MultiManagerEnasEnvironment(EnasTrainEnv):
             for i in range(1, self.child_warm_up_epochs + 1):
                 self.logger.info("warm-up : %i epoch" % i)
                 for j in range(self.manager_cnt):
-                    self.manager[j].get_rewards(trial=-i, model_arc=None, nsteps=warmup_nsteps)
+                    self.manager[j].get_rewards(trial=-i, model_arc=None, nsteps=warmup_nsteps, )
         for child_step in range(self.start_ep, self.max_episode):
             try:
-                ep_reward = 0
-                loss_and_metrics_ep = {'knowledge': 0, 'acc': 0, 'loss': 0}
-                if 'metrics' in self.manager.model_compile_dict:
-                    loss_and_metrics_ep.update({x: 0 for x in self.manager.model_compile_dict['metrics']})
-
-                ep_probs = []
-
                 # train child parameters w
                 for j in range(self.manager_cnt):
                     self.manager[j].get_rewards(child_step, None, nsteps=self.child_train_steps)
 
                 # train controller parameters theta
+                ep_reward = 0
+                loss_and_metrics_ep = {'knowledge': 0, 'acc': 0, 'loss': 0}
                 for step in range(self.max_step_per_ep):
                     for j in range(self.manager_cnt):
+                        if 'metrics' in self.manager[j].model_compile_dict:
+                            loss_and_metrics_ep.update({x: 0 for x in self.manager[j].model_compile_dict['metrics']})
+
+                        ep_probs = []
                         arc_seq, probs = self.controller.get_action(
                             description_feature=self.data_descriptive_features[j])
                         self.entropy_record.append(compute_entropy(probs))

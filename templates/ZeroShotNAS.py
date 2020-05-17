@@ -10,6 +10,9 @@ import tensorflow as tf
 import numpy as np
 import keras.backend as K
 import os
+import logging
+import pickle
+
 from amber.modeler import EnasCnnModelBuilder
 from amber.architect.controller import ZeroShotController
 from amber.architect.model_space import State, ModelSpace
@@ -22,9 +25,9 @@ from amber.architect.manager import EnasManager
 from amber.architect.train_env import MultiManagerEnasEnvironment
 from amber.architect.reward import LossAucReward
 from amber.plots import plot_controller_hidden_states
-import logging
-import pickle
 from amber.utils import run_from_ipython
+from amber.utils.logging import setup_logger
+from amber.utils.data_parser import get_data_from_simdata
 
 
 def get_controller(model_space, session, data_description_len=3):
@@ -35,7 +38,6 @@ def get_controller(model_space, session, data_description_len=3):
             session=session,
             share_embedding={i:0 for i in range(1, len(model_space))},
             with_skip_connection=True,
-            skip_connection_unique_connection=False,
             skip_weight=0.5,
             skip_target=0.2,
             lstm_size=64,
@@ -78,41 +80,124 @@ def get_model_space(out_filters=16, num_layers=3, num_pool=3):
     return state_space
 
 
+def read_data():
+    dataset1 = get_data_from_simdata(positive_file="./data/zero_shot/DensityEmbedding_prefix-MYC_known10_motifs-MYC_known10_min-1_max-10_mean-5_zeroProb-0_seqLength-1000_numSeqs-10000.simdata", negative_file="./data/zero_shot/EmptyBackground_prefix-empty_bg_seqLength-1000_numSeqs-10000.simdata", targets=["MYC_known10"])
+    dataset2 = get_data_from_simdata(positive_file="./data/zero_shot/DensityEmbedding_prefix-CTCF_known1_motifs-CTCF_known1_min-1_max-1_mean-1_zeroProb-0_seqLength-1000_numSeqs-10000.simdata", negative_file="./data/zero_shot/EmptyBackground_prefix-empty_bg_seqLength-1000_numSeqs-10000.simdata", targets=["CTCF_known1"])
+
+    num_seqs = 10000
+    train_idx = np.arange(0, int(num_seqs*0.8))
+    val_idx = np.arange(int(num_seqs*0.8), int(num_seqs*0.9) )
+    test_idx = np.arange(int(num_seqs*0.9), num_seqs )
+    dictionarize = lambda dataset: {
+            "train": (dataset[0][train_idx], dataset[1][train_idx]),
+            "val": (dataset[0][val_idx], dataset[1][val_idx]),
+            "test": (dataset[0][test_idx], dataset[1][test_idx]),
+            }
+
+    dataset1 = dictionarize(dataset1)
+    dataset2 = dictionarize(dataset2)
+
+    return dataset1, dataset2
+
+
+def get_manager(train_data, val_data, controller, model_space, wd, dag_name, verbose=2):
+    input_node = State('input', shape=(1000, 4), name="input", dtype=tf.float32)
+    output_node = State('dense', units=1, activation='sigmoid')
+    model_compile_dict = {
+        'loss': 'binary_crossentropy',
+        'optimizer': 'adam',
+    }
+    session = controller.session
+
+    reward_fn = LossAucReward(method='auc')
+    
+    child_batch_size = 500
+    model_fn = EnasCnnModelBuilder(
+        dag_func='EnasConv1dDAG',
+        batch_size=child_batch_size,
+        session=session,
+        model_space=model_space,
+        inputs_op=[input_node],
+        output_op=[output_node],
+        num_layers=len(model_space),
+        l1_reg=1e-8,
+        l2_reg=5e-7,
+        model_compile_dict=model_compile_dict,
+        controller=controller,
+        dag_kwargs={
+            'stem_config':{
+                'flatten_op': 'flatten',
+                'fc_units': 10
+                },
+            'name': dag_name
+            }
+    )
+    
+    manager = EnasManager(
+        train_data=train_data,
+        validation_data=val_data,
+        epochs=1,
+        child_batchsize=child_batch_size,
+        reward_fn=reward_fn,
+        model_fn=model_fn,
+        store_fn='minimal',
+        model_compile_dict=model_compile_dict,
+        working_dir=wd,
+        verbose=verbose
+        )
+    return manager
+
+
+
 def main():
+    wd = "./outputs/zero_shot/"
+    verbose = 2
     model_space = get_model_space()
     session = tf.Session()
-    controller = get_controller(model_space=model_space, session=session, data_description_len=3)
+    controller = get_controller(model_space=model_space, session=session, data_description_len=2)
 
-    d1 = [[0,0,0]]
-    action, prob = controller.get_action(description_feature=d1)
-    for _ in range(5):
-        controller.store(prob=prob, action=action, reward=1, description=d1)
+    dataset1, dataset2 = read_data()
+    manager1 = get_manager(train_data=dataset1['train'], val_data=dataset1['val'], controller=controller,
+            model_space=model_space, wd=wd, dag_name="EnasDAG1", verbose=verbose)
+    manager2 = get_manager(train_data=dataset2['train'], val_data=dataset2['val'], controller=controller,
+            model_space=model_space, wd=wd, dag_name="EnasDAG2", verbose=verbose)
 
-    d2 = [[1,1,1]]
-    action, prob = controller.get_action(description_feature=d2)
-    for _ in range(5):
-        controller.store(prob=prob, action=action, reward=-1, description=d2)
 
-    buffer = controller.buffer
-    buffer.finish_path(model_space, 1, ".")
+    logger = setup_logger(wd, verbose_level=logging.DEBUG)
+    vars_list1 = [v for v in tf.trainable_variables() if v.name.startswith(manager1.model_fn.dag.name)]
+    vars_list2 = [v for v in tf.trainable_variables() if v.name.startswith(manager2.model_fn.dag.name)]
+    # remove optimizer related vars (e.g. momentum, rms)
+    vars_list1 = [v for v in vars_list1 if not v.name.startswith("%s/compile"%manager1.model_fn.dag.name)]
+    vars_list2 = [v for v in vars_list2 if not v.name.startswith("%s/compile"%manager2.model_fn.dag.name)]
+    logger.info("total model1 params: %i" % count_model_params(vars_list1))
+    logger.info("total model2 params: %i" % count_model_params(vars_list2))
 
-    g = buffer.get_data(bs=3)
-    batch_data = next(g)
+    with open(os.path.join(wd,"tensor_vars.txt"), "w") as f:
+        for v in vars_list1 + vars_list2:
+            f.write("%s\t%i\n"%(v.name, int(np.prod(v.shape).value) ))
 
-    p_batch, a_batch, ad_batch, nr_batch = \
-        [batch_data[x] for x in ['prob', 'action', 'advantage', 'reward']]
-    desc_batch = batch_data['description']
-    feed_dict = {controller.input_arc[i]: a_batch[:, [i]]
-                 for i in range(a_batch.shape[1])}
-    feed_dict.update({controller.advantage: ad_batch})
-    feed_dict.update({controller.old_probs[i]: p_batch[i]
-                      for i in range(len(controller.old_probs))})
-    feed_dict.update({controller.reward: nr_batch})
-    feed_dict.update({controller.data_descriptive_feature: desc_batch})
 
-    for i in range(100):
-        _ = controller.session.run(controller.train_op, feed_dict=feed_dict)
-        curr_loss, curr_kl, curr_ent = controller.session.run([controller.loss, controller.kl_div, controller.ent], feed_dict=feed_dict)
+    dfeatures = np.array([[1,0], [0,1]])
+    env = MultiManagerEnasEnvironment(
+        data_descriptive_features= dfeatures,
+        controller=controller,
+        manager=[manager1, manager2],
+        logger=logger,
+        max_episode=300,
+        max_step_per_ep=100,
+        working_dir=wd,
+        time_budget="2:00:00",
+        with_input_blocks=False,
+        with_skip_connection=True,
+    )
+
+    try:
+        env.train()
+    except KeyboardInterrupt:
+        print("user interrupted training")
+        pass
+    controller.save_weights(os.path.join(wd, "controller_weights.h5"))
+    plot_controller_hidden_states(controller, "%s/controller_states.png" % wd)
 
 
 if __name__ == "__main__":
