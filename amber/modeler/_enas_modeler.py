@@ -2,7 +2,7 @@
 
 from .dag import get_dag, get_layer
 from .dag import ComputationNode
-
+from .dag import EnasConv1dDAG
 
 class ModelBuilder:
     """Scaffold of Model Builder
@@ -267,7 +267,7 @@ class EnasCnnModelBuilder(DAGModelBuilder):
             **kwargs:
         """
         super().__init__(dag_func=dag_func, *args, **kwargs)
-        assert dag_func.lower() in ('enascnndag', 'enasconv1ddag'), "EnasModelBuilder only support enasDAG."
+        #assert dag_func.lower() in ('enascnndag', 'enasconv1ddag'), "EnasModelBuilder only support enasDAG."
         self.session = session
         self.controller = controller
         self.l1_reg = float(l1_reg)
@@ -279,6 +279,7 @@ class EnasCnnModelBuilder(DAGModelBuilder):
         # END NEW ARGS
         # -----
         self._build_dag()
+        assert issubclass(type(self.dag), EnasConv1dDAG), "EnasModelBuilder only support enasDAG and its derivatives"
 
     def _build_dag(self):
         """

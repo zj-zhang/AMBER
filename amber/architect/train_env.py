@@ -104,7 +104,8 @@ class ControllerTrainEnvironment:
             if os.path.realpath(manager.working_dir) != os.path.realpath(self.working_dir):
                 warnings.warn("manager working dir and environment working dir are different.", stacklevel=2)
         else:
-            warnings.warn("ControllerTrainEnvironment: input manager is not a subclass of BaseNetworkManager; please make sure this intended", stacklevel=2)
+            warnings.warn("ControllerTrainEnvironment: input manager is not a subclass of BaseNetworkManager; "
+                          "make sure this is intended", stacklevel=2)
     
     def __str__(self):
         s = 'ControllerTrainEnv for %i max steps, %i child mod. each step' % (self.max_episode, self.max_step_per_ep)
@@ -318,7 +319,8 @@ class EnasTrainEnv(ControllerTrainEnvironment):
             if self.manager.model_fn.controller is None:
                 self.manager.model_fn.set_controller(self.controller)
         else:
-            warnings.warn("EnasTrainEnv: input manager is not a subclass of BaseNetworkManager; please make sure this intended", stacklevel=2)
+            warnings.warn("EnasTrainEnv: input manager is not a subclass of BaseNetworkManager; "
+                          "make sure this is intended", stacklevel=2)
         if self.time_budget is None:
             pass
         elif type(self.time_budget) is str:
@@ -379,7 +381,7 @@ class EnasTrainEnv(ControllerTrainEnvironment):
                         loss_and_metrics_ep[x] += loss_and_metrics[x]
 
                     # save the arc_seq and reward
-                    self.controller.store(state, probs, arc_seq, reward)
+                    self.controller.store(state=state, prob=probs, action=arc_seq, reward=reward)
 
                     # write the results of this trial into a file
                     data = [controller_step, [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
@@ -496,6 +498,7 @@ class MultiManagerEnasEnvironment(EnasTrainEnv):
             try:
                 # train child parameters w
                 for j in range(self.manager_cnt):
+                    self.logger.info("sampling with mananger %i" % j)
                     self.manager[j].get_rewards(child_step, None, nsteps=self.child_train_steps)
 
                 # train controller parameters theta
@@ -508,7 +511,7 @@ class MultiManagerEnasEnvironment(EnasTrainEnv):
 
                         ep_probs = []
                         arc_seq, probs = self.controller.get_action(
-                            description_feature=self.data_descriptive_features[j])
+                            description_feature=self.data_descriptive_features[[j]])    # preserve the first dimension
                         self.entropy_record.append(compute_entropy(probs))
                         ep_probs.append(probs)
                         # LOGGER.debug the action probabilities
@@ -516,7 +519,7 @@ class MultiManagerEnasEnvironment(EnasTrainEnv):
                         self.logger.debug("Manager {}, Predicted actions : {}".format(j, [str(x) for x in action_list]))
 
                         # build a model, train and get reward and accuracy from the network manager
-                        reward, loss_and_metrics = self.manager.get_rewards(
+                        reward, loss_and_metrics = self.manager[j].get_rewards(
                             controller_step, arc_seq, nsteps=self.child_train_steps)
                         self.logger.debug("Rewards : " + str(reward) + " Metrics : " + str(loss_and_metrics))
 
@@ -525,7 +528,8 @@ class MultiManagerEnasEnvironment(EnasTrainEnv):
                             loss_and_metrics_ep[x] += loss_and_metrics[x]
 
                         # save the arc_seq and reward
-                        self.controller.store(state=state, probs=probs, action=arc_seq, reward=reward)
+                        self.controller.store(prob=probs, action=arc_seq, reward=reward,
+                                              description=self.data_descriptive_features[[j]])
 
                         # write the results of this trial into a file
                         data = [controller_step, [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],

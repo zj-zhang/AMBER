@@ -44,6 +44,8 @@ def get_dag(arg):
             return EnasAnnDAG
         elif arg.lower() == 'enascnndag' or arg.lower() == 'enasconv1ddag':
             return EnasConv1dDAG
+        elif arg == 'EnasConv1DwDataDescrption':
+            return EnasConv1DwDataDescrption
     elif callable(arg):
         return arg
     else:
@@ -1200,10 +1202,10 @@ class EnasConv1dDAG:
             self.sample_metrics = ops['metrics']
             self.sample_ops = ops
         # if not self.is_initialized:
-        vars = [v for v in tf.all_variables() if v.name.startswith(var_scope) and v not in self.vars]
-        if len(vars):
-            self.session.run(tf.initialize_variables(vars))
-            self.vars += vars
+        vars_ = [v for v in tf.all_variables() if v.name.startswith(var_scope) and v not in self.vars]
+        if len(vars_):
+            self.session.run(tf.initialize_variables(vars_))
+            self.vars += vars_
             # self.is_initialized = True
 
     def _build_fixed_arc(self, input_tensor=None, label_tensor=None, **kwargs):
@@ -1584,3 +1586,55 @@ class EnasConv1dDAG:
 
     def _identity_branch(self, inputs):
         return lambda: inputs
+
+
+class EnasConv1DwDataDescrption(EnasConv1dDAG):
+    """This is a modeler that specifiied for convolution network with data description features
+    Date: 2020.5.17
+    """
+    def __init__(self, data_description, *args, **kwargs):
+        self.data_description = data_description
+        super().__init__(*args, **kwargs)
+        if len(self.data_description.shape) < 2:
+            self.data_description = np.expand_dims(self.data_description, axis=0)
+
+    # overwrite
+    def _model(self, arc, **kwargs):
+        """
+        Overwrite the parent `_model` method to feed the description to controller when sampling architectures
+        :param arc:
+        :param kwargs:
+        :return:
+        """
+        if self.train_fixed_arc:
+            assert arc == self.fixed_arc or arc is None, "This DAG instance is built to train fixed arc, hence you can only provide arc=None or arc=self.fixed_arc; check the initialization of this instances"
+        if arc is None:
+            if self.train_fixed_arc:
+                model = EnasCnnModel(inputs=self.fixed_model_input,
+                                     outputs=self.fixed_model_output,
+                                     labels=self.fixed_model_label,
+                                     arc_seq=arc,
+                                     dag=self,
+                                     session=self.session,
+                                     name=self.name)
+
+            else:
+                model = EnasCnnModel(inputs=self.sample_model_input,
+                                     outputs=self.sample_model_output,
+                                     labels=self.sample_model_label,
+                                     arc_seq=arc,
+                                     dag=self,
+                                     session=self.session,
+                                     name=self.name,
+                                     sample_dag_feed_dict={
+                                         self.controller.data_descriptive_feature: self.data_description}
+                                     )
+        else:
+            model = EnasCnnModel(inputs=self.fixed_model_input,
+                                 outputs=self.fixed_model_output,
+                                 labels=self.fixed_model_label,
+                                 arc_seq=arc,
+                                 dag=self,
+                                 session=self.session,
+                                 name=self.name)
+        return model

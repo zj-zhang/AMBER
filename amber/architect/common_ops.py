@@ -162,7 +162,7 @@ def get_keras_train_ops(loss, tf_variables, optim_algo, **kwargs):
             grad_var.append(v)
     if no_grad_var:
         warnings.warn(
-            "=" * 80 + "\n\nWarning: the following tf.variables have no gradients"
+            "\n" + "=" * 80 + "\nWarning: the following tf.variables have no gradients"
                        " and have been discarded: \n %s" % no_grad_var, stacklevel=2)
     train_op = opt.get_updates(loss, grad_var)
     config = opt.get_config()

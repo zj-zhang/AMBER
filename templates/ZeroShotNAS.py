@@ -81,10 +81,16 @@ def get_model_space(out_filters=16, num_layers=3, num_pool=3):
 
 
 def read_data():
-    dataset1 = get_data_from_simdata(positive_file="./data/zero_shot/DensityEmbedding_prefix-MYC_known10_motifs-MYC_known10_min-1_max-10_mean-5_zeroProb-0_seqLength-1000_numSeqs-10000.simdata", negative_file="./data/zero_shot/EmptyBackground_prefix-empty_bg_seqLength-1000_numSeqs-10000.simdata", targets=["MYC_known10"])
-    dataset2 = get_data_from_simdata(positive_file="./data/zero_shot/DensityEmbedding_prefix-CTCF_known1_motifs-CTCF_known1_min-1_max-1_mean-1_zeroProb-0_seqLength-1000_numSeqs-10000.simdata", negative_file="./data/zero_shot/EmptyBackground_prefix-empty_bg_seqLength-1000_numSeqs-10000.simdata", targets=["CTCF_known1"])
+    dataset1 = get_data_from_simdata(
+        positive_file="./data/zero_shot/DensityEmbedding_prefix-MYC_known10_motifs-MYC_known10_min-1_max-10_mean-5_zeroProb-0_seqLength-1000_numSeqs-10000.simdata",
+        negative_file="./data/zero_shot/EmptyBackground_prefix-empty_bg_seqLength-1000_numSeqs-10000.simdata",
+        targets=["MYC"])
+    dataset2 = get_data_from_simdata(
+        positive_file="./data/zero_shot/DensityEmbedding_prefix-CTCF_known1_motifs-CTCF_known1_min-1_max-1_mean-1_zeroProb-0_seqLength-1000_numSeqs-10000.simdata",
+        negative_file="./data/zero_shot/EmptyBackground_prefix-empty_bg_seqLength-1000_numSeqs-10000.simdata",
+        targets=["CTCF"])
 
-    num_seqs = 10000
+    num_seqs = 20000
     train_idx = np.arange(0, int(num_seqs*0.8))
     val_idx = np.arange(int(num_seqs*0.8), int(num_seqs*0.9) )
     test_idx = np.arange(int(num_seqs*0.9), num_seqs )
@@ -100,7 +106,7 @@ def read_data():
     return dataset1, dataset2
 
 
-def get_manager(train_data, val_data, controller, model_space, wd, dag_name, verbose=2):
+def get_manager(train_data, val_data, controller, model_space, wd, data_description, dag_name, verbose=2):
     input_node = State('input', shape=(1000, 4), name="input", dtype=tf.float32)
     output_node = State('dense', units=1, activation='sigmoid')
     model_compile_dict = {
@@ -113,7 +119,7 @@ def get_manager(train_data, val_data, controller, model_space, wd, dag_name, ver
     
     child_batch_size = 500
     model_fn = EnasCnnModelBuilder(
-        dag_func='EnasConv1dDAG',
+        dag_func='EnasConv1DwDataDescrption',
         batch_size=child_batch_size,
         session=session,
         model_space=model_space,
@@ -129,7 +135,8 @@ def get_manager(train_data, val_data, controller, model_space, wd, dag_name, ver
                 'flatten_op': 'flatten',
                 'fc_units': 10
                 },
-            'name': dag_name
+            'name': dag_name,
+            'data_description': data_description
             }
     )
     
@@ -151,16 +158,17 @@ def get_manager(train_data, val_data, controller, model_space, wd, dag_name, ver
 
 def main():
     wd = "./outputs/zero_shot/"
-    verbose = 2
+    verbose = 1
     model_space = get_model_space()
     session = tf.Session()
     controller = get_controller(model_space=model_space, session=session, data_description_len=2)
 
     dataset1, dataset2 = read_data()
+    dfeatures = np.array([[1,0], [0,1]])  # one-hot encoding
     manager1 = get_manager(train_data=dataset1['train'], val_data=dataset1['val'], controller=controller,
-            model_space=model_space, wd=wd, dag_name="EnasDAG1", verbose=verbose)
+            model_space=model_space, wd=wd, data_description=dfeatures[[0]], dag_name="EnasDAG1", verbose=verbose)
     manager2 = get_manager(train_data=dataset2['train'], val_data=dataset2['val'], controller=controller,
-            model_space=model_space, wd=wd, dag_name="EnasDAG2", verbose=verbose)
+            model_space=model_space, wd=wd, data_description=dfeatures[[1]], dag_name="EnasDAG2", verbose=verbose)
 
 
     logger = setup_logger(wd, verbose_level=logging.DEBUG)
@@ -176,8 +184,6 @@ def main():
         for v in vars_list1 + vars_list2:
             f.write("%s\t%i\n"%(v.name, int(np.prod(v.shape).value) ))
 
-
-    dfeatures = np.array([[1,0], [0,1]])
     env = MultiManagerEnasEnvironment(
         data_descriptive_features= dfeatures,
         controller=controller,
