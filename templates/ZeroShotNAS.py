@@ -171,7 +171,7 @@ def main():
             model_space=model_space, wd=wd, data_description=dfeatures[[1]], dag_name="EnasDAG2", verbose=verbose)
 
 
-    logger = setup_logger(wd, verbose_level=logging.DEBUG)
+    logger = setup_logger(wd, verbose_level=logging.INFO)
     vars_list1 = [v for v in tf.trainable_variables() if v.name.startswith(manager1.model_fn.dag.name)]
     vars_list2 = [v for v in tf.trainable_variables() if v.name.startswith(manager2.model_fn.dag.name)]
     # remove optimizer related vars (e.g. momentum, rms)
@@ -190,7 +190,7 @@ def main():
         manager=[manager1, manager2],
         logger=logger,
         max_episode=300,
-        max_step_per_ep=100,
+        max_step_per_ep=50,
         working_dir=wd,
         time_budget="2:00:00",
         with_input_blocks=False,
@@ -203,7 +203,6 @@ def main():
         print("user interrupted training")
         pass
     controller.save_weights(os.path.join(wd, "controller_weights.h5"))
-    plot_controller_hidden_states(controller, "%s/controller_states.png" % wd)
 
 
 if __name__ == "__main__":

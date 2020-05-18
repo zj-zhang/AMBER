@@ -551,7 +551,7 @@ class MultiManagerEnasEnvironment(EnasTrainEnv):
                 if child_step >= self.initial_buffering_queue - 1:
                     # train the controller on the saved state and the discounted rewards
                     loss = self.controller.train(child_step, self.working_dir)
-                    self.total_reward += np.sum(np.array(self.controller.buffer.lt_adbuffer[-1]).flatten())
+                    self.total_reward += np.sum(np.array(self.controller.buffer.lt_adv[-1]).flatten())
                     self.logger.info("Total reward : " + str(self.total_reward))
                     self.logger.info("END episode %d: Controller loss : %0.6f" % (child_step, loss))
                     self.logger.info("-" * 10)
