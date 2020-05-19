@@ -1,4 +1,6 @@
+import os
 import sys
+import logging
 from amber.architect.controller import GeneralController
 from amber.architect.model_space import State, ModelSpace
 from amber.architect.train_env import ControllerTrainEnvironment
@@ -26,7 +28,7 @@ def get_controller(state_space, sess):
 			buffer_size=5, ## num of episodes saved
 			batch_size=5,
 			session=sess,
-			use_ppo_loss=True
+			#use_ppo_loss=True
 			)
 	return controller
 
@@ -97,8 +99,10 @@ def train_simple_controller(should_plot=False, logger=None, Lambda=1., wd='./out
 	return
 
 if __name__ == '__main__':
-	logger = setup_logger()
-	B = 1
-	Lambda = 1.
-	for t in range(B):
-		train_simple_controller(t==(B-1), logger, Lambda)
+    wd = "./outputs/mock_nas/"
+    os.makedirs(wd, exist_ok=True)
+    logger = setup_logger(working_dir=wd, verbose_level=logging.DEBUG)
+    B = 1
+    Lambda = 1.
+    for t in range(B):
+        train_simple_controller(t==(B-1), logger, Lambda)

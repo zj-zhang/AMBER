@@ -65,13 +65,13 @@ class Buffer(object):
         self.lt_rmbuffer = []    # reward mean buffer
 
     def store(self, state=None, prob=None, action=None, reward=None, *args, **kwargs):
-        if state:
+        if state is not None:
             self.state_buffer.append(state)
-        if prob:
+        if prob is not None:
             self.prob_buffer.append(prob)
-        if action:
+        if action is not None:
             self.action_buffer.append(action)
-        if reward:
+        if reward is not None:
             self.reward_buffer.append(reward)
 
     def discount_rewards(self):
