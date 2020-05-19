@@ -455,20 +455,21 @@ class EnasTrainEnv(ControllerTrainEnvironment):
         return act_idx
 
 
-class MultiManagerEnasEnvironment(EnasTrainEnv):
+class MultiManagerEnvironment(EnasTrainEnv):
     """
     MultiManagerEnvironment is an environment that allows one controller to interact with multiple EnasManagers
     """
 
-    def __init__(self, data_descriptive_features, *args, **kwargs):
-        super(MultiManagerEnasEnvironment, self).__init__(*args, **kwargs)
+    def __init__(self, data_descriptive_features, is_enas='auto', *args, **kwargs):
+        super(MultiManagerEnvironment, self).__init__(*args, **kwargs)
         assert type(self.manager) is list, \
             "MultiManagerEnasEnvironment must have a List of manager instances, got %s" % type(self.manager)
 
         self.manager_cnt = len(self.manager)
+        self.is_enas = is_enas
         for i in range(self.manager_cnt):
-            assert isinstance(self.manager[i], EnasManager), \
-                "MultiManagerEnasEnvironment expects a List of EnasManager instances, " \
+            assert issubclass(type(self.manager[i]), BaseNetworkManager), \
+                "MultiManagerEnasEnvironment expects a List of Manager instances, " \
                 "got %s for %i-th element" % (type(self.manager[i]), i)
 
         self.data_descriptive_features = data_descriptive_features
@@ -476,10 +477,15 @@ class MultiManagerEnasEnvironment(EnasTrainEnv):
             "data descriptive features must match the number of managers; " \
             "got %i description, %i managers" % ( len(self.data_descriptive_features), self.manager_cnt )
 
+        if self.is_enas == "auto":
+            if all([isinstance(self.manager[i], EnasManager) for i in range(self.manager_cnt)]):
+                self.is_enas = True
+            else:
+                self.is_enas = False
+
     def train(self):
         action_probs_record = []
         loss_and_metrics_list = []
-        state = self.reset()  # nuisance param
         controller_step = self.start_ep * self.max_step_per_ep
         if self.resume_prev_run:
             f = open(os.path.join(self.working_dir, 'train_history.csv'), mode='a+')
@@ -488,6 +494,7 @@ class MultiManagerEnasEnvironment(EnasTrainEnv):
         writer = csv.writer(f)
         starttime = datetime.datetime.now()
         if self.child_warm_up_epochs > 0:
+            assert self.is_enas, "You can only set warm_up_epochs>0 if is_enas=True"
             self.logger.info("warm-up for child model: %i epochs" % self.child_warm_up_epochs)
             warmup_nsteps = None
             for i in range(1, self.child_warm_up_epochs + 1):
@@ -496,10 +503,11 @@ class MultiManagerEnasEnvironment(EnasTrainEnv):
                     self.manager[j].get_rewards(trial=-i, model_arc=None, nsteps=warmup_nsteps, )
         for child_step in range(self.start_ep, self.max_episode):
             try:
-                # train child parameters w
-                for j in range(self.manager_cnt):
-                    self.logger.info("sampling with mananger %i" % j)
-                    self.manager[j].get_rewards(child_step, None, nsteps=self.child_train_steps)
+                if self.is_enas:
+                    # train child parameters w, if is_enas
+                    for j in range(self.manager_cnt):
+                        self.logger.info("sampling with mananger %i" % j)
+                        self.manager[j].get_rewards(child_step, None, nsteps=self.child_train_steps)
 
                 # train controller parameters theta
                 ep_reward = 0
@@ -520,7 +528,7 @@ class MultiManagerEnasEnvironment(EnasTrainEnv):
 
                         # build a model, train and get reward and accuracy from the network manager
                         reward, loss_and_metrics = self.manager[j].get_rewards(
-                            controller_step, arc_seq, nsteps=self.child_train_steps)
+                            trial=controller_step, model_arc=arc_seq, nsteps=self.child_train_steps)
                         self.logger.debug("Rewards : " + str(reward) + " Metrics : " + str(loss_and_metrics))
 
                         ep_reward += reward

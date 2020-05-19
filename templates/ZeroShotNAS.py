@@ -22,13 +22,16 @@ from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.optimizers import Adam, SGD
 
 from amber.architect.manager import EnasManager
-from amber.architect.train_env import MultiManagerEnasEnvironment
+from amber.architect.train_env import MultiManagerEnvironment
 from amber.architect.reward import LossAucReward
 from amber.plots import plot_controller_hidden_states
 from amber.utils import run_from_ipython
 from amber.utils.logging import setup_logger
 from amber.utils.data_parser import get_data_from_simdata
 
+from amber.bootstrap.simple_conv1d_space import get_state_space as get_model_space_common
+from amber.modeler.modeler import build_sequential_model
+from amber.architect.manager import GeneralManager
 
 def get_controller(model_space, session, data_description_len=3):
     with tf.device("/cpu:0"):
@@ -36,11 +39,11 @@ def get_controller(model_space, session, data_description_len=3):
             data_description_len=data_description_len,
             model_space=model_space,
             session=session,
-            share_embedding={i:0 for i in range(1, len(model_space))},
-            with_skip_connection=True,
-            skip_weight=0.5,
+            #share_embedding={i:0 for i in range(1, len(model_space))},
+            with_skip_connection=False,
+            skip_weight=None,
             skip_target=0.2,
-            lstm_size=64,
+            lstm_size=32,
             lstm_num_layers=1,
             kl_threshold=0.01,
             train_pi_iter=10,
@@ -50,13 +53,13 @@ def get_controller(model_space, session, data_description_len=3):
             tanh_constant=1.5,
             buffer_type="MultiManager",
             buffer_size=5,
-            batch_size=20
+            batch_size=5
         )
         controller.buffer.rescale_advantage_by_reward = False
     return controller
 
 
-def get_model_space(out_filters=16, num_layers=3, num_pool=3):
+def get_model_space_enas(out_filters=16, num_layers=3, num_pool=3):
     state_space = ModelSpace()
     if num_pool == 4:
         expand_layers = [num_layers//4-1, num_layers//4*2-1, num_layers//4*3-1]
@@ -76,7 +79,6 @@ def get_model_space(out_filters=16, num_layers=3, num_pool=3):
       ])
         if i in expand_layers:
             out_filters *= 2
-
     return state_space
 
 
@@ -106,7 +108,7 @@ def read_data():
     return dataset1, dataset2
 
 
-def get_manager(train_data, val_data, controller, model_space, wd, data_description, dag_name, verbose=2):
+def get_manager_enas(train_data, val_data, controller, model_space, wd, data_description, dag_name, verbose=2):
     input_node = State('input', shape=(1000, 4), name="input", dtype=tf.float32)
     output_node = State('dense', units=1, activation='sigmoid')
     model_compile_dict = {
@@ -155,36 +157,71 @@ def get_manager(train_data, val_data, controller, model_space, wd, data_descript
     return manager
 
 
+def get_manager_common(train_data, val_data, controller, model_space, wd, data_description, verbose=2, **kwargs):
+    input_node = State('input', shape=(1000, 4), name="input", dtype=tf.float32)
+    output_node = State('dense', units=1, activation='sigmoid')
+    model_compile_dict = {
+        'loss': 'binary_crossentropy',
+        'optimizer': 'adam',
+        'metrics': ['acc']
+    }
+    session = controller.session
+
+    reward_fn = LossAucReward(method='auc')
+
+    child_batch_size = 500
+    # TODO: convert functions in `_keras_modeler.py` to classes, and wrap up this Lambda function step
+    model_fn = lambda model_arc: build_sequential_model(
+        model_states=model_arc, input_state=input_node, output_state=output_node, model_compile_dict=model_compile_dict,
+        model_space=model_space)
+    manager = GeneralManager(
+        train_data=train_data,
+        validation_data=val_data,
+        epochs=30,
+        child_batchsize=child_batch_size,
+        reward_fn=reward_fn,
+        model_fn=model_fn,
+        store_fn='minimal',
+        model_compile_dict=model_compile_dict,
+        working_dir=wd,
+        verbose=verbose,
+        save_full_model=False,
+        model_space=model_space
+    )
+    return manager
+
 
 def main():
     wd = "./outputs/zero_shot/"
     verbose = 1
-    model_space = get_model_space()
+    model_space = get_model_space_common()
     session = tf.Session()
     controller = get_controller(model_space=model_space, session=session, data_description_len=2)
 
     dataset1, dataset2 = read_data()
     dfeatures = np.array([[1,0], [0,1]])  # one-hot encoding
-    manager1 = get_manager(train_data=dataset1['train'], val_data=dataset1['val'], controller=controller,
+    manager1 = get_manager_common(train_data=dataset1['train'], val_data=dataset1['val'], controller=controller,
             model_space=model_space, wd=wd, data_description=dfeatures[[0]], dag_name="EnasDAG1", verbose=verbose)
-    manager2 = get_manager(train_data=dataset2['train'], val_data=dataset2['val'], controller=controller,
+    manager2 = get_manager_common(train_data=dataset2['train'], val_data=dataset2['val'], controller=controller,
             model_space=model_space, wd=wd, data_description=dfeatures[[1]], dag_name="EnasDAG2", verbose=verbose)
 
-
     logger = setup_logger(wd, verbose_level=logging.INFO)
-    vars_list1 = [v for v in tf.trainable_variables() if v.name.startswith(manager1.model_fn.dag.name)]
-    vars_list2 = [v for v in tf.trainable_variables() if v.name.startswith(manager2.model_fn.dag.name)]
-    # remove optimizer related vars (e.g. momentum, rms)
-    vars_list1 = [v for v in vars_list1 if not v.name.startswith("%s/compile"%manager1.model_fn.dag.name)]
-    vars_list2 = [v for v in vars_list2 if not v.name.startswith("%s/compile"%manager2.model_fn.dag.name)]
-    logger.info("total model1 params: %i" % count_model_params(vars_list1))
-    logger.info("total model2 params: %i" % count_model_params(vars_list2))
+    try:
+        vars_list1 = [v for v in tf.trainable_variables() if v.name.startswith(manager1.model_fn.dag.name)]
+        vars_list2 = [v for v in tf.trainable_variables() if v.name.startswith(manager2.model_fn.dag.name)]
+        # remove optimizer related vars (e.g. momentum, rms)
+        vars_list1 = [v for v in vars_list1 if not v.name.startswith("%s/compile"%manager1.model_fn.dag.name)]
+        vars_list2 = [v for v in vars_list2 if not v.name.startswith("%s/compile"%manager2.model_fn.dag.name)]
+        logger.info("total model1 params: %i" % count_model_params(vars_list1))
+        logger.info("total model2 params: %i" % count_model_params(vars_list2))
+        with open(os.path.join(wd,"tensor_vars.txt"), "w") as f:
+            for v in vars_list1 + vars_list2:
+                f.write("%s\t%i\n"%(v.name, int(np.prod(v.shape).value) ))
+    except AttributeError:
+        pass
 
-    with open(os.path.join(wd,"tensor_vars.txt"), "w") as f:
-        for v in vars_list1 + vars_list2:
-            f.write("%s\t%i\n"%(v.name, int(np.prod(v.shape).value) ))
 
-    env = MultiManagerEnasEnvironment(
+    env = MultiManagerEnvironment(
         data_descriptive_features= dfeatures,
         controller=controller,
         manager=[manager1, manager2],
@@ -194,7 +231,7 @@ def main():
         working_dir=wd,
         time_budget="2:00:00",
         with_input_blocks=False,
-        with_skip_connection=True,
+        with_skip_connection=False,
     )
 
     try:

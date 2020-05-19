@@ -51,7 +51,12 @@ class GeneralManager(BaseNetworkManager):
         self.working_dir = working_dir
         if not os.path.exists(self.working_dir):
             os.makedirs(self.working_dir)
-        self.model_compile_dict = model_fn.model_compile_dict
+        self.model_compile_dict = kwargs.pop("model_compile_dict", None)
+        if self.model_compile_dict is None:
+            self.model_compile_dict = model_fn.model_compile_dict
+
+        # added 2020.5.19: parse model_space to manager for compatibility with newer versions of controllers
+        self.model_space = kwargs.pop("model_space", None)
 
         self.save_full_model = save_full_model
         self.epochs = epochs
@@ -62,7 +67,7 @@ class GeneralManager(BaseNetworkManager):
         self.reward_fn = reward_fn
         self.store_fn = get_store_fn(store_fn)
 
-    def get_rewards(self, trial, model_arc):
+    def get_rewards(self, trial, model_arc, **kwargs):
         # print('-'*80, model_arc, '-'*80)
         train_graph = tf.Graph()
         train_sess = tf.Session(graph=train_graph)

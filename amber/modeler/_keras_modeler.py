@@ -1,7 +1,10 @@
 from keras.models import Model
+from ..architect import Operation
+from .dag import get_layer
+import numpy as np
 
 
-def build_sequential_model(model_states, input_state, output_state, model_compile_dict):
+def build_sequential_model(model_states, input_state, output_state, model_compile_dict, **kwargs):
     """
     Args:
         model_states: a list of operators sampled from operator space
@@ -13,8 +16,15 @@ def build_sequential_model(model_states, input_state, output_state, model_compil
     """
     inp = get_layer(None, input_state)
     x = inp
-    for state in model_states:
-        x = get_layer(x, state)
+    model_space = kwargs.pop("model_space", None)
+    for i, state in enumerate(model_states):
+        if issubclass(type(state), Operation):
+            x = get_layer(x, state)
+        elif issubclass(type(state), int) or np.issubclass_(type(state), np.integer):
+            assert model_space is not None, "if provided integer model_arc, must provide model_space in kwargs"
+            x = get_layer(x, model_space[i][state])
+        else:
+            raise Exception("cannot understand %s of type %s" % (state, type(state)))
     out = get_layer(x, output_state)
     model = Model(inputs=inp, outputs=out)
     model.compile(**model_compile_dict)
