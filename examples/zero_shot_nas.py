@@ -12,6 +12,7 @@ import keras.backend as K
 import os
 import logging
 import pickle
+import pandas as pd
 
 from amber.modeler import EnasCnnModelBuilder
 from amber.architect.controller import ZeroShotController
@@ -29,9 +30,11 @@ from amber.utils import run_from_ipython
 from amber.utils.logging import setup_logger
 from amber.utils.data_parser import get_data_from_simdata
 
-from amber.bootstrap.simple_conv1d_space import get_state_space as get_model_space_common
+#from amber.bootstrap.simple_conv1d_space import get_state_space as get_model_space_common
 from amber.modeler.modeler import build_sequential_model
 from amber.architect.manager import GeneralManager
+from amber.architect.model_space import get_layer_shortname
+
 
 def get_controller(model_space, session, data_description_len=3):
     with tf.device("/cpu:0"):
@@ -46,14 +49,15 @@ def get_controller(model_space, session, data_description_len=3):
             lstm_size=32,
             lstm_num_layers=1,
             kl_threshold=0.01,
-            train_pi_iter=10,
+            train_pi_iter=100,
             #optim_algo=SGD(lr=lr, momentum=True),
             optim_algo='adam',
             temperature=2.,
             tanh_constant=1.5,
             buffer_type="MultiManager",
             buffer_size=5,
-            batch_size=5
+            batch_size=5,
+            use_ppo_loss=True
         )
         controller.buffer.rescale_advantage_by_reward = False
     return controller
@@ -80,6 +84,36 @@ def get_model_space_enas(out_filters=16, num_layers=3, num_pool=3):
         if i in expand_layers:
             out_filters *= 2
     return state_space
+
+
+def get_model_space_common():
+    state_space = ModelSpace()
+    state_space.add_layer(0, [
+        State('conv1d', filters=3, kernel_size=8, kernel_initializer='glorot_uniform', activation='relu',
+              name="conv1"),
+        State('conv1d', filters=3, kernel_size=14, kernel_initializer='glorot_uniform', activation='relu',
+              name="conv1"),
+        State('conv1d', filters=3, kernel_size=20, kernel_initializer='glorot_uniform', activation='relu',
+              name="conv1"),
+    ])
+    state_space.add_layer(1, [
+        State('Identity'),
+        State('maxpool1d', pool_size=8, strides=8),
+        State('avgpool1d', pool_size=8, strides=8),
+
+    ])
+    state_space.add_layer(2, [
+        State('Flatten'),
+        State('GlobalMaxPool1D'),
+        State('GlobalAvgPool1D'),
+    ])
+    state_space.add_layer(3, [
+        State('Dense', units=3, activation='relu'),
+        State('Dense', units=10, activation='relu'),
+        State('Identity')
+    ])
+    return state_space
+
 
 
 def read_data():
@@ -109,7 +143,7 @@ def read_data():
 
 
 def get_manager_enas(train_data, val_data, controller, model_space, wd, data_description, dag_name, verbose=2):
-    input_node = State('input', shape=(1000, 4), name="input", dtype=tf.float32)
+    input_node = State('input', shape=(1000, 4), name="input", dtype='float32')
     output_node = State('dense', units=1, activation='sigmoid')
     model_compile_dict = {
         'loss': 'binary_crossentropy',
@@ -158,7 +192,7 @@ def get_manager_enas(train_data, val_data, controller, model_space, wd, data_des
 
 
 def get_manager_common(train_data, val_data, controller, model_space, wd, data_description, verbose=2, **kwargs):
-    input_node = State('input', shape=(1000, 4), name="input", dtype=tf.float32)
+    input_node = State('input', shape=(1000, 4), name="input", dtype='float32')
     output_node = State('dense', units=1, activation='sigmoid')
     model_compile_dict = {
         'loss': 'binary_crossentropy',
@@ -181,19 +215,83 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
         child_batchsize=child_batch_size,
         reward_fn=reward_fn,
         model_fn=model_fn,
-        store_fn='minimal',
+        store_fn='model_plot',
         model_compile_dict=model_compile_dict,
         working_dir=wd,
-        verbose=verbose,
+        verbose=0,
         save_full_model=False,
         model_space=model_space
     )
     return manager
 
 
+def get_samples_controller(dfeatures, controller, model_space, T=100):
+    res = []
+    for i in range(len(dfeatures)):
+        dfeature = dfeatures[[i]]
+        prob_arr = [ np.zeros((T, len(model_space[i]))) for i in range(len(model_space)) ]
+        for t in range(T):
+            a, p = controller.get_action(dfeature)
+            for i, p in enumerate(p):
+                prob_arr[i][t] = p.flatten()
+        res.append(prob_arr)
+    return res
+
+
+def convert_to_dataframe(res, model_space, data_names):
+    probs = []
+    layer = []
+    description = []
+    operation = []
+    for i in range(len(res)):
+        for j in range(len(model_space)):
+            for k in range(len(model_space[j])):
+                o = get_layer_shortname(model_space[j][k])
+                p = res[i][j][:, k]
+                # extend the array
+                T = p.shape[0]
+                probs.extend(p)
+                description.extend([data_names[i]]*T)
+                layer.extend([j]*T)
+                operation.extend([o]*T)
+    df = pd.DataFrame({
+        'description':description, 
+        'layer': layer,
+        'operation': operation,
+        'prob': probs
+        })
+    return df
+
+
+def reload_trained_controller():
+    wd = "./outputs/zero_shot/"
+    model_space = get_model_space_common()
+    session = tf.Session()
+    controller = get_controller(model_space=model_space, session=session, data_description_len=2)
+    controller.load_weights(os.path.join(wd, "controller_weights.h5"))
+
+    dfeatures = np.array([[1,0], [0,1]])  # one-hot encoding
+    res = get_samples_controller(dfeatures, controller, model_space, T=1000)
+   
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    df = convert_to_dataframe(res, model_space, data_names=['MYC_known10', 'CTCF_known1'])
+
+    plt.tight_layout()
+    for i in range(len(model_space)):
+        sub_df = df.loc[ (df.layer==i) ]
+        plt.clf()
+        ax = sns.boxplot(x="operation", y="prob",
+            hue="description", palette=["m", "g"],
+            data=sub_df)
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+        plt.savefig(os.path.join(wd, "layer_%i.png"%i))
+    return res
+
+
 def main():
     wd = "./outputs/zero_shot/"
-    verbose = 1
+    verbose = 2
     model_space = get_model_space_common()
     session = tf.Session()
     controller = get_controller(model_space=model_space, session=session, data_description_len=2)
@@ -226,10 +324,10 @@ def main():
         controller=controller,
         manager=[manager1, manager2],
         logger=logger,
-        max_episode=300,
-        max_step_per_ep=50,
+        max_episode=200,
+        max_step_per_ep=15,
         working_dir=wd,
-        time_budget="2:00:00",
+        time_budget="12:00:00",
         with_input_blocks=False,
         with_skip_connection=False,
     )
