@@ -8,21 +8,18 @@ May 14, 2020
 
 import tensorflow as tf
 import numpy as np
-import keras.backend as K
 import os
 import logging
 import pickle
 import pandas as pd
+import argparse
 
 from amber.modeler import EnasCnnModelBuilder
 from amber.architect.controller import ZeroShotController
 from amber.architect.model_space import State, ModelSpace
 from amber.architect.common_ops import count_model_params
 
-from keras.callbacks import ModelCheckpoint, EarlyStopping
-from keras.optimizers import Adam, SGD
-
-from amber.architect.manager import EnasManager
+#from amber.architect.manager import EnasManager
 from amber.architect.train_env import MultiManagerEnvironment
 from amber.architect.reward import LossAucReward
 from amber.plots import plot_controller_hidden_states
@@ -30,7 +27,6 @@ from amber.utils import run_from_ipython
 from amber.utils.logging import setup_logger
 from amber.utils.data_parser import get_data_from_simdata
 
-#from amber.bootstrap.simple_conv1d_space import get_state_space as get_model_space_common
 from amber.modeler.modeler import build_sequential_model
 from amber.architect.manager import GeneralManager
 from amber.architect.model_space import get_layer_shortname
@@ -50,7 +46,6 @@ def get_controller(model_space, session, data_description_len=3):
             lstm_num_layers=1,
             kl_threshold=0.01,
             train_pi_iter=100,
-            #optim_algo=SGD(lr=lr, momentum=True),
             optim_algo='adam',
             temperature=2.,
             tanh_constant=1.5,
@@ -263,8 +258,8 @@ def convert_to_dataframe(res, model_space, data_names):
     return df
 
 
-def reload_trained_controller():
-    wd = "./outputs/zero_shot/"
+def reload_trained_controller(arg):
+    wd = arg.wd #wd = "./outputs/zero_shot/"
     model_space = get_model_space_common()
     session = tf.Session()
     controller = get_controller(model_space=model_space, session=session, data_description_len=2)
@@ -277,20 +272,20 @@ def reload_trained_controller():
     import matplotlib.pyplot as plt
     df = convert_to_dataframe(res, model_space, data_names=['MYC_known10', 'CTCF_known1'])
 
-    plt.tight_layout()
     for i in range(len(model_space)):
         sub_df = df.loc[ (df.layer==i) ]
         plt.clf()
+        plt.tight_layout()
         ax = sns.boxplot(x="operation", y="prob",
             hue="description", palette=["m", "g"],
             data=sub_df)
         ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
-        plt.savefig(os.path.join(wd, "layer_%i.png"%i))
+        plt.savefig(os.path.join(wd, "layer_%i.png"%i), bbox_inches="tight")
     return res
 
 
-def main():
-    wd = "./outputs/zero_shot/"
+def train_nas(arg):
+    wd = arg.wd #wd = "./outputs/zero_shot/"
     verbose = 2
     model_space = get_model_space_common()
     session = tf.Session()
@@ -305,6 +300,7 @@ def main():
 
     logger = setup_logger(wd, verbose_level=logging.INFO)
     try:
+        # only for enas
         vars_list1 = [v for v in tf.trainable_variables() if v.name.startswith(manager1.model_fn.dag.name)]
         vars_list2 = [v for v in tf.trainable_variables() if v.name.startswith(manager2.model_fn.dag.name)]
         # remove optimizer related vars (e.g. momentum, rms)
@@ -342,4 +338,15 @@ def main():
 
 if __name__ == "__main__":
     if not run_from_ipython():
-        main()
+        parser = argparse.ArgumentParser(description="experimental zero-shot nas")
+        parser.add_argument("--analysis", type=str, choices=['train', 'reload'], required=True, help="analysis type")
+        parser.add_argument("--wd", type=str, default="./outputs/zero_shot/", help="working dir")
+
+        arg = parser.parse_args()
+
+        if arg.analysis == "train":
+            train_nas(arg)
+        elif arg.analysis == "reload":
+            reload_trained_controller(arg)
+        else:
+            raise Exception("Unknown analysis type: %s"% arg.analysis)
