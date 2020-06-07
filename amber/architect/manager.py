@@ -6,6 +6,7 @@ import warnings
 
 import numpy as np
 import tensorflow as tf
+from keras import backend as K
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.models import Model
 
@@ -72,6 +73,7 @@ class GeneralManager(BaseNetworkManager):
         train_graph = tf.Graph()
         train_sess = tf.Session(graph=train_graph)
         with train_graph.as_default(), train_sess.as_default():
+            K.set_session(train_sess)
             model = self.model_fn(model_arc)  # a compiled keras Model
 
             # unpack the dataset
@@ -126,6 +128,19 @@ class GeneralManager(BaseNetworkManager):
         del hist
         gc.collect()
         return this_reward, loss_and_metrics
+
+
+class DistributedGeneralManager(GeneralManager):
+    def __init__(self, devices, *args, **kwargs):
+        self.devices = devices
+        super().__init__(*args, **kwargs)
+
+    def get_rewards(self, trial, model_arc, **kwargs):
+        strategy = tf.distribute.MirroredStrategy(devices=self.devices)
+        print('Number of devices: {} - {}'.format(strategy.num_replicas_in_sync, self.devices))
+        with strategy.scope():
+            res = super().get_rewards(trial=trial, model_arc=model_arc, **kwargs)
+        return res
 
 
 class EnasManager(GeneralManager):

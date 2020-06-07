@@ -38,6 +38,7 @@ def store_with_model_plot(
         *args, **kwargs
 ):
     par_dir = os.path.join(working_dir, 'weights', 'trial_%s' % trial)
+    os.makedirs(par_dir, exist_ok=True)
     store_general(trial=trial,
                   model=model,
                   hist=hist,

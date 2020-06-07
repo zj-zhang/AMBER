@@ -185,10 +185,13 @@ def save_stats(loss_and_metrics_list, working_dir):
     data = [list(loss_and_metrics.values()) for loss_and_metrics in loss_and_metrics_list]
     data_per_cat = list(zip(*data))
     k_data = data_per_cat[keys.index('knowledge')]
-    acc_data = data_per_cat[keys.index('acc')]
     loss_data = data_per_cat[keys.index('loss')]
     df['Knowledge'].append(list(k_data))
-    df['Accuracy'].append(list(acc_data))
     df['Loss'].append(list(loss_data))
-
+    # modified 2020.6.7 by ZZ: not every case will have the Accuracy metric..
+    try:
+        acc_data = data_per_cat[keys.index('acc')]
+        df['Accuracy'].append(list(acc_data))
+    except ValueError:
+        pass
     json.dump(df, open(save_path, 'w'))
