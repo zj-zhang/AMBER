@@ -21,7 +21,7 @@ from amber.architect.common_ops import count_model_params
 
 #from amber.architect.manager import EnasManager
 from amber.architect.train_env import MultiManagerEnvironment
-from amber.architect.reward import LossAucReward
+from amber.architect.reward import LossAucReward, LossReward
 from amber.plots import plot_controller_hidden_states
 from amber.utils import run_from_ipython
 from amber.utils.logging import setup_logger
@@ -123,7 +123,8 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
     }
     session = controller.session
 
-    reward_fn = LossAucReward(method='auc')
+    #reward_fn = LossAucReward(method='auc')
+    reward_fn = LossReward() # TODO: IMplement LossAucReward for generator.
 
     child_batch_size = 500
     # TODO: convert functions in `_keras_modeler.py` to classes, and wrap up this Lambda function step
@@ -257,7 +258,7 @@ def train_nas(arg):
         max_episode=200,
         max_step_per_ep=15,
         working_dir=wd,
-        time_budget="12:00:00",
+        time_budget="10:00:00",
         with_input_blocks=False,
         with_skip_connection=False,
     )
