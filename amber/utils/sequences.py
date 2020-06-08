@@ -86,7 +86,7 @@ class Genome(Sequence):
         self.in_memory = in_memory
         if in_memory is True:
             fasta = pyfaidx.Fasta(input_path)
-            self.data = {k: str(fasta[k].seq).upper() for k in fasta.keys()}
+            self.data = {k: str(fasta[k][:].seq).upper() for k in fasta.keys()}
             fasta.close()
         else:
             self.data = pyfaidx.Fasta(input_path)

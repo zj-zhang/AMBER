@@ -74,17 +74,14 @@ class GeneralManager(BaseNetworkManager):
         with train_graph.as_default(), train_sess.as_default():
             model = self.model_fn(model_arc)  # a compiled keras Model
 
-            # unpack the dataset
-            X_val, y_val = self.validation_data[0:2]
-            X_train, y_train = self.train_data
-
             # train the model using Keras methods
             print(" Trial %i: Start training model..." % trial)
-            hist = model.fit(X_train, y_train,
-                             batch_size=self.batchsize,
+            hist = model.fit(self.train_data,
+                             #batch_size=self.batchsize,
                              epochs=self.epochs,
                              verbose=self.verbose,
-                             validation_data=(X_val, y_val),
+                             #shuffle=True,
+                             validation_data=self.validation_data,
                              callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
                                                         monitor='val_loss', verbose=self.verbose,
                                                         save_best_only=True),
@@ -108,7 +105,7 @@ class GeneralManager(BaseNetworkManager):
             # do any post processing,
             # e.g. save child net, plot training history, plot scattered prediction.
             if self.store_fn:
-                val_pred = model.predict(X_val)
+                val_pred = model.predict(self.validation_data) # TODO: Actually need to debug this still.
                 self.store_fn(
                     trial=trial,
                     model=model,
