@@ -5,6 +5,7 @@ Overall wrapper class for DeepAmbre
 """
 
 from tensorflow import Session
+from keras import backend as K
 
 from . import _getter
 
@@ -47,6 +48,7 @@ class Amber:
 
         # use one tf.Session throughout one DA instance
         self.session = Session()
+        K.set_session(self.session)
 
         if specs is not None:
             self.from_dict(specs)

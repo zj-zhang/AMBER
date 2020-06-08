@@ -1426,7 +1426,6 @@ class EnasConv1dDAG:
                 if flatten_op == 'global_avg_pool' or flatten_op == 'gap':
                     inp_c = x.get_shape()[-1].value
                     w = create_weight("w_fc", [inp_c, fc_units])
-                    print("gap w: %s" % w)
                 elif flatten_op == 'flatten':
                     inp_c = np.prod(x.get_shape()[1:]).value
                     w = create_weight("w_fc", [inp_c, fc_units])
