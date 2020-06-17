@@ -10,6 +10,9 @@ from ._general_controller import GeneralController
 from .common_ops import create_bias, create_weight
 from .buffer import MultiManagerBuffer
 import tensorflow as tf
+if tf.__version__.startswith('2'):
+    tf.compat.v1.disable_eager_execution()
+    import tensorflow.compat.v1 as tf
 import sys
 
 

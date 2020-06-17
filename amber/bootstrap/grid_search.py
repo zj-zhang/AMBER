@@ -92,16 +92,16 @@ def rewrite_train_hist(working_dir, model_fn, knowledge_fn, data, suffix='new',
 
 
 def grid_search(model_space_generator, manager, working_dir, B=10, resume_prev_run=True):
-    # for backward comparability
-    if getattr(model_space_generator, "__next__", None):
-        model_space_generator_ = model_space_generator
-    else:
-        model_space_generator_ = itertools.product(*model_space_generator)
     write_mode = "a" if resume_prev_run else "w"
     fh = open(os.path.join(working_dir, 'train_history.csv'), write_mode)
     writer = csv.writer(fh)
     i = 0
     for b in range(B):
+        # for backward comparability
+        if getattr(model_space_generator, "__next__", None):
+            model_space_generator_ = model_space_generator
+        else:
+            model_space_generator_ = itertools.product(*model_space_generator)
         for model_states in model_space_generator_:
             i += 1
             print("B={} i={} arc={}".format(b, i, ','.join([str(x) for x in model_states])))

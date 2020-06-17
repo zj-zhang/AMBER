@@ -7,6 +7,9 @@ import sys
 
 import h5py
 import tensorflow as tf
+if tf.__version__.startswith("2"):
+    tf.compat.v1.disable_eager_execution()
+    import tensorflow.compat.v1 as tf
 
 from .buffer import get_buffer
 from .common_ops import get_keras_train_ops
@@ -369,7 +372,7 @@ class GeneralController(BaseController):
         prev_h = [tf.zeros([batch_size, self.lstm_size], tf.float32) for _ in
                   range(self.lstm_num_layers)]
         # only expand `g_emb` if necessary
-        if self.g_emb.shape[0].value == 1:
+        if self.g_emb.shape[0] is not None and self.g_emb.shape[0].value == 1:
             inputs = tf.matmul(tf.ones((batch_size, 1)), self.g_emb)
         else:
             inputs = self.g_emb

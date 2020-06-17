@@ -9,9 +9,10 @@ Date:
     6.12.2019
 """
 import numpy as np
-import tensorflow as tf
-from keras.layers import Concatenate
-from keras.models import Model
+#import tensorflow as tf
+from ..utils import corrected_tf as tf
+from tensorflow.keras.layers import Concatenate
+from tensorflow.keras.models import Model
 # TODO: need to clean up `State` as `Operation`
 from ..architect.model_space import State
 
@@ -21,11 +22,11 @@ from ..architect.common_ops import get_tf_metrics, get_keras_train_ops, get_tf_l
     create_bias, batch_norm1d
 # for get layers
 from keras import backend as K
-from keras.layers import GlobalAveragePooling1D, GlobalMaxPooling1D, GaussianNoise
-from keras.layers.core import Dense, Dropout, Flatten
-from keras.layers.convolutional import Conv1D, MaxPooling1D, AveragePooling1D
-from keras.layers import Input, Lambda, Permute
-from keras.layers.recurrent import LSTM
+from tensorflow.keras.layers import GlobalAveragePooling1D, GlobalMaxPooling1D, GaussianNoise
+from tensorflow.keras.layers import Dense, Dropout, Flatten
+from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
+from tensorflow.keras.layers import Input, Lambda, Permute
+from tensorflow.keras.layers import LSTM
 from ..modeler.operators import Layer_deNovo, SeparableFC, sparsek_vec
 from ..architect.model_space import get_layer_shortname
 
@@ -1426,10 +1427,16 @@ class EnasConv1dDAG:
             with tf.variable_scope("fc"):
                 fc_units = self.stem_config['fc_units'] if 'fc_units' in self.stem_config else 1000
                 if flatten_op == 'global_avg_pool':
-                    inp_c = x.get_shape()[-1].value
+                    try:
+                        inp_c = x.get_shape()[-1].value
+                    except AttributeError:
+                        inp_c = x.get_shape()[-1]
                     w = create_weight("w_fc", [inp_c, fc_units])
                 elif flatten_op == 'flatten':
-                    inp_c = np.prod(x.get_shape()[1:]).value
+                    try:
+                        inp_c = np.prod(x.get_shape()[1:]).value
+                    except AttributeError:
+                        inp_c = np.prod(x.get_shape()[1:])
                     w = create_weight("w_fc", [inp_c, fc_units])
                 b = create_bias("b_fc", shape=[fc_units])
                 x = tf.matmul(x, w) + b
@@ -1449,10 +1456,16 @@ class EnasConv1dDAG:
     def _refactorized_channels_for_skipcon(self, layer, out_filters, is_training):
         """for dealing with mismatch-dimensions in skip connections: use a linear transformation"""
         if self.data_format == 'NWC':
-            inp_c = layer.get_shape()[-1].value
+            try:
+                inp_c = layer.get_shape()[-1].value
+            except AttributeError:
+                inp_c = layer.get_shape()[-1]
             actual_data_format = 'channels_last'
         elif self.data_format == 'NCW':
-            inp_c = layer.get_shape()[1].value
+            try:    
+                inp_c = layer.get_shape()[1].value
+            except AttributeError:
+                inp_c = layer.get_shape()[1]
             actual_data_format = 'channels_first'
 
         with tf.variable_scope("path1_conv"):
@@ -1465,11 +1478,21 @@ class EnasConv1dDAG:
     def _layer(self, arc_seq, layer_id, prev_layers, start_idx, out_filters, is_training):
         inputs = prev_layers[-1]
         if self.data_format == "NWC":
-            inp_w = inputs.get_shape()[1].value
-            inp_c = inputs.get_shape()[2].value
+            try:
+                inp_w = inputs.get_shape()[1].value
+                inp_c = inputs.get_shape()[2].value
+            except AttributeError:    # for newer tf2
+                inp_w = inputs.get_shape()[1]
+                inp_c = inputs.get_shape()[2]
+
         elif self.data_format == "NCW":
-            inp_c = inputs.get_shape()[1].value
-            inp_w = inputs.get_shape()[2].value
+            try:
+                inp_c = inputs.get_shape()[1].value
+                inp_w = inputs.get_shape()[2].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[1]
+                inp_w = inputs.get_shape()[2]
+
         else:
             raise Exception("cannot understand data format: %s" % self.data_format)
         count = arc_seq[start_idx]
@@ -1541,10 +1564,15 @@ class EnasConv1dDAG:
         dilation = layer_attr['dilation'] if 'dilation' in layer_attr else 1
         filters = layer_attr['filters']
         if self.data_format == "NWC":
-            inp_c = inputs.get_shape()[-1].value
+            try:
+                inp_c = inputs.get_shape()[-1].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[-1]
         elif self.data_format == "NCW":
-            inp_c = inputs.get_shape()[1].value
-
+            try:
+                inp_c = inputs.get_shape()[1].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[1]
         w = create_weight("w", [kernel_size, inp_c, filters])
         x = tf.nn.conv1d(inputs, filters=w, stride=1, padding="SAME", dilations=dilation)
         x = batch_norm1d(x, is_training, data_format=self.data_format)
@@ -1557,10 +1585,16 @@ class EnasConv1dDAG:
         strides = layer_attr['strides']
         filters = layer_attr['filters']
         if self.data_format == "NWC":
-            inp_c = inputs.get_shape()[-1].value
+            try:
+                inp_c = inputs.get_shape()[-1].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[-1]
             actual_data_format = "channels_last"
         elif self.data_format == "NCW":
-            inp_c = inputs.get_shape()[1].value
+            try:
+                inp_c = inputs.get_shape()[1].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[1]
             actual_data_format = "channels_first"
         else:
             raise Exception("Unknown data format: %s" % self.data_format)

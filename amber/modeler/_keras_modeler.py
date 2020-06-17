@@ -1,7 +1,39 @@
-from keras.models import Model
+import tensorflow.keras as keras
+from tensorflow.keras.models import Model
 from ..architect import Operation
 from .dag import get_layer
 import numpy as np
+from ._enas_modeler import ModelBuilder
+import tensorflow as tf
+
+
+class KerasModelBuilder(ModelBuilder):
+    def __init__(self, inputs, outputs, model_compile_dict, model_space=None, gpus=None, **kwargs):
+        self.model_compile_dict = model_compile_dict
+        self.input_node = inputs
+        self.output_node = outputs
+        self.model_space = model_space
+        self.gpus = gpus
+
+    def __call__(self, model_states):
+        if self.gpus is None or self.gpus == 1:
+            model = build_sequential_model(
+                        model_states=model_states,
+                        input_state=self.input_node,
+                        output_state=self.output_node,
+                        model_compile_dict=self.model_compile_dict,
+                        model_space=self.model_space
+                        )
+        else:
+             model = build_multi_gpu_sequential_model(
+                        model_states=model_states,
+                        input_state=self.input_node,
+                        output_state=self.output_node,
+                        model_compile_dict=self.model_compile_dict,
+                        model_space=self.model_space,
+                        gpus=self.gpus
+                        )
+        return model
 
 
 def build_sequential_model(model_states, input_state, output_state, model_compile_dict, **kwargs):
@@ -36,8 +68,8 @@ def build_multi_gpu_sequential_model(model_states, input_state, output_state, mo
         from keras.utils import multi_gpu_model
     except Exception as e:
         raise Exception("multi gpu not supported in keras. check your version. Error: %s" % e)
-    vanilla_model = build_sequential_model(model_states, input_state, output_state, model_compile_dict)
-    model = multi_gpu_model(vanilla_model, gpus=gpus, **kwargs)
+    vanilla_model = build_sequential_model(model_states, input_state, output_state, model_compile_dict, **kwargs)
+    model = multi_gpu_model(vanilla_model, gpus=gpus)
     model.compile(**model_compile_dict)
     return model
 

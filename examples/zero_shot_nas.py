@@ -19,7 +19,7 @@ from amber.architect.controller import ZeroShotController
 from amber.architect.model_space import State, ModelSpace
 from amber.architect.common_ops import count_model_params
 
-#from amber.architect.manager import EnasManager
+from amber.architect.manager import EnasManager
 from amber.architect.train_env import MultiManagerEnvironment
 from amber.architect.reward import LossAucReward
 from amber.plots import plot_controller_hidden_states
@@ -31,16 +31,18 @@ from amber.modeler.modeler import build_sequential_model
 from amber.architect.manager import GeneralManager
 from amber.architect.model_space import get_layer_shortname
 
+from amber.bootstrap.mock_manager import MockManager
 
-def get_controller(model_space, session, data_description_len=3):
+
+def get_controller(model_space, session, data_description_len=3, is_enas=True):
     with tf.device("/cpu:0"):
         controller = ZeroShotController(
             data_description_len=data_description_len,
             model_space=model_space,
             session=session,
-            #share_embedding={i:0 for i in range(1, len(model_space))},
-            with_skip_connection=False,
-            skip_weight=None,
+            share_embedding={i:0 for i in range(1, len(model_space))} if is_enas else None,
+            with_skip_connection=is_enas,
+            skip_weight=0.8 if is_enas else None,
             skip_target=0.2,
             lstm_size=32,
             lstm_num_layers=1,
@@ -50,30 +52,25 @@ def get_controller(model_space, session, data_description_len=3):
             temperature=2.,
             tanh_constant=1.5,
             buffer_type="MultiManager",
-            buffer_size=5,
-            batch_size=5,
-            use_ppo_loss=True
+            buffer_size=1 if is_enas else 5,
+            batch_size=20 if is_enas else 5,
+            use_ppo_loss=True,
+            rescale_advantage_by_reward=True
         )
-        controller.buffer.rescale_advantage_by_reward = False
     return controller
 
 
 def get_model_space_enas(out_filters=16, num_layers=3, num_pool=3):
     state_space = ModelSpace()
-    if num_pool == 4:
-        expand_layers = [num_layers//4-1, num_layers//4*2-1, num_layers//4*3-1]
-    elif num_pool == 3:
-        expand_layers = [num_layers//3-1, num_layers//3*2-1]
-    else:
-        raise Exception("Unsupported pooling num: %i"%num_pool)
+    expand_layers = [num_layers//num_pool*i-1 for i in range(num_pool)]
     for i in range(num_layers):
         state_space.add_layer(i, [
-            State('conv1d', filters=out_filters, kernel_size=4, activation='relu'),
             State('conv1d', filters=out_filters, kernel_size=8, activation='relu'),
-            State('conv1d', filters=out_filters, kernel_size=12, activation='relu'),
+            State('conv1d', filters=out_filters, kernel_size=14, activation='relu'),
+            State('conv1d', filters=out_filters, kernel_size=20, activation='relu'),
             # max/avg pool has underlying 1x1 conv
-            State('maxpool1d', filters=out_filters, pool_size=4, strides=1),
-            State('avgpool1d', filters=out_filters, pool_size=4, strides=1),
+            State('maxpool1d', filters=out_filters, pool_size=8, strides=1),
+            State('avgpool1d', filters=out_filters, pool_size=8, strides=1),
             State('identity', filters=out_filters),
       ])
         if i in expand_layers:
@@ -163,8 +160,8 @@ def get_manager_enas(train_data, val_data, controller, model_space, wd, data_des
         controller=controller,
         dag_kwargs={
             'stem_config':{
-                'flatten_op': 'flatten',
-                'fc_units': 10
+                'flatten_op': 'global_avg_pool',
+                'fc_units': 3
                 },
             'name': dag_name,
             'data_description': data_description
@@ -194,7 +191,6 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
         'optimizer': 'adam',
         'metrics': ['acc']
     }
-    session = controller.session
 
     reward_fn = LossAucReward(method='auc')
 
@@ -220,15 +216,55 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
     return manager
 
 
-def get_samples_controller(dfeatures, controller, model_space, T=100):
+def get_manager_mock(dataset, model_space, **kwargs):
+    if dataset in [1,2]:
+        model_compile_dict = {
+            'loss': 'binary_crossentropy',
+            'optimizer': 'adam',
+            'metrics': ['acc']
+        }
+        
+        def mock_reward_fn(model_arc, train_history_df, *args, **kwargs):
+            model_states_ = [str(model_space[i][model_arc[i]]) for i in range(len(model_arc))]
+            idx_bool = np.array([train_history_df['L%i' % (i + 1)] == model_states_[i] for i in range(len(model_states_))])
+            index = np.apply_along_axis(func1d=lambda x: all(x), axis=0, arr=idx_bool)
+            l, k = train_history_df[['loss', 'knowledge']].iloc[np.random.choice(np.where(index)[0])]
+            this_reward =  l 
+            loss_and_metrics = [l, k]
+            reward_metrics = {'knowledge': k}
+            return this_reward, loss_and_metrics, reward_metrics
+
+        manager = MockManager(
+                #history_fn_list=['./outputs/zs_grid_history/dataset%i/zs_grid_%i/train_history.csv'%(dataset, i)
+                #    for i in range(1,3)],
+                history_fn_list = ['./outputs/zs_hist/dataset%i/train_history.csv'%dataset ],
+                model_compile_dict=model_compile_dict,
+                #metric_name_dict={"acc":0, "knowledge":1, "loss":2},
+                metric_name_dict={"knowledge":0, "loss":1},
+                reward_fn=mock_reward_fn
+                )
+    else:
+        raise Exception("Unknown dataset: %s"%dataset)
+    return manager
+
+
+def get_samples_controller(dfeatures, controller, model_space, T=100, is_enas=True):
     res = []
     for i in range(len(dfeatures)):
         dfeature = dfeatures[[i]]
         prob_arr = [ np.zeros((T, len(model_space[i]))) for i in range(len(model_space)) ]
+        if is_enas:
+            skip_layers = [i*2 for i in range(1, len(model_space))]
+        else:
+            skip_layers = []
         for t in range(T):
             a, p = controller.get_action(dfeature)
+            layer_id = 0
             for i, p in enumerate(p):
-                prob_arr[i][t] = p.flatten()
+                if i in skip_layers:
+                    continue
+                prob_arr[layer_id][t] = p.flatten()
+                layer_id += 1
         res.append(prob_arr)
     return res
 
@@ -260,13 +296,19 @@ def convert_to_dataframe(res, model_space, data_names):
 
 def reload_trained_controller(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
-    model_space = get_model_space_common()
-    session = tf.Session()
-    controller = get_controller(model_space=model_space, session=session, data_description_len=2)
+    model_space = get_model_space_common() if arg.mode!="enas" else \
+            get_model_space_enas(out_filters=4, num_layers=3, num_pool=3) 
+    try:
+        session = tf.Session()
+    except:
+        session = tf.compat.v1.Session()
+
+    controller = get_controller(model_space=model_space, session=session, data_description_len=2,
+            is_enas=arg.mode=='enas')
     controller.load_weights(os.path.join(wd, "controller_weights.h5"))
 
     dfeatures = np.array([[1,0], [0,1]])  # one-hot encoding
-    res = get_samples_controller(dfeatures, controller, model_space, T=1000)
+    res = get_samples_controller(dfeatures, controller, model_space, T=1000, is_enas=arg.mode=='enas')
    
     import seaborn as sns
     import matplotlib.pyplot as plt
@@ -286,20 +328,24 @@ def reload_trained_controller(arg):
 
 def train_nas(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
+    logger = setup_logger(wd, verbose_level=logging.INFO)
     verbose = 2
-    model_space = get_model_space_common()
-    session = tf.Session()
-    controller = get_controller(model_space=model_space, session=session, data_description_len=2)
+    model_space = get_model_space_enas(out_filters=3, num_layers=4, num_pool=2) if arg.mode == 'enas' else \
+            get_model_space_common()
+    try:
+        session = tf.Session()
+    except:
+        session = tf.compat.v1.Session()
+    controller = get_controller(model_space=model_space, session=session, data_description_len=2,
+            is_enas=arg.mode=='enas')
 
     dataset1, dataset2 = read_data()
     dfeatures = np.array([[1,0], [0,1]])  # one-hot encoding
-    manager1 = get_manager_common(train_data=dataset1['train'], val_data=dataset1['val'], controller=controller,
-            model_space=model_space, wd=wd, data_description=dfeatures[[0]], dag_name="EnasDAG1", verbose=verbose)
-    manager2 = get_manager_common(train_data=dataset2['train'], val_data=dataset2['val'], controller=controller,
-            model_space=model_space, wd=wd, data_description=dfeatures[[1]], dag_name="EnasDAG2", verbose=verbose)
-
-    logger = setup_logger(wd, verbose_level=logging.INFO)
-    try:
+    if arg.mode == 'enas':
+        manager1 = get_manager_enas(train_data=dataset1['train'], val_data=dataset1['val'], controller=controller,
+                model_space=model_space, wd=wd, data_description=dfeatures[[0]], dag_name="EnasDAG1", verbose=verbose)
+        manager2 = get_manager_enas(train_data=dataset2['train'], val_data=dataset2['val'], controller=controller,
+                model_space=model_space, wd=wd, data_description=dfeatures[[1]], dag_name="EnasDAG2", verbose=verbose)
         # only for enas
         vars_list1 = [v for v in tf.trainable_variables() if v.name.startswith(manager1.model_fn.dag.name)]
         vars_list2 = [v for v in tf.trainable_variables() if v.name.startswith(manager2.model_fn.dag.name)]
@@ -311,8 +357,18 @@ def train_nas(arg):
         with open(os.path.join(wd,"tensor_vars.txt"), "w") as f:
             for v in vars_list1 + vars_list2:
                 f.write("%s\t%i\n"%(v.name, int(np.prod(v.shape).value) ))
-    except AttributeError:
-        pass
+
+    elif arg.mode == 'vanilla':
+        manager1 = get_manager_common(train_data=dataset1['train'], val_data=dataset1['val'], controller=controller,
+                model_space=model_space, wd=wd, data_description=dfeatures[[0]], dag_name="EnasDAG1", verbose=verbose)
+        manager2 = get_manager_common(train_data=dataset2['train'], val_data=dataset2['val'], controller=controller,
+                model_space=model_space, wd=wd, data_description=dfeatures[[1]], dag_name="EnasDAG2", verbose=verbose)
+    elif arg.mode == 'bootstrap':
+        manager1 = get_manager_mock(dataset=1, model_space=model_space)
+        manager2 = get_manager_mock(dataset=2, model_space=model_space)
+    
+    else:
+        raise Exception("Cannot understand mode: %s"% arg.mode)
 
 
     env = MultiManagerEnvironment(
@@ -321,11 +377,11 @@ def train_nas(arg):
         manager=[manager1, manager2],
         logger=logger,
         max_episode=200,
-        max_step_per_ep=15,
+        max_step_per_ep=100 if arg.mode=='enas' else 15,
         working_dir=wd,
-        time_budget="12:00:00",
+        time_budget="8:00:00",
         with_input_blocks=False,
-        with_skip_connection=False,
+        with_skip_connection=arg.mode=="enas",
     )
 
     try:
@@ -340,10 +396,12 @@ if __name__ == "__main__":
     if not run_from_ipython():
         parser = argparse.ArgumentParser(description="experimental zero-shot nas")
         parser.add_argument("--analysis", type=str, choices=['train', 'reload'], required=True, help="analysis type")
+        parser.add_argument("--mode", type=str, choices=['enas', 'vanilla', 'bootstrap'], required=True, help="amber mode")
         parser.add_argument("--wd", type=str, default="./outputs/zero_shot/", help="working dir")
 
         arg = parser.parse_args()
 
+        os.makedirs(arg.wd, exist_ok=True)
         if arg.analysis == "train":
             train_nas(arg)
         elif arg.analysis == "reload":

@@ -17,14 +17,13 @@ import argparse
 from amber.architect.controller import ZeroShotController
 from amber.architect.model_space import State, ModelSpace
 
-#from amber.architect.manager import EnasManager
 from amber.architect.train_env import MultiManagerEnvironment, ParallelMultiManagerEnvironment
 from amber.architect.reward import LossAucReward
 from amber.plots import plot_controller_hidden_states
 from amber.utils import run_from_ipython, get_available_gpus
 from amber.utils.logging import setup_logger
 
-from amber.modeler.modeler import build_sequential_model
+from amber.modeler.modeler import build_sequential_model, KerasModelBuilder
 from amber.architect.manager import GeneralManager, DistributedGeneralManager
 from amber.architect.model_space import get_layer_shortname
 
@@ -44,10 +43,9 @@ reward_fn = LossAucReward(method='auc')
 child_batch_size = 500
 
 
-def model_fn(model_arc):
-    return build_sequential_model(
-        model_states=model_arc, input_state=input_node, output_state=output_node, model_compile_dict=model_compile_dict,
-        model_space=model_space)
+def get_model_builder():
+    mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space)
+    return mb
 
 
 def get_controller(model_space, session, data_description_len=3):
@@ -82,10 +80,10 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         devices=devices,
         train_data=train_data,
         validation_data=val_data,
-        epochs=5,
+        epochs=50,
         child_batchsize=child_batch_size,
         reward_fn=reward_fn,
-        model_fn=model_fn,
+        model_fn=get_model_builder(),
         store_fn='model_plot',
         model_compile_dict=model_compile_dict,
         working_dir=wd,
@@ -128,15 +126,21 @@ def reload_trained_controller(arg):
 def train_nas(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
     verbose = 1
-    session = tf.Session()
+    try:
+        session = tf.Session()
+    except AttributeError:
+        session = tf.compat.v1.Session()
     controller = get_controller(model_space=model_space, session=session, data_description_len=2)
 
     dataset1, dataset2 = read_data()
     dfeatures = np.array([[1,0], [0,1]])  # one-hot encoding
     gpus = get_available_gpus()
+    #gpus = tf.config.experimental.list_physical_devices('GPU')
     if len(gpus) > 1:
         dev1 = gpus[:len(gpus)//2]
         dev2 = gpus[len(gpus)//2 :]
+        print(dev1)
+        print(dev2)
     else:
         dev1 = dev2 = None
     manager1 = get_manager_distributed(train_data=dataset1['train'], val_data=dataset1['val'], controller=controller,

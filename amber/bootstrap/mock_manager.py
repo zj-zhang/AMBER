@@ -29,9 +29,8 @@ def get_mock_reward(model_states, train_history_df, metric, stringify_states=Tru
         return train_history_df[metric].iloc[np.random.choice(np.where(index)[0])]
 
 
-def get_default_mock_reward_fn(model_states, train_history_df, lbd=1.):
+def get_default_mock_reward_fn(model_states, train_history_df, lbd=1.0, metric=['loss', 'knowledge', 'acc']):
     Lambda = lbd
-    metric = ['loss', 'knowledge', 'acc']
     mock_reward = get_mock_reward(model_states, train_history_df, metric)
     this_reward = -(mock_reward['loss'] + Lambda * mock_reward['knowledge'])
     loss_and_metrics = [mock_reward['loss'], mock_reward['acc']]
@@ -90,7 +89,9 @@ class MockManager(NetworkManager):
         s = "MockManager with %i records" % self.train_history_df.shape[0]
         return s
 
-    def get_rewards(self, trial, model_states):
+    def get_rewards(self, trial, model_states=None, **kwargs):
+        if model_states is None:
+            model_states = kwargs.pop('model_arc', None)
         # evaluate the model by `reward_fn`
         if self.reward_fn:
             this_reward, loss_and_metrics, reward_metrics = self.reward_fn(model_states, self.train_history_df,

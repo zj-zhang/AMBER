@@ -4,7 +4,12 @@
 Overall wrapper class for DeepAmbre
 """
 
-from tensorflow import Session
+import tensorflow as tf
+try:
+    from tensorflow import Session
+except ImportError:
+    from tensorflow.compat.v1 import Session
+    tf.compat.v1.disable_eager_execution()
 
 from . import _getter
 
