@@ -13,7 +13,7 @@ import pyfaidx
 
 def draw_samples(genome_file, bed_file, output_file, feature_name_file,
                  bin_size, cvg_frac, n_examples,
-                 chrom_pad, chrom_pattern, max_unk):
+                 chrom_pad, chrom_pattern, max_unk, interval_file):
     # Read feature names from file.
     feature_name_set = set()
     i_to_feature_name = list()
@@ -38,13 +38,45 @@ def draw_samples(genome_file, bed_file, output_file, feature_name_file,
         if chrom_pattern.match(k) is not None:
             l = len(genome[k])
             if l > chrom_pad * 3:
-                chroms.append(k)
-                chrom_lens.append(l - 2 * chrom_pad - bin_size)
-    chrom_weighting_lens = numpy.array(chrom_lens)
-    chrom_lens = numpy.array(chrom_lens) * 2
-    chrom_weights = chrom_lens / numpy.sum(chrom_lens)
+                for s in ["+", "-"]: # Different mass on strands.
+                    chroms.append((s, k))
+                    chrom_lens.append(l - 2 * chrom_pad - bin_size)
     n_chrom = len(chroms)
-    max_examples = numpy.sum(chrom_lens)
+    chrom_to_i = {k: i for (i, k) in enumerate(chroms)}
+
+    # Get intervals.
+    if interval_file is None:
+        chrom_weighting_lens = numpy.array(chrom_lens)
+        chrom_lens = numpy.array(chrom_lens)
+        chrom_weights = chrom_lens / numpy.sum(chrom_lens)
+        chrom_bound_ivt = {k: intervaltree.IntervalTree() for k in chroms}
+        for s in chrom_bound_ivt.keys():
+            for x, chrom_len in zip(chroms, chrom_lens.tolist()):
+                chrom_bound_ivt[x].addi(chrom_pad, chrom_len + chrom_pad, True)
+        max_examples = numpy.sum(chrom_lens)
+    else:
+        chrom_weighting_lens = numpy.zeros(n_chrom)
+        chrom_lens = numpy.array(chrom_lens)
+        chrom_bound_ivt = {k: intervaltree.IntervalTree() for k in chroms}
+        with open(interval_file, "r") as read_file:
+            for line_i, line in enumerate(read_file):
+                line = line.strip()
+                if line:
+                    if not line.startswith("#"):
+                        line = line.split("\t")
+                        if len(line) != 6:
+                            s = "Found that line #{} has {} elements and not 6".format(line_i, len(line))
+                            raise ValueError(s)
+                        chrom, start, end, _, _, strand = line
+                        start = int(start)
+                        end = int(end)
+                        start, end = min(start, end - 1), max(start + 1, end)
+                        if (strand, chrom) in chrom_to_i:
+                            chrom_bound_ivt[(strand, chrom)].addi(start, end, True)
+                            chrom_weighting_lens[chrom_to_i[(strand, chrom)]] += abs(end - start)
+        max_examples = numpy.sum(chrom_weighting_lens)
+        chrom_weights = chrom_weighting_lens / chrom_weighting_lens.sum()
+
     if max_examples < n_examples:
         msg = "Got {} max examples possible, but need {} examples".format(
             max_examples, n_examples)
@@ -70,22 +102,22 @@ def draw_samples(genome_file, bed_file, output_file, feature_name_file,
                         ivt[x][chrom].addi(start, end, feature_name_to_i[name])
 
     # Create outputs.
-    seen = {"+": collections.defaultdict(set),
-            "-": collections.defaultdict(set)}
+    seen = {k : set() for k in range(len(chroms))}
     outputs = list()
     i = 0
     while i < n_examples:
         c_i = numpy.random.choice(n_chrom, p=chrom_weights)
-        strand = numpy.random.choice(["+", "-"], 1)[0]
-        chrom = chroms[c_i]
+        strand, chrom = chroms[c_i]
         pos = numpy.random.choice(chrom_lens[c_i]) + chrom_pad
+        if len(chrom_bound_ivt[(strand, chrom)].overlap(pos, pos + 1)) == 0:
+            continue
         start = pos
         end = pos + bin_size
-        if pos not in seen[strand][c_i]:
+        if pos not in seen[c_i]:
             # Add to seen and adjust weights.
             chrom_weighting_lens[c_i] -= 1
             chrom_weights = chrom_weighting_lens / numpy.sum(chrom_weighting_lens)
-            seen[strand][c_i].add(pos)
+            seen[c_i].add(pos)
 
             # Determine label etc w/ ivt.
             cvg = numpy.zeros(n_feats)
@@ -117,10 +149,11 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, required=True, help="Seed for RNG.")
     parser.add_argument("--include-chroms", type=str, required=True, help="Regex for chromosomes to include.")
     parser.add_argument("--max-n", type=int, required=True, help="Maximum N chars in sequences.")
+    parser.add_argument("--interval-file", type=str, required=False, default=None, help="Path to file with intervals to draw positives from")
     args = parser.parse_args()
 
     # Validate arguments.
-    for x in [args.genome, args.bed, args.feature_name_file]:
+    for x in [args.genome, args.bed, args.feature_name_file] + ([] if args.interval_file is None else [args.interval_file]):
         if not os.path.exists(x):
             raise ValueError(x + " does not exist")
 
@@ -149,4 +182,4 @@ if __name__ == "__main__":
     # Run function.
     draw_samples(args.genome, args.bed, args.output, args.feature_name_file,
                  args.bin_size, args.cvg_frac, args.n_examples,
-                 args.chrom_pad, pattern, args.max_n)
+                 args.chrom_pad, pattern, args.max_n, args.interval_file)
