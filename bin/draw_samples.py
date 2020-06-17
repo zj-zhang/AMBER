@@ -109,10 +109,10 @@ def draw_samples(genome_file, bed_file, output_file, feature_name_file,
         c_i = numpy.random.choice(n_chrom, p=chrom_weights)
         strand, chrom = chroms[c_i]
         pos = numpy.random.choice(chrom_lens[c_i]) + chrom_pad
-        if len(chrom_bound_ivt[(strand, chrom)].overlap(pos, pos + 1)) == 0:
-            continue
         start = pos
         end = pos + bin_size
+        if len(chrom_bound_ivt[(strand, chrom)].overlap(start, end)) == 0:
+            continue
         if pos not in seen[c_i]:
             # Add to seen and adjust weights.
             chrom_weighting_lens[c_i] -= 1
@@ -172,7 +172,7 @@ if __name__ == "__main__":
         raise ValueError("--cvg-frac must be < 1")
 
     if args.max_n < 0:
-        raise Valueerror("--max-n must be >= 0")
+        raise ValueError("--max-n must be >= 0")
 
 
     # Prepare for function.
