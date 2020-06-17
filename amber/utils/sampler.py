@@ -322,7 +322,7 @@ class BatchedBioIntervalSequence(BioIntervalSource, keras.utils.Sequence):
         self.batch_size = batch_size
         self.seed = seed
         self.shuffle = shuffle
-        self.random_state = numpy.random.seed(self.seed)
+        self.random_state = numpy.random.RandomState(seed=self.seed)
         self.index = numpy.arange(len(self.examples))
 
     def __len__(self):
@@ -366,7 +366,7 @@ class BatchedBioIntervalSequence(BioIntervalSource, keras.utils.Sequence):
         If applicable, shuffle the examples at the end of an epoch.
         """
         if self.shuffle:
-            self.index = self.random_state.choice(len(self.index),
-                                                  len(self.index),
+            self.index = self.random_state.choice(len(self.examples),
+                                                  len(self.examples),
                                                   replace=False)
 

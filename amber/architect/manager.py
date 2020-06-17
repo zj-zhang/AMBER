@@ -92,7 +92,7 @@ class GeneralManager(BaseNetworkManager):
 
             # evaluate the model by `reward_fn`
             this_reward, loss_and_metrics, reward_metrics = \
-                self.reward_fn(model, (X_val, y_val),
+                self.reward_fn(model, (self.validation_data),
                                session=train_sess,
                                graph=train_graph)
             loss = loss_and_metrics.pop(0)
