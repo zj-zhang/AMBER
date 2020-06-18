@@ -54,9 +54,10 @@ class BioIntervalSource(object):
                 if not line.startswith("#"):
                     if line:
                         line = line.split("\t", 4)
-                        chrom, start, end, label = line[:4]
-                        self.labels.append(numpy.array([int(label)]))
-                        self.examples.append((chrom, int(start), int(end)))
+                        chrom, start, end, strand = line[:4]
+                        label = [int(x) for x in line[5:]]
+                        self.labels.append(numpy.array([label]))
+                        self.examples.append((chrom, int(start), int(end), strand))
 
     def padding_is_valid(self, value):
         """Determine if the specified value is a valid value for padding
@@ -163,8 +164,8 @@ class BioIntervalSource(object):
         -------
         tuple(numpy.ndarray, numpy.ndarray)
         """
-        chrom, start, end = self.examples[item]
-        x = self.reference_sequence.get_sequence_from_coords(chrom, start - self.left_pad, end + self.right_pad)
+        chrom, start, end, strand = self.examples[item]
+        x = self.reference_sequence.get_sequence_from_coords(chrom, start - self.left_pad, end + self.right_pad, strand)
         y = self.labels[item]
         return x, y
 
