@@ -10,6 +10,7 @@ import copy
 import numpy
 import pyfaidx
 
+_DNA_COMP_TABLE = str.maketrans("ATCGN", "TAGCN")
 
 class Sequence(metaclass=abc.ABCMeta):
     """This class represents a source of sequence data, which can be
@@ -109,7 +110,7 @@ class Genome(Sequence):
         """
         return sum(self.chrom_len_dict.values())
 
-    def coords_are_valid(self, chrom, start, end):
+    def coords_are_valid(self, chrom, start, end, strand="+"):
         """Checks if the queried coordinates are valid.
 
         Parameters
@@ -120,6 +121,8 @@ class Genome(Sequence):
             The first position in the queried corodinates.
         end : int
             One past the last position in the queried coordinates.
+        strand : str
+            Strand of sequence to draw from.
 
         Returns
         -------
@@ -136,10 +139,12 @@ class Genome(Sequence):
             return False
         elif start >= self.chrom_len_dict[chrom]:
             return False
+        elif strand not in {"+", "-"}:
+            return False
         else:
             return True
 
-    def get_sequence_from_coords(self, chrom, start, end):
+    def get_sequence_from_coords(self, chrom, start, end, strand="+"):
         """Fetches a string representation of a sequence at
         the specified coordinates.
 
@@ -152,6 +157,8 @@ class Genome(Sequence):
             First position in queried sequence.
         end : int
             One past the last position in the queried sequence.
+        strand : str
+            The strand to sample from.
 
         Returns
         -------
@@ -164,14 +171,16 @@ class Genome(Sequence):
         IndexError
             If the coordinates are not valid.
         """
-        if self.coords_are_valid(chrom, start, end):
+        if self.coords_are_valid(chrom, start, end, strand):
             x = self.data[chrom][start:end]
             if not self.in_memory:
                 x = str(x.seq).upper()
+            if strand == "-":
+                x = x.translate(_DNA_COMP_TABLE)[::-1]
             return x
         else:
-            s = "Specified coordinates ({} to {} on \"{}\") are invalid!".format(
-                start, end, chrom)
+            s = "Specified coordinates ({} to {} on \"{}\", strand of \"{}\") are invalid!".format(
+                start, end, chrom, strand)
             raise IndexError(s)
 
 

@@ -53,6 +53,23 @@ class TestEncodedGenome(unittest.TestCase):
         observed = g.get_sequence_from_coords("seq2", 22, 24)
         self.assertSequenceEqual(expected.tolist(), observed.tolist())
 
+    def test_load_rc(self):
+        expected = "CCAAGGNNTT"
+        expected = [[0, 1, 0, 0],
+                    [0, 1, 0, 0],
+                    [1, 0, 0, 0],
+                    [1, 0, 0, 0],
+                    [0, 0, 1, 0],
+                    [0, 0, 1, 0],
+                    [.25, .25, .25, .25],
+                    [.25, .25, .25, .25],
+                    [0, 0, 0, 1],
+                    [0, 0, 0, 1]]
+        expected = numpy.array(expected)
+        g = self._get_small_genome()
+        observed = g.get_sequence_from_coords("seq0", 0, 10, "-")
+        self.assertSequenceEqual(expected.tolist(), observed.tolist())
+
     def test_coords_flipped(self):
         g = self._get_small_genome()
         observed = g.coords_are_valid("seq0", 2, 1)

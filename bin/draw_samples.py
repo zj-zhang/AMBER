@@ -5,6 +5,7 @@ import argparse
 import collections
 import os
 import re
+import sys
 
 import bx.intervals.intersection
 import gzip
@@ -28,6 +29,7 @@ def draw_samples(genome_file, bed_file, output_file, feature_name_file,
                 feature_name_to_i[line] = i
                 i += 1
     n_feats = len(i_to_feature_name)
+    print("Loaded features", file=sys.stderr)
 
     # Load genome and get estimate of chromosome weights.
     genome = pyfaidx.Fasta(genome_file)
@@ -43,6 +45,7 @@ def draw_samples(genome_file, bed_file, output_file, feature_name_file,
                     chrom_lens.append(l - 2 * chrom_pad - bin_size)
     n_chrom = len(chroms)
     chrom_to_i = {k: i for (i, k) in enumerate(chroms)}
+    print("Loaded chroms", file=sys.stderr)
 
     # Get intervals.
     chrom_bound_ivals = {k: list() for k in chrom_to_i.values()}
@@ -73,10 +76,13 @@ def draw_samples(genome_file, bed_file, output_file, feature_name_file,
                             i = chrom_to_i[(strand, chrom)]
                             start = max(start, chrom_pad)
                             end = min(end, chrom_lens[i] - chrom_pad - bin_size)
+                            if end - start <= 0:
+                                continue
                             chrom_bound_ivals[i].append((start, end))
                             dist = abs(end - start)
                             chrom_weighting_lens[i] += dist
                             chrom_bound_ival_weights[i].append(dist)
+    print("Loaded chrom ivals", file=sys.stderr)
 
     # Calculate weighting and number of examples.
     chrom_weights = chrom_weighting_lens / chrom_weighting_lens.sum()
@@ -108,6 +114,7 @@ def draw_samples(genome_file, bed_file, output_file, feature_name_file,
                         i = chrom_to_i[(x, chrom)]
                         ivt[i][feature_name_to_i[name]].insert_interval(
                             bx.intervals.intersection.Interval(start, end))
+    print("Loaded labels", file=sys.stderr)
 
     # Create outputs.
     outputs = list()
@@ -115,11 +122,27 @@ def draw_samples(genome_file, bed_file, output_file, feature_name_file,
     while i < n_examples:
         c_i = numpy.random.choice(n_chrom, p=chrom_weights)
         strand, chrom = chroms[c_i]
-        ival_bin_i = numpy.random.choice(len(chrom_bound_ivals[c_i]),
+        try:
+            ival_bin_i = numpy.random.choice(len(chrom_bound_ivals[c_i]),
                                          p=numpy.array(chrom_bound_ival_weights[c_i]).flatten() / chrom_weighting_lens[c_i])
+        except:
+            print("***FAILED ON RANDOM CHOICE",
+                  c_i,
+                  chrom_bound_ivals[c_i],
+                  chrom_weights,
+                  chrom_weighting_lens, sep="\n", flush=True, file=sys.stderr)
+            raise RuntimeError()
         start, end = chrom_bound_ivals[c_i].pop(ival_bin_i)
         cur_weight = chrom_bound_ival_weights[c_i].pop(ival_bin_i) # Remove weight.
-        pos = numpy.random.choice(end - start) + start
+        try:
+            pos = numpy.random.choice(end - start) + start
+        except:
+            print("***FAILED ON RANDOM CHOICE",
+                  c_i,
+                  chrom_bound_ivals[c_i],
+                  chrom_weights,
+                  chrom_weighting_lens, sep="\n", flush=True, file=sys.stderr)
+            raise RuntimeError()
         if end - start > 1:
             if pos == start:
                 chrom_bound_ival_weights[c_i].append(cur_weight - 1)
@@ -148,13 +171,16 @@ def draw_samples(genome_file, bed_file, output_file, feature_name_file,
         cvg = (cvg > cvg_frac).astype(int).tolist()
         outputs.append((chrom, start, end, strand, *cvg))
         i += 1
-        print(i)
+        if i % 10000 == 0:
+            print(i)
+    print("Loaded all examples.", file=sys.stderr)
 
     # write outputs to file.
     with open(output_file, "w") as write_file:
         for x in sorted(outputs):
             x = [str(y) for y in list(x)]
             write_file.write("\t".join(x) + "\n")
+    print("Wrote examples.", file=sys.stderr)
 
 
 if __name__ == "__main__":

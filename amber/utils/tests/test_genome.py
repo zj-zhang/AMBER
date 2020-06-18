@@ -25,6 +25,12 @@ class TestGenome(unittest.TestCase):
         observed = g.get_sequence_from_coords("seq0", 0, 10)
         self.assertEqual(expected, observed)
 
+    def test_load_rc(self):
+        expected = "CCAAGGNNTT"
+        g = self._get_small_genome()
+        observed = g.get_sequence_from_coords("seq0", 0, 10, "-")
+        self.assertEqual(expected, observed)
+
     def test_load_sequence0(self):
         expected = "C"
         g = self._get_small_genome()
