@@ -53,10 +53,10 @@ class BioIntervalSource(object):
                 line = line.strip()
                 if not line.startswith("#"):
                     if line:
-                        line = line.split("\t", 4)
+                        line = line.split("\t")
                         chrom, start, end, strand = line[:4]
-                        label = [int(x) for x in line[5:]]
-                        self.labels.append(numpy.array([label]))
+                        label = [int(x) for x in line[4:]]
+                        self.labels.append(numpy.array(label))
                         self.examples.append((chrom, int(start), int(end), strand))
 
     def padding_is_valid(self, value):

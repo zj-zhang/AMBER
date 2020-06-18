@@ -55,9 +55,11 @@ def get_controller(model_space, session, data_description_len=3):
             buffer_type="MultiManager",
             buffer_size=5,
             batch_size=5,
-            use_ppo_loss=True
+            use_ppo_loss=True,
+            rescale_advantage_by_reward=True
         )
-        controller.buffer.rescale_advantage_by_reward = False
+        #controller.buffer.rescale_advantage_by_reward = False
+        controller.buffer.rescale_advantage_by_reward = True
     return controller
 
 
@@ -113,9 +115,9 @@ def get_model_space_common():
     return state_space
 
 
-def get_manager_common(train_data, val_data, controller, model_space, wd, data_description, verbose=2, **kwargs):
+def get_manager_common(train_data, val_data, controller, model_space, wd, data_description, verbose=2, n_feats=1, **kwargs):
     input_node = State('input', shape=(1000, 4), name="input", dtype='float32')
-    output_node = State('dense', units=1, activation='sigmoid')
+    output_node = State('dense', units=n_feats, activation='sigmoid')
     model_compile_dict = {
         'loss': 'binary_crossentropy',
         'optimizer': 'adam',
@@ -245,7 +247,8 @@ def train_nas(arg):
             wd=wd,
             data_description=configs[k]["dfeatures"],
             dag_name="AmberDAG{}".format(k),
-            verbose=verbose)
+            verbose=verbose,
+            n_feats=configs[k]["n_feats"])
         config_keys.append(k)
 
     logger = setup_logger(wd, verbose_level=logging.INFO)
@@ -258,7 +261,7 @@ def train_nas(arg):
         max_episode=200,
         max_step_per_ep=15,
         working_dir=wd,
-        time_budget="10:00:00",
+        time_budget="1:00:00",
         with_input_blocks=False,
         with_skip_connection=False,
     )
