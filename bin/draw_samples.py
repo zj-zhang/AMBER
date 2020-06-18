@@ -6,7 +6,7 @@ import collections
 import os
 import re
 
-import intervaltree
+import bx.intervals.intersection
 import gzip
 import numpy
 import pyfaidx
@@ -45,19 +45,17 @@ def draw_samples(genome_file, bed_file, output_file, feature_name_file,
     chrom_to_i = {k: i for (i, k) in enumerate(chroms)}
 
     # Get intervals.
+    chrom_bound_ivals = {k: list() for k in chrom_to_i.values()}
+    chrom_bound_ival_weights = {k: list() for k in chrom_to_i.values()}
+    chrom_lens = numpy.array(chrom_lens)
     if interval_file is None:
-        chrom_weighting_lens = numpy.array(chrom_lens)
-        chrom_lens = numpy.array(chrom_lens)
-        chrom_weights = chrom_lens / numpy.sum(chrom_lens)
-        chrom_bound_ivt = {k: intervaltree.IntervalTree() for k in chroms}
-        for s in chrom_bound_ivt.keys():
-            for x, chrom_len in zip(chroms, chrom_lens.tolist()):
-                chrom_bound_ivt[x].addi(chrom_pad, chrom_len + chrom_pad, True)
-        max_examples = numpy.sum(chrom_lens)
+        chrom_weighting_lens = chrom_lens.copy()
+        for x, chrom_len in zip(chroms, chrom_lens.tolist()):
+            c_i = chrom_to_i[x]
+            chrom_bound_ivals[c_i].append((chrom_pad, chrom_len + chrom_pad))
+            chrom_bound_ival_weights[c_i].append(chrom_len)
     else:
-        chrom_weighting_lens = numpy.zeros(n_chrom)
-        chrom_lens = numpy.array(chrom_lens)
-        chrom_bound_ivt = {k: intervaltree.IntervalTree() for k in chroms}
+        chrom_weighting_lens = numpy.zeros_like(chrom_lens)
         with open(interval_file, "r") as read_file:
             for line_i, line in enumerate(read_file):
                 line = line.strip()
@@ -72,19 +70,24 @@ def draw_samples(genome_file, bed_file, output_file, feature_name_file,
                         end = int(end)
                         start, end = min(start, end - 1), max(start + 1, end)
                         if (strand, chrom) in chrom_to_i:
-                            chrom_bound_ivt[(strand, chrom)].addi(start, end, True)
-                            chrom_weighting_lens[chrom_to_i[(strand, chrom)]] += abs(end - start)
-        max_examples = numpy.sum(chrom_weighting_lens)
-        chrom_weights = chrom_weighting_lens / chrom_weighting_lens.sum()
+                            i = chrom_to_i[(strand, chrom)]
+                            start = max(start, chrom_pad)
+                            end = min(end, chrom_lens[i] - chrom_pad - bin_size)
+                            chrom_bound_ivals[i].append((start, end))
+                            dist = abs(end - start)
+                            chrom_weighting_lens[i] += dist
+                            chrom_bound_ival_weights[i].append(dist)
 
+    # Calculate weighting and number of examples.
+    chrom_weights = chrom_weighting_lens / chrom_weighting_lens.sum()
+    max_examples = numpy.sum(chrom_weighting_lens)
     if max_examples < n_examples:
         msg = "Got {} max examples possible, but need {} examples".format(
             max_examples, n_examples)
         raise ValueError(msg)
 
     # Create interval tree for fast label query.
-    ivt = {"+": collections.defaultdict(intervaltree.IntervalTree),
-           "-": collections.defaultdict(intervaltree.IntervalTree)}
+    ivt = {k : {kk: bx.intervals.intersection.IntervalTree() for kk in feature_name_to_i.values()} for k in chrom_to_i.values()}
     with gzip.open(bed_file, "rt") as read_file:
         for line in read_file:
             line = line.strip()
@@ -92,41 +95,60 @@ def draw_samples(genome_file, bed_file, output_file, feature_name_file,
                 line = line.split("\t")
                 chrom, start, end, name = line[:4]
                 if len(line) >= 6:
-                    strand = [line[5]]
+                    if line[5] == ".":
+                        strand = ["+", "-"]
+                    else:
+                        strand = [line[5]]
                 else:
                     strand = ["+", "-"]
                 start = int(start)
                 end = int(end)
                 if name in feature_name_set:
                     for x in strand:
-                        ivt[x][chrom].addi(start, end, feature_name_to_i[name])
+                        i = chrom_to_i[(x, chrom)]
+                        ivt[i][feature_name_to_i[name]].insert_interval(
+                            bx.intervals.intersection.Interval(start, end))
 
     # Create outputs.
-    seen = {k : set() for k in range(len(chroms))}
     outputs = list()
     i = 0
     while i < n_examples:
         c_i = numpy.random.choice(n_chrom, p=chrom_weights)
         strand, chrom = chroms[c_i]
-        pos = numpy.random.choice(chrom_lens[c_i]) + chrom_pad
+        ival_bin_i = numpy.random.choice(len(chrom_bound_ivals[c_i]),
+                                         p=numpy.array(chrom_bound_ival_weights[c_i]).flatten() / chrom_weighting_lens[c_i])
+        start, end = chrom_bound_ivals[c_i].pop(ival_bin_i)
+        cur_weight = chrom_bound_ival_weights[c_i].pop(ival_bin_i) # Remove weight.
+        pos = numpy.random.choice(end - start) + start
+        if end - start > 1:
+            if pos == start:
+                chrom_bound_ival_weights[c_i].append(cur_weight - 1)
+                chrom_bound_ivals[c_i].append((start + 1, end))
+            elif pos == end - 1:
+                chrom_bound_ival_weights[c_i].append(cur_weight - 1)
+                chrom_bound_ivals[c_i].append((start, end - 1))
+            else:
+                chrom_bound_ivals[c_i].append((start, pos))
+                chrom_bound_ival_weights[c_i].append(pos - start)
+                chrom_bound_ivals[c_i].append((pos + 1, end))
+                chrom_bound_ival_weights[c_i].append(end - (pos + 1))
         start = pos
         end = pos + bin_size
-        if len(chrom_bound_ivt[(strand, chrom)].overlap(start, end)) == 0:
-            continue
-        if pos not in seen[c_i]:
-            # Add to seen and adjust weights.
-            chrom_weighting_lens[c_i] -= 1
-            chrom_weights = chrom_weighting_lens / numpy.sum(chrom_weighting_lens)
-            seen[c_i].add(pos)
 
-            # Determine label etc w/ ivt.
-            cvg = numpy.zeros(n_feats)
-            for x in ivt[strand][chroms[c_i]].overlap(start, end):
-                cvg[x.data] += min(x.end, end) - max(x.begin, start)
-            cvg /= bin_size
-            cvg = (cvg > cvg_frac).astype(int).tolist()
-            outputs.append((chrom, start, end, strand, *cvg))
-            i += 1
+        # Adjust chrom weights.
+        chrom_weighting_lens[c_i] -= 1
+        chrom_weights = chrom_weighting_lens / numpy.sum(chrom_weighting_lens)
+
+        # Determine label etc w/ ivt.
+        cvg = numpy.zeros(n_feats)
+        for feat_i in feature_name_to_i.values():
+            for x in ivt[c_i][feat_i].find(start, end):
+                cvg[feat_i] += min(x.end, end) - max(x.start, start)
+        cvg /= bin_size
+        cvg = (cvg > cvg_frac).astype(int).tolist()
+        outputs.append((chrom, start, end, strand, *cvg))
+        i += 1
+        print(i)
 
     # write outputs to file.
     with open(output_file, "w") as write_file:
