@@ -9,6 +9,7 @@ Date:
     6.12.2019
 """
 import numpy as np
+import warnings
 #import tensorflow as tf
 from ..utils import corrected_tf as tf
 from tensorflow.keras.layers import Concatenate
@@ -598,6 +599,9 @@ class EnasAnnDAG:
     def _verify_args(self):
         """verify vanilla ANN model space, input nodes, etc.,
          and configure internal attr. like masking steps"""
+        # check the consistency of with_output_blocks and output_op
+        if not self.with_output_blocks and len(self.output_node)>1:
+            warnings.warn("You specified `with_output_blocks=False`, but gave a List of output operations of length %i"%len(self.output_node), stacklevel=2)
         # model space
         assert len(set([tuple(self.model_space[i]) for i in
                         range(self.num_layers)])) == 1, "model_space for EnasDAG must be identical for all layers"
@@ -890,103 +894,104 @@ class EnasAnnDAG:
         metrics = self.model_compile_dict['metrics'] if 'metrics' in self.model_compile_dict else None
         var_scope = var_scope or self.name
 
-        if self.feature_model is None or self.feature_model.pseudo_inputs_pipe is None:
-            labels = self.child_model_label
-        else:
-            # TODO: for now, only use data_pipe for sample_arc
-            if use_pipe:
-                labels = self.child_model_label_pipe
-            else:
+        with tf.compat.v1.variable_scope("compile", reuse=tf.AUTO_REUSE):
+            if self.feature_model is None or self.feature_model.pseudo_inputs_pipe is None:
                 labels = self.child_model_label
+            else:
+                # TODO: for now, only use data_pipe for sample_arc
+                if use_pipe:
+                    labels = self.child_model_label_pipe
+                else:
+                    labels = self.child_model_label
 
-        # TODO: process loss_weights
-        loss_weights = self.model_compile_dict['loss_weights'] if 'loss_weights' in self.model_compile_dict else None
-        if type(loss) is str:
-            loss_ = [get_tf_loss(loss, labels[i], model_output[i]) for i in range(len(model_output))]
-            # loss_ should originally all have the batch_size dim, then reduce_mean to 1-unit sample
-            # if the loss is homogeneous, then take the mean
-            loss_ = tf.reduce_mean(loss_)
-        elif type(loss) is list:
-            loss_ = []
-            for i in range(len(loss)):
-                loss_.append(get_tf_loss(
-                    loss[i],
-                    labels[i],
-                    model_output[i]
-                ))
-            # if the loss are provided by a list, assume its heterogeneous, and return the sum of
-            # each individual loss components
-            loss_ = tf.reduce_sum(loss_)
-        elif callable(loss):
-            loss_ = tf.reduce_sum([loss(labels[i], model_output[i]) for i in range(len(model_output))])
-        else:
-            raise Exception("expect loss to be str, list, dict or callable; got %s" % loss)
-        trainable_var = [var for var in tf.trainable_variables() if var.name.startswith(var_scope)]
-        if self.feature_model_trainable:
-            feature_model_trainable_var = [var for var in tf.trainable_variables() if
-                                           var.name.startswith(self.feature_model.name)]
-            assert len(feature_model_trainable_var) > 0, "You asked me to train featureModel but there is no trainable " \
-                                                         "variables in featureModel"
-            trainable_var += feature_model_trainable_var
-        regularization_penalty = 0.
-        if self.l1_reg > 0:
-            l1_regularizer = tf.contrib.layers.l1_regularizer(
-                scale=self.l1_reg, scope=self.name
-            )
-            l1_regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer,
-                                                                               [var[0] for var in w_masks])
-            loss_ += l1_regularization_penalty
-        else:
-            l1_regularization_penalty = 0.
+            # TODO: process loss_weights
+            loss_weights = self.model_compile_dict['loss_weights'] if 'loss_weights' in self.model_compile_dict else None
+            if type(loss) is str:
+                loss_ = [get_tf_loss(loss, labels[i], model_output[i]) for i in range(len(model_output))]
+                # loss_ should originally all have the batch_size dim, then reduce_mean to 1-unit sample
+                # if the loss is homogeneous, then take the mean
+                loss_ = tf.reduce_mean(loss_)
+            elif type(loss) is list:
+                loss_ = []
+                for i in range(len(loss)):
+                    loss_.append(get_tf_loss(
+                        loss[i],
+                        labels[i],
+                        model_output[i]
+                    ))
+                # if the loss are provided by a list, assume its heterogeneous, and return the sum of
+                # each individual loss components
+                loss_ = tf.reduce_sum(loss_)
+            elif callable(loss):
+                loss_ = tf.reduce_sum([loss(labels[i], model_output[i]) for i in range(len(model_output))])
+            else:
+                raise Exception("expect loss to be str, list, dict or callable; got %s" % loss)
+            trainable_var = [var for var in tf.trainable_variables() if var.name.startswith(var_scope)]
+            if self.feature_model_trainable:
+                feature_model_trainable_var = [var for var in tf.trainable_variables() if
+                                               var.name.startswith(self.feature_model.name)]
+                assert len(feature_model_trainable_var) > 0, "You asked me to train featureModel but there is no trainable " \
+                                                             "variables in featureModel"
+                trainable_var += feature_model_trainable_var
+            regularization_penalty = 0.
+            if self.l1_reg > 0:
+                l1_regularizer = tf.contrib.layers.l1_regularizer(
+                    scale=self.l1_reg, scope=self.name
+                )
+                l1_regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer,
+                                                                                   [var[0] for var in w_masks])
+                loss_ += l1_regularization_penalty
+            else:
+                l1_regularization_penalty = 0.
 
-        if self.l2_reg > 0:
-            l2_regularizer = tf.contrib.layers.l2_regularizer(
-                scale=self.l2_reg, scope=self.name
-            )
-            l2_regularization_penalty = tf.contrib.layers.apply_regularization(l2_regularizer,
-                                                                               [var[0] for var in w_masks])
-            loss_ += l2_regularization_penalty
-        else:
-            l2_regularization_penalty = 0.
+            if self.l2_reg > 0:
+                l2_regularizer = tf.contrib.layers.l2_regularizer(
+                    scale=self.l2_reg, scope=self.name
+                )
+                l2_regularization_penalty = tf.contrib.layers.apply_regularization(l2_regularizer,
+                                                                                   [var[0] for var in w_masks])
+                loss_ += l2_regularization_penalty
+            else:
+                l2_regularization_penalty = 0.
 
-        regularization_penalty += l1_regularization_penalty + l2_regularization_penalty
+            regularization_penalty += l1_regularization_penalty + l2_regularization_penalty
 
-        # default settings used from enas
-        if self.child_train_op_kwargs is None:
-            # more sensible default values
-            train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
-                # get_train_ops(
-                loss=loss_,
-                tf_variables=trainable_var,
-                optim_algo=optimizer,
-                train_step=self.train_step)
-        # user specific settings; useful when training the final searched arc
-        else:
-            train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
-                # get_train_ops
-                loss=loss_,
-                tf_variables=trainable_var,
-                train_step=self.train_step,
-                optim_algo=optimizer,
-                **self.child_train_op_kwargs)
-        if metrics is None:
-            metrics = []
-        else:
-            metrics = [get_tf_metrics(x) for x in metrics]
-        # TODO: this needs fixing to be more generic;
-        # TODO: for example, the squeeze op is not usable for
-        # TODO: other metrics such as Acc
-        metrics_ = [f(tf.squeeze(self.child_model_label[i]), tf.squeeze(model_output[i]))
-                    for i in range(len(model_output)) for f in metrics]
-        ops = {'train_op': train_op,
-               'lr': lr,
-               'grad_norm': grad_norm,
-               'optimizer': optimizer,
-               'loss': loss_,
-               'metrics': metrics_,
-               'reg_cost': regularization_penalty
-               }
-        return ops
+            # default settings used from enas
+            if self.child_train_op_kwargs is None:
+                # more sensible default values
+                train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
+                    # get_train_ops(
+                    loss=loss_,
+                    tf_variables=trainable_var,
+                    optim_algo=optimizer,
+                    train_step=self.train_step)
+            # user specific settings; useful when training the final searched arc
+            else:
+                train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
+                    # get_train_ops
+                    loss=loss_,
+                    tf_variables=trainable_var,
+                    train_step=self.train_step,
+                    optim_algo=optimizer,
+                    **self.child_train_op_kwargs)
+            if metrics is None:
+                metrics = []
+            else:
+                metrics = [get_tf_metrics(x) for x in metrics]
+            # TODO: this needs fixing to be more generic;
+            # TODO: for example, the squeeze op is not usable for
+            # TODO: other metrics such as Acc
+            metrics_ = [f(tf.squeeze(self.child_model_label[i]), tf.squeeze(model_output[i]))
+                        for i in range(len(model_output)) for f in metrics]
+            ops = {'train_op': train_op,
+                   'lr': lr,
+                   'grad_norm': grad_norm,
+                   'optimizer': optimizer,
+                   'loss': loss_,
+                   'metrics': metrics_,
+                   'reg_cost': regularization_penalty
+                   }
+            return ops
 
     def connect_controller(self, controller):
         self.sample_arc = controller.sample_arc
