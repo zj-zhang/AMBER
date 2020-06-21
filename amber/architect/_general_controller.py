@@ -7,6 +7,9 @@ import sys
 
 import h5py
 import tensorflow as tf
+if tf.__version__.startswith("2"):
+    tf.compat.v1.disable_eager_execution()
+    import tensorflow.compat.v1 as tf
 
 from .buffer import get_buffer
 from .common_ops import get_keras_train_ops
@@ -92,7 +95,7 @@ class GeneralController(BaseController):
     def __init__(self, model_space, buffer_type='ordinal', with_skip_connection=True, share_embedding=None,
                  use_ppo_loss=False, kl_threshold=0.05, skip_connection_unique_connection=False, buffer_size=15,
                  batch_size=5, session=None, train_pi_iter=20, lstm_size=32, lstm_num_layers=2, lstm_keep_prob=1.0,
-                 tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=0.5,
+                 tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=None,
                  rescale_advantage_by_reward=False, name="controller", **kwargs):
         super().__init__(**kwargs)
 
@@ -130,6 +133,8 @@ class GeneralController(BaseController):
 
         self.skip_target = skip_target
         self.skip_weight = skip_weight
+        if self.skip_weight is not None:
+            assert self.with_skip_connection, "If skip_weight is not None, must have with_skip_connection=True"
 
         self.optim_algo = optim_algo
         self.name = name
@@ -366,7 +371,11 @@ class GeneralController(BaseController):
                   range(self.lstm_num_layers)]
         prev_h = [tf.zeros([batch_size, self.lstm_size], tf.float32) for _ in
                   range(self.lstm_num_layers)]
-        inputs = tf.matmul(tf.ones((batch_size, 1)), self.g_emb)
+        # only expand `g_emb` if necessary
+        if self.g_emb.shape[0] is not None and self.g_emb.shape[0].value == 1:
+            inputs = tf.matmul(tf.ones((batch_size, 1)), self.g_emb)
+        else:
+            inputs = self.g_emb
         skip_targets = tf.constant([1.0 - self.skip_target, self.skip_target],
                                    dtype=tf.float32)
 
@@ -529,7 +538,7 @@ class GeneralController(BaseController):
             optim_algo=self.optim_algo
         )
 
-    def get_action(self, **kwargs):
+    def get_action(self, *args, **kwargs):
         probs, onehots = self.session.run([self.sample_probs, self.sample_arc])
         return onehots, probs
 
@@ -557,7 +566,6 @@ class GeneralController(BaseController):
 
                 self.session.run(self.train_op, feed_dict=feed_dict)
                 curr_loss, curr_kl, curr_ent = self.session.run([self.loss, self.kl_div, self.ent], feed_dict=feed_dict)
-
                 aloss += curr_loss
                 kl_sum += curr_kl
                 ent_sum += curr_ent
@@ -577,8 +585,8 @@ class GeneralController(BaseController):
 
         return aloss / g_t
 
-    def store(self, state, prob, action, reward):
-        self.buffer.store(state, prob, action, reward)
+    def store(self, state, prob, action, reward, *args, **kwargs):
+        self.buffer.store(state=state, prob=prob, action=action, reward=reward)
         return
 
     def remove_files(self, files, working_dir='.'):

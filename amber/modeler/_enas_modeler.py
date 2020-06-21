@@ -2,7 +2,7 @@
 
 from .dag import get_dag, get_layer
 from .dag import ComputationNode
-
+from .dag import EnasConv1dDAG
 
 class ModelBuilder:
     """Scaffold of Model Builder
@@ -166,6 +166,7 @@ class EnasAnnModelBuilder(DAGModelBuilder):
                  with_output_blocks=False,
                  use_node_dag=True,
                  feature_model=None,
+                 dag_kwargs=None,
                  *args,
                  **kwargs):
         """
@@ -191,6 +192,7 @@ class EnasAnnModelBuilder(DAGModelBuilder):
         self.node_dag = None
         self.use_node_dag = use_node_dag
         self.feature_model = feature_model
+        self.dag_kwargs = dag_kwargs or {}
         self.with_output_blocks = with_output_blocks
         assert not (
                     self.with_output_blocks and self.use_node_dag), "Currently `use_node_dag` is incompatible with `with_output_blocks`"
@@ -216,7 +218,8 @@ class EnasAnnModelBuilder(DAGModelBuilder):
                                  l1_reg=self.l1_reg,
                                  l2_reg=self.l2_reg,
                                  controller=self.controller,
-                                 feature_model=self.feature_model)
+                                 feature_model=self.feature_model,
+                                 **self.dag_kwargs)
 
     def __call__(self, arc_seq=None, *args, **kwargs):
         input_nodes = self._get_input_nodes()
@@ -267,7 +270,7 @@ class EnasCnnModelBuilder(DAGModelBuilder):
             **kwargs:
         """
         super().__init__(dag_func=dag_func, *args, **kwargs)
-        assert dag_func.lower() in ('enascnndag', 'enasconv1ddag'), "EnasModelBuilder only support enasDAG."
+        #assert dag_func.lower() in ('enascnndag', 'enasconv1ddag'), "EnasModelBuilder only support enasDAG."
         self.session = session
         self.controller = controller
         self.l1_reg = float(l1_reg)
@@ -279,6 +282,7 @@ class EnasCnnModelBuilder(DAGModelBuilder):
         # END NEW ARGS
         # -----
         self._build_dag()
+        assert issubclass(type(self.dag), EnasConv1dDAG), "EnasModelBuilder only support enasDAG and its derivatives"
 
     def _build_dag(self):
         """

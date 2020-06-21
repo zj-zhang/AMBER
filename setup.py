@@ -9,10 +9,10 @@ config = {
     'package_data': {'deepambre': ['./amber/resources/gui/*']},
     'setup_requires': [],
     'install_requires': [
-        'numpy', 
+        'numpy',
+        'tensorflow',
         'matplotlib', 
         'scipy', 
-        'tensorflow>=1.9.0,<2.0.0', 
         'keras>=2.0.0', 
         'seaborn>=0.9.0',
         'networkx'

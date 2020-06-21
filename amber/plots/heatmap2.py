@@ -15,7 +15,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from seaborn import cm
-from seaborn.external.six import string_types
+try:
+    from seaborn.external.six import string_types
+except ModuleNotFoundError:
+    # patch on 2020.6.8
+    from six import string_types
 from seaborn.utils import (despine, axis_ticklabels_overlap, relative_luminance, to_utf8)
 
 

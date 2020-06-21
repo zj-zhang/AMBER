@@ -4,8 +4,13 @@
 Overall wrapper class for DeepAmbre
 """
 
-from tensorflow import Session
+import tensorflow as tf
 from keras import backend as K
+try:
+    from tensorflow import Session
+except ImportError:
+    from tensorflow.compat.v1 import Session
+    tf.compat.v1.disable_eager_execution()
 
 from . import _getter
 
@@ -48,7 +53,10 @@ class Amber:
 
         # use one tf.Session throughout one DA instance
         self.session = Session()
-        K.set_session(self.session)
+        try:
+          K.set_session(self.session)
+        except Exception as e:
+          print("Failed to set Keras backend becasue of %s"%e)
 
         if specs is not None:
             self.from_dict(specs)

@@ -38,6 +38,7 @@ def store_with_model_plot(
         *args, **kwargs
 ):
     par_dir = os.path.join(working_dir, 'weights', 'trial_%s' % trial)
+    os.makedirs(par_dir, exist_ok=True)
     store_general(trial=trial,
                   model=model,
                   hist=hist,
@@ -47,7 +48,7 @@ def store_with_model_plot(
                   working_dir=working_dir,
                   save_full_model=save_full_model
                   )
-    from keras.utils import plot_model
+    from tensorflow.keras.utils import plot_model
     plot_model(model, to_file=os.path.join(par_dir, "model_arc.png"))
 
 

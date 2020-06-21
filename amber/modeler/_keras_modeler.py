@@ -1,7 +1,42 @@
-from keras.models import Model
+import tensorflow.keras as keras
+from tensorflow.keras.models import Model
+from ..architect import Operation
+from .dag import get_layer
+import numpy as np
+from ._enas_modeler import ModelBuilder
+import tensorflow as tf
 
 
-def build_sequential_model(model_states, input_state, output_state, model_compile_dict):
+class KerasModelBuilder(ModelBuilder):
+    def __init__(self, inputs, outputs, model_compile_dict, model_space=None, gpus=None, **kwargs):
+        self.model_compile_dict = model_compile_dict
+        self.input_node = inputs
+        self.output_node = outputs
+        self.model_space = model_space
+        self.gpus = gpus
+
+    def __call__(self, model_states):
+        if self.gpus is None or self.gpus == 1:
+            model = build_sequential_model(
+                        model_states=model_states,
+                        input_state=self.input_node,
+                        output_state=self.output_node,
+                        model_compile_dict=self.model_compile_dict,
+                        model_space=self.model_space
+                        )
+        else:
+             model = build_multi_gpu_sequential_model(
+                        model_states=model_states,
+                        input_state=self.input_node,
+                        output_state=self.output_node,
+                        model_compile_dict=self.model_compile_dict,
+                        model_space=self.model_space,
+                        gpus=self.gpus
+                        )
+        return model
+
+
+def build_sequential_model(model_states, input_state, output_state, model_compile_dict, **kwargs):
     """
     Args:
         model_states: a list of operators sampled from operator space
@@ -13,8 +48,15 @@ def build_sequential_model(model_states, input_state, output_state, model_compil
     """
     inp = get_layer(None, input_state)
     x = inp
-    for state in model_states:
-        x = get_layer(x, state)
+    model_space = kwargs.pop("model_space", None)
+    for i, state in enumerate(model_states):
+        if issubclass(type(state), Operation):
+            x = get_layer(x, state)
+        elif issubclass(type(state), int) or np.issubclass_(type(state), np.integer):
+            assert model_space is not None, "if provided integer model_arc, must provide model_space in kwargs"
+            x = get_layer(x, model_space[i][state])
+        else:
+            raise Exception("cannot understand %s of type %s" % (state, type(state)))
     out = get_layer(x, output_state)
     model = Model(inputs=inp, outputs=out)
     model.compile(**model_compile_dict)
@@ -26,8 +68,8 @@ def build_multi_gpu_sequential_model(model_states, input_state, output_state, mo
         from keras.utils import multi_gpu_model
     except Exception as e:
         raise Exception("multi gpu not supported in keras. check your version. Error: %s" % e)
-    vanilla_model = build_sequential_model(model_states, input_state, output_state, model_compile_dict)
-    model = multi_gpu_model(vanilla_model, gpus=gpus, **kwargs)
+    vanilla_model = build_sequential_model(model_states, input_state, output_state, model_compile_dict, **kwargs)
+    model = multi_gpu_model(vanilla_model, gpus=gpus)
     model.compile(**model_compile_dict)
     return model
 

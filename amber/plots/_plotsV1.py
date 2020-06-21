@@ -9,7 +9,6 @@ import pandas as pd
 import numpy as np
 import os
 import json
-from .heatmap2 import heatmap2
 
 matplotlib.use('Agg')
 
@@ -384,6 +383,8 @@ def plot_hessian(gkf, save_fn):
     f, ax = plt.subplots(1, 1, figsize=figsize)
     cbar_ax = f.add_axes([0.9, 0.1, cbar_width, 0.8])
     cbar_ax.tick_params(length=0.5, labelsize='x-small')
+    
+    from .heatmap2 import heatmap2
     heatmap2(g_ratio, ax=ax,
              cbar_ax=cbar_ax,
              vmax=vmax, vmin=vmin,

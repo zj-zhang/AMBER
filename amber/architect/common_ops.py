@@ -3,6 +3,10 @@ import warnings
 import keras.backend as K
 import numpy as np
 import tensorflow as tf
+if tf.__version__.startswith("2"):
+    tf.compat.v1.disable_eager_execution()
+    import tensorflow.compat.v1 as tf
+
 from tensorflow.python.training import moving_averages
 
 
@@ -88,7 +92,10 @@ def get_tf_layer(fn_str):
 
 def create_weight(name, shape, initializer=None, trainable=True, seed=None):
     if initializer is None:
-        initializer = tf.contrib.keras.initializers.he_normal(seed=seed)
+        try:
+            initializer = tf.contrib.keras.initializers.he_normal(seed=seed)
+        except AttributeError:
+            initializer = tf.keras.initializers.he_normal(seed=seed)
     return tf.get_variable(name, shape, initializer=initializer, trainable=trainable)
 
 
@@ -162,11 +169,17 @@ def get_keras_train_ops(loss, tf_variables, optim_algo, **kwargs):
             grad_var.append(v)
     if no_grad_var:
         warnings.warn(
-            "=" * 80 + "\n\nWarning: the following tf.variables have no gradients"
-                       " and have been discarded: \n %s" % no_grad_var)
+            "\n" + "=" * 80 + "\nWarning: the following tf.variables have no gradients"
+                       " and have been discarded: \n %s" % no_grad_var, stacklevel=2)
     train_op = opt.get_updates(loss, grad_var)
-    config = opt.get_config()
-    learning_rate = config['lr']
+    try:
+        config = opt.get_config()
+    except NotImplementedError:  # if cannot get learning-rate when eager-execution is disableed
+        config = {'lr':None}
+    try:
+        learning_rate = config['lr']
+    except:  # for newer version of keras
+        learning_rate = config['learning_rate']
     return train_op, learning_rate, None, opt
 
 

@@ -5,11 +5,20 @@ import os
 import warnings
 
 import numpy as np
-import tensorflow as tf
-from keras.callbacks import ModelCheckpoint, EarlyStopping
-from keras.models import Model
+import tensorflow.keras as keras
+from ..utils import corrected_tf as tf
+import tensorflow as tf2
+from keras import backend as K
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.keras.models import Model
 
 from .store import get_store_fn
+
+__all__ = [
+    'BaseNetworkManager',
+    'NetworkManager',
+    'GeneralManager'
+]
 
 
 class BaseNetworkManager:
@@ -45,7 +54,12 @@ class GeneralManager(BaseNetworkManager):
         self.working_dir = working_dir
         if not os.path.exists(self.working_dir):
             os.makedirs(self.working_dir)
-        self.model_compile_dict = model_fn.model_compile_dict
+        self.model_compile_dict = kwargs.pop("model_compile_dict", None)
+        if self.model_compile_dict is None:
+            self.model_compile_dict = model_fn.model_compile_dict
+
+        # added 2020.5.19: parse model_space to manager for compatibility with newer versions of controllers
+        self.model_space = kwargs.pop("model_space", None)
 
         self.save_full_model = save_full_model
         self.epochs = epochs
@@ -56,11 +70,15 @@ class GeneralManager(BaseNetworkManager):
         self.reward_fn = reward_fn
         self.store_fn = get_store_fn(store_fn)
 
-    def get_rewards(self, trial, model_arc):
+    def get_rewards(self, trial, model_arc, **kwargs):
         # print('-'*80, model_arc, '-'*80)
         train_graph = tf.Graph()
         train_sess = tf.Session(graph=train_graph)
         with train_graph.as_default(), train_sess.as_default():
+            try:
+                K.set_session(train_sess)
+            except RuntimeError: # keras 2.3.1 `set_session` not available for tf2.0
+                pass
             model = self.model_fn(model_arc)  # a compiled keras Model
 
             # unpack the dataset
@@ -113,6 +131,84 @@ class GeneralManager(BaseNetworkManager):
         # clean up resources and GPU memory
         del model
         del hist
+        gc.collect()
+        return this_reward, loss_and_metrics
+
+
+class DistributedGeneralManager(GeneralManager):
+    def __init__(self, devices, *args, **kwargs):
+        self.devices = devices
+        super().__init__(*args, **kwargs)
+        assert len(self.devices) == 1, "Only supports one GPU device currently"
+
+    def get_rewards(self, trial, model_arc, **kwargs):
+        #strategy = tf2.distribute.MirroredStrategy(devices=self.devices)
+        #print('Number of devices: {} - {}'.format(strategy.num_replicas_in_sync, self.devices))
+        #with strategy.scope():
+        train_graph = tf.Graph()
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        train_sess = tf.Session(graph=train_graph, config=config)
+        with train_graph.as_default(), train_sess.as_default():
+            with tf.device(self.devices[0]):
+                try:
+                    K.set_session(train_sess)
+                except RuntimeError: # keras 2.3.1 `set_session` not available for tf2.0
+                    pass
+                model = self.model_fn(model_arc)  # a compiled keras Model
+
+                # unpack the dataset
+                X_val, y_val = self.validation_data[0:2]
+                X_train, y_train = self.train_data
+
+                # train the model using Keras methods
+                print(" Trial %i: Start training model..." % trial)
+                hist = model.fit(X_train, y_train,
+                                 batch_size=self.batchsize,
+                                 epochs=self.epochs,
+                                 verbose=self.verbose,
+                                 validation_data=(X_val, y_val),
+                                 callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
+                                                            monitor='val_loss', verbose=self.verbose,
+                                                            save_best_only=True),
+                                            EarlyStopping(monitor='val_loss', patience=5, verbose=self.verbose)]
+                                 )
+                # load best performance epoch in this training session
+                model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
+
+                # evaluate the model by `reward_fn`
+                this_reward, loss_and_metrics, reward_metrics = \
+                    self.reward_fn(model, (X_val, y_val),
+                                   session=train_sess,
+                                   )
+                loss = loss_and_metrics.pop(0)
+                loss_and_metrics = {str(self.model_compile_dict['metrics'][i]): loss_and_metrics[i] for i in
+                                    range(len(loss_and_metrics))}
+                loss_and_metrics['loss'] = loss
+                if reward_metrics:
+                    loss_and_metrics.update(reward_metrics)
+
+                # do any post processing,
+                # e.g. save child net, plot training history, plot scattered prediction.
+                if self.store_fn:
+                    val_pred = model.predict(X_val)
+                    self.store_fn(
+                        trial=trial,
+                        model=model,
+                        hist=hist,
+                        data=self.validation_data,
+                        pred=val_pred,
+                        loss_and_metrics=loss_and_metrics,
+                        working_dir=self.working_dir,
+                        save_full_model=self.save_full_model,
+                        knowledge_func=self.reward_fn.knowledge_function
+                    )
+
+        # clean up resources and GPU memory
+        del model
+        del hist
+        del train_sess
+        del train_graph
         gc.collect()
         return this_reward, loss_and_metrics
 

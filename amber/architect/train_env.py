@@ -2,37 +2,17 @@
 
 import csv
 import datetime
-import logging
 import shutil
 import warnings
-
-from keras.optimizers import *
+from collections import defaultdict
 
 from .buffer import parse_action_str, parse_action_str_squeezed
 from ._operation_controller import *
 from ..utils.io import save_action_weights, save_stats
 from ..plots import plot_stats2, plot_environment_entropy, plot_controller_performance, \
     plot_action_weights, plot_wiring_weights
-
-
-def setup_logger(working_dir='.', verbose_level=logging.INFO):
-    # setup logger
-    logger = logging.getLogger('AMBER')
-    logger.setLevel(verbose_level)
-    # create file handler which logs even debug messages
-    fh = logging.FileHandler(os.path.join(working_dir, 'log.AMBER.txt'))
-    fh.setLevel(verbose_level)
-    # create console handler with a higher log level
-    ch = logging.StreamHandler()
-    ch.setLevel(verbose_level)
-    # create formatter and add it to the handlers
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s -\n %(message)s')
-    fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
-    # add the handlers to the logger
-    logger.addHandler(fh)
-    logger.addHandler(ch)
-    return logger
+from ..utils.logging import setup_logger
+from .manager import BaseNetworkManager, EnasManager
 
 
 def get_controller_states(model):
@@ -80,7 +60,7 @@ class ControllerTrainEnvironment:
                  initial_buffering_queue=15,
                  working_dir='.', entropy_converge_epsilon=0.01,
                  squeezed_action=True,
-                 with_input_blocks=True,
+                 with_input_blocks=False,
                  with_skip_connection=True,
                  save_controller=False,
                  continuous_run=False,
@@ -110,7 +90,7 @@ class ControllerTrainEnvironment:
         try:
             self.last_actionState_size = len(self.controller.state_space[-1])
         except Exception as e:
-            warnings.warn("DEPRECATED Exception in ControllerTrainEnv: %s" % e)
+            warnings.warn("DEPRECATED Exception in ControllerTrainEnv: %s" % e, stacklevel=2)
             self.last_actionState_size = 1
 
         if resume_prev_run:
@@ -119,9 +99,13 @@ class ControllerTrainEnvironment:
             self.clean()
         self.resume_prev_run = resume_prev_run
         self.logger = logger if logger else setup_logger(working_dir)
-        if os.path.realpath(manager.working_dir) != os.path.realpath(self.working_dir):
-            warnings.warn("manager working dir and environment working dir are different.")
-
+        if issubclass(type(manager), BaseNetworkManager):
+            if os.path.realpath(manager.working_dir) != os.path.realpath(self.working_dir):
+                warnings.warn("manager working dir and environment working dir are different.", stacklevel=2)
+        else:
+            warnings.warn("ControllerTrainEnvironment: input manager is not a subclass of BaseNetworkManager; "
+                          "make sure this is intended", stacklevel=2)
+    
     def __str__(self):
         s = 'ControllerTrainEnv for %i max steps, %i child mod. each step' % (self.max_episode, self.max_step_per_ep)
         return s
@@ -330,8 +314,12 @@ class EnasTrainEnv(ControllerTrainEnvironment):
         self.save_controller_every = kwargs.pop('save_controller_every', None)
         super().__init__(*args, **kwargs)
         self.initial_buffering_queue = 0
-        if self.manager.model_fn.controller is None:
-            self.manager.model_fn.set_controller(self.controller)
+        if issubclass(type(self.manager), BaseNetworkManager):
+            if self.manager.model_fn.controller is None:
+                self.manager.model_fn.set_controller(self.controller)
+        else:
+            warnings.warn("EnasTrainEnv: input manager is not a subclass of BaseNetworkManager; "
+                          "make sure this is intended", stacklevel=2)
         if self.time_budget is None:
             pass
         elif type(self.time_budget) is str:
@@ -392,7 +380,7 @@ class EnasTrainEnv(ControllerTrainEnvironment):
                         loss_and_metrics_ep[x] += loss_and_metrics[x]
 
                     # save the arc_seq and reward
-                    self.controller.store(state, probs, arc_seq, reward)
+                    self.controller.store(state=state, prob=probs, action=arc_seq, reward=reward)
 
                     # write the results of this trial into a file
                     data = [controller_step, [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
@@ -464,3 +452,330 @@ class EnasTrainEnv(ControllerTrainEnvironment):
         for p in ep_p:
             act_idx.append(np.argmax(p))
         return act_idx
+
+
+class MultiManagerEnvironment(EnasTrainEnv):
+    """
+    MultiManagerEnvironment is an environment that allows one controller to interact with multiple EnasManagers
+    """
+
+    def __init__(self, data_descriptive_features, is_enas='auto', *args, **kwargs):
+        super(MultiManagerEnvironment, self).__init__(*args, **kwargs)
+        assert type(self.manager) is list, \
+            "MultiManagerEnasEnvironment must have a List of manager instances, got %s" % type(self.manager)
+
+        self.manager_cnt = len(self.manager)
+        self.is_enas = is_enas
+        for i in range(self.manager_cnt):
+            assert issubclass(type(self.manager[i]), BaseNetworkManager), \
+                "MultiManagerEnasEnvironment expects a List of Manager instances, " \
+                "got %s for %i-th element" % (type(self.manager[i]), i)
+
+        self.data_descriptive_features = data_descriptive_features
+        assert len(self.data_descriptive_features) == self.manager_cnt, \
+            "data descriptive features must match the number of managers; " \
+            "got %i description, %i managers" % ( len(self.data_descriptive_features), self.manager_cnt )
+
+        if self.is_enas == "auto":
+            if all([isinstance(self.manager[i], EnasManager) for i in range(self.manager_cnt)]):
+                self.is_enas = True
+            else:
+                self.is_enas = False
+
+    def _warmup(self):
+        assert self.is_enas, "You can only set warm_up_epochs>0 if is_enas=True"
+        self.logger.info("warm-up for child model: %i epochs" % self.child_warm_up_epochs)
+        warmup_nsteps = None
+        for i in range(1, self.child_warm_up_epochs + 1):
+            self.logger.info("warm-up : %i epoch" % i)
+            for j in range(self.manager_cnt):
+                self.manager[j].get_rewards(trial=-i, model_arc=None, nsteps=warmup_nsteps)
+
+    def _train_loop(self):
+        if self.resume_prev_run:
+            f = open(os.path.join(self.working_dir, 'train_history.csv'), mode='a+')
+        else:
+            f = open(os.path.join(self.working_dir, 'train_history.csv'), mode='w')
+        writer = csv.writer(f)
+        starttime = datetime.datetime.now()
+        action_probs_record = []
+        loss_and_metrics_list = []
+        controller_step = self.start_ep * self.max_step_per_ep
+        for child_step in range(self.start_ep, self.max_episode):
+            try:
+                if self.is_enas:
+                    # train child parameters w, if is_enas
+                    for j in range(self.manager_cnt):
+                        self.logger.info("sampling with mananger %i" % j)
+                        self.manager[j].get_rewards(child_step, None, nsteps=self.child_train_steps)
+
+                # train controller parameters theta
+                ep_reward = 0
+                loss_and_metrics_ep = defaultdict(float)
+                for step in range(self.max_step_per_ep):
+                    for j in range(self.manager_cnt):
+                        ep_probs = []
+                        arc_seq, probs = self.controller.get_action(
+                            description_feature=self.data_descriptive_features[[j]])    # preserve the first dimension
+                        self.entropy_record.append(compute_entropy(probs))
+                        ep_probs.append(probs)
+                        # LOGGER.debug the action probabilities
+                        action_list = parse_action_str_squeezed(arc_seq, self.controller.state_space)
+                        self.logger.debug("Manager {}, Predicted actions : {}".format(j, [str(x) for x in action_list]))
+
+                        # build a model, train and get reward and accuracy from the network manager
+                        reward, loss_and_metrics = self.manager[j].get_rewards(
+                            trial=controller_step, model_arc=arc_seq, nsteps=self.child_train_steps)
+                        self.logger.debug("Rewards : " + str(reward) + " Metrics : " + str(loss_and_metrics))
+
+                        ep_reward += reward
+                        for x in loss_and_metrics.keys():
+                            loss_and_metrics_ep[x] += loss_and_metrics[x]
+                        # save the arc_seq and reward
+                        self.controller.store(prob=probs, action=arc_seq, reward=reward,
+                                              description=self.data_descriptive_features[[j]])
+                        # write the results of this trial into a file
+                        data = [controller_step, [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
+                                reward]
+                        if self.squeezed_action:
+                            data.extend(arc_seq)
+                        else:
+                            data.extend(action_list)
+                        writer.writerow(data)
+                        f.flush()
+                    # update trial
+                    controller_step += 1
+                loss_and_metrics_list.append({x: (v / self.max_step_per_ep) for x, v in loss_and_metrics_ep.items()})
+                # average probs over trajectory
+                ep_p = [sum(p) / len(p) for p in zip(*ep_probs)]
+                action_probs_record.append(ep_p)
+                if child_step >= self.initial_buffering_queue - 1:
+                    # train the controller on the saved state and the discounted rewards
+                    loss = self.controller.train(child_step, self.working_dir)
+                    self.total_reward += np.sum(np.array(self.controller.buffer.lt_adv[-1]).flatten())
+                    self.logger.info("Total reward : " + str(self.total_reward))
+                    self.logger.info("END episode %d: Controller loss : %0.6f" % (child_step, loss))
+                    self.logger.info("-" * 10)
+                else:
+                    self.logger.info("END episode %d: Buffering" % child_step)
+                    self.logger.info("-" * 10)
+
+                if self.save_controller_every is not None and child_step % self.save_controller_every == 0:
+                    self.controller.save_weights(
+                        os.path.join(self.working_dir, "controller_weights-epoch-%i.h5" % child_step))
+            except KeyboardInterrupt:
+                self.logger.info("User disrupted training")
+                break
+
+            consumed_time = (datetime.datetime.now() - starttime).total_seconds()
+            self.logger.info("used time: %.2f %%" % (consumed_time / self.time_budget * 100))
+            if consumed_time >= self.time_budget:
+                self.logger.info("training ceased because run out of time budget")
+                break
+
+        self.logger.debug("Total Reward : %s" % self.total_reward)
+        f.close()
+        return action_probs_record, loss_and_metrics_list
+
+    def train(self):
+        if self.child_warm_up_epochs > 0:
+            self._warmup()
+
+        action_probs_record, loss_and_metrics_list = self._train_loop()
+
+        metrics_dict = {k: v for k, v in zip(sorted(loss_and_metrics_list[0].keys()),
+                                             range(len(loss_and_metrics_list[0])))}
+        plot_controller_performance(os.path.join(self.working_dir, 'train_history.csv'),
+                                    metrics_dict=metrics_dict,
+                                    save_fn=os.path.join(self.working_dir, 'train_history.png'), N_sma=5)
+        plot_environment_entropy(self.entropy_record,
+                                 os.path.join(self.working_dir, 'entropy.png'))
+        save_kwargs = {}
+        if self.with_input_blocks:
+            save_kwargs['input_nodes'] = self.manager.model_fn.inputs_op
+        self.action_probs_record = action_probs_record
+        save_action_weights(action_probs_record, self.controller.state_space, self.working_dir,
+                            with_input_blocks=self.with_input_blocks, with_skip_connection=self.with_skip_connection,
+                            **save_kwargs)
+        save_stats(loss_and_metrics_list, self.working_dir)
+
+        if self.should_plot:
+            plot_action_weights(self.working_dir)
+            plot_wiring_weights(self.working_dir, self.with_input_blocks, self.with_skip_connection)
+            plot_stats2(self.working_dir)
+
+        # return converged config idx
+        act_idx = []
+        for p in action_probs_record[-1]:
+            act_idx.append(np.argmax(p))
+        return act_idx
+
+
+class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
+    def __init__(self, processes=2, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.processes = processes
+        assert self.processes <= self.manager_cnt, "Cannot have more processes than managers"
+        assert self.processes >= 1
+
+    @staticmethod
+    def _reward_getter(args):
+        pid = os.getpid()
+        res = []
+        for i in range(len(args)):
+            print("PID %i: %i/%i run" % (pid, i, len(args)))
+            # this = reward, loss_and_metrics
+            try:
+                reward, loss_and_metrics = args[i]['manager'].get_rewards(
+                    trial=args[i]['trial'], model_arc=args[i]['model_arc'], nsteps=args[i]['nsteps'])
+            except Exception as e:
+                raise Exception("child pid %i has exception %s" % (pid, e))
+            res.append({'reward': reward, 'loss_and_metrics': loss_and_metrics})
+        return res
+
+    # overwrite
+    def _train_loop(self):
+        if self.resume_prev_run:
+            f = open(os.path.join(self.working_dir, 'train_history.csv'), mode='a+')
+        else:
+            f = open(os.path.join(self.working_dir, 'train_history.csv'), mode='w')
+        writer = csv.writer(f)
+        starttime = datetime.datetime.now()
+        action_probs_record = []
+        loss_and_metrics_list = []
+        controller_step = self.start_ep * self.max_step_per_ep
+
+        # Plain `Pool` won't work; see here for a very nice explanation:
+        # https://pythonspeed.com/articles/python-multiprocessing/
+        from multiprocessing import set_start_method, get_context
+        set_start_method("spawn")
+        with get_context('spawn').Pool(processes=self.processes) as pool:
+            for child_step in range(self.start_ep, self.max_episode):
+                try:
+                    if self.is_enas:
+                        # train child parameters w, if is_enas
+                        pool_args = []
+                        for j in range(self.manager_cnt):
+                            pool_args.append(
+                                [{
+                                    'manager': self.manager[j],
+                                    'trial': child_step,
+                                    'model_arc': None,
+                                    'nsteps': self.child_train_steps
+                                }]
+                            )
+                        self.logger.info("sampling of n=%i managers executed in parallel.." % self.manager_cnt)
+                        _ = pool.map(self._reward_getter, pool_args)
+
+                    # train controller parameters theta
+                    ep_reward = 0
+                    loss_and_metrics_ep = defaultdict(float)
+
+                    # pool_args is a list of list; each element is list of args (dict)
+                    # for a spawned process handling one manager
+                    pool_args = []
+                    # store_args is a list of list; each element is list of args (dict)
+                    # for controller.store; ordered the same as pool_args
+                    store_args = []
+
+                    for j in range(self.manager_cnt):
+                        this_pool = []
+                        this_store = []
+                        controller_step_ = controller_step
+                        for step in range(self.max_step_per_ep):
+                            ep_probs = []
+                            arc_seq, probs = self.controller.get_action(
+                                description_feature=self.data_descriptive_features[[j]])  # preserve the first dimension
+                            self.entropy_record.append(compute_entropy(probs))
+                            ep_probs.append(probs)
+                            # LOGGER.debug the action probabilities
+                            action_list = parse_action_str_squeezed(arc_seq, self.controller.state_space)
+                            self.logger.debug("Manager {}, Predicted actions : {}".format(j, [str(x) for x in action_list]))
+
+                            this_pool.append(
+                                {
+                                    'manager': self.manager[j],
+                                    'trial': controller_step_,
+                                    'model_arc': arc_seq,
+                                    'nsteps': self.child_train_steps
+                                }
+                            )
+
+                            this_store.append(
+                                {
+                                    'prob': probs,
+                                    'action': arc_seq,
+                                    'description': self.data_descriptive_features[[j]]
+                                }
+                            )
+
+                            controller_step_ += 1
+
+                        # append the j-th manager's args to the pool
+                        pool_args.append(this_pool)
+                        store_args.append(this_store)
+
+                    # update trial
+                    controller_step += self.max_step_per_ep
+
+                    # distribute args to the pool of workers
+                    if self.processes > 1:
+                        self.logger.info("distributing reward-getter to a pool of %i workers" % self.processes)
+                        res_list = pool.map(self._reward_getter, pool_args)
+                    else:
+                        self.logger.info("Only %i worker, running sequentially" % self.processes)
+                        res_list = []
+                        for x in pool_args:
+                            res_list.append(self._reward_getter(x))
+
+                    for store_, res_ in zip(store_args, res_list):  # manager level
+                        for store, res in zip(store_, res_):        # trial level
+                            reward, loss_and_metrics = res['reward'], res['loss_and_metrics']
+                            probs, arc_seq, description = store['prob'], store['action'], store['description']
+                            ep_reward += reward
+                            for x in loss_and_metrics.keys():
+                                loss_and_metrics_ep[x] += loss_and_metrics[x]
+                            # save the arc_seq and reward
+                            self.controller.store(prob=probs, action=arc_seq, reward=reward,
+                                                  description=self.data_descriptive_features[[j]])
+                            # write the results of this trial into a file
+                            data = [controller_step, [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
+                                    reward]
+                            if self.squeezed_action:
+                                data.extend(arc_seq)
+                            else:
+                                data.extend(action_list)
+                            writer.writerow(data)
+                            f.flush()
+                            loss_and_metrics_list.append({x: (v / self.max_step_per_ep) for x, v in loss_and_metrics_ep.items()})
+                            # average probs over trajectory
+                            ep_p = [sum(p) / len(p) for p in zip(*ep_probs)]
+                            action_probs_record.append(ep_p)
+
+                    if child_step >= self.initial_buffering_queue - 1:
+                        # train the controller on the saved state and the discounted rewards
+                        loss = self.controller.train(child_step, self.working_dir)
+                        self.total_reward += np.sum(np.array(self.controller.buffer.lt_adv[-1]).flatten())
+                        self.logger.info("Total reward : " + str(self.total_reward))
+                        self.logger.info("END episode %d: Controller loss : %0.6f" % (child_step, loss))
+                        self.logger.info("-" * 10)
+                    else:
+                        self.logger.info("END episode %d: Buffering" % child_step)
+                        self.logger.info("-" * 10)
+
+                    if self.save_controller_every is not None and child_step % self.save_controller_every == 0:
+                        self.controller.save_weights(
+                            os.path.join(self.working_dir, "controller_weights-epoch-%i.h5" % child_step))
+                except KeyboardInterrupt:
+                    self.logger.info("User disrupted training")
+                    break
+
+                consumed_time = (datetime.datetime.now() - starttime).total_seconds()
+                self.logger.info("used time: %.2f %%" % (consumed_time / self.time_budget * 100))
+                if consumed_time >= self.time_budget:
+                    self.logger.info("training ceased because run out of time budget")
+                    break
+
+        self.logger.debug("Total Reward : %s" % self.total_reward)
+        f.close()
+        return action_probs_record, loss_and_metrics_list
