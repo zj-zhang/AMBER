@@ -5,6 +5,7 @@ Overall wrapper class for DeepAmbre
 """
 
 import tensorflow as tf
+from keras import backend as K
 try:
     from tensorflow import Session
 except ImportError:
@@ -52,6 +53,10 @@ class Amber:
 
         # use one tf.Session throughout one DA instance
         self.session = Session()
+        try:
+          K.set_session(self.session)
+        except Exception as e:
+          print("Failed to set Keras backend becasue of %s"%e)
 
         if specs is not None:
             self.from_dict(specs)

@@ -1431,7 +1431,7 @@ class EnasConv1dDAG:
                 x = tf.nn.dropout(x, rate=dropout_placeholders[-1])
             with tf.variable_scope("fc"):
                 fc_units = self.stem_config['fc_units'] if 'fc_units' in self.stem_config else 1000
-                if flatten_op == 'global_avg_pool':
+                if flatten_op == 'global_avg_pool' or flatten_op == 'gap':
                     try:
                         inp_c = x.get_shape()[-1].value
                     except AttributeError:
@@ -1443,6 +1443,8 @@ class EnasConv1dDAG:
                     except AttributeError:
                         inp_c = np.prod(x.get_shape()[1:])
                     w = create_weight("w_fc", [inp_c, fc_units])
+                else:
+                    raise Exception("Unknown fc string: %s" % flatten_op)
                 b = create_bias("b_fc", shape=[fc_units])
                 x = tf.matmul(x, w) + b
                 x = tf.nn.relu(x)

@@ -59,9 +59,14 @@ class LossReward(Reward):
         # Loss function values will always be the first value
         if type(loss_and_metrics) is list:
             L = loss_and_metrics[0]
-        else:
+        elif type(loss_and_metrics) is dict:
+            L = loss_and_metrics['val_loss']
+            loss_and_metrics = [L]
+        elif isinstance(loss_and_metrics, float):
             L = loss_and_metrics
             loss_and_metrics = [loss_and_metrics]
+        else:
+            raise Exception("Cannot understand return type of model.evaluate; got %s" % type(loss_and_metrics))
         return -L, loss_and_metrics, None
     # return self.c/L, loss_and_metrics, None
 
@@ -74,6 +79,8 @@ class LossAucReward(Reward):
         elif method == 'aupr' or method == 'auprc':
             from sklearn.metrics import average_precision_score
             self.scorer = average_precision_score
+        elif callable(method):
+            self.scorer = method
         else:
             raise Exception("cannot understand scorer method: %s" % method)
         self.knowledge_function = knowledge_function
@@ -95,6 +102,8 @@ class LossAucReward(Reward):
             pred = [pred]
         for i in range(len(y)):
             tmp = []
+            if len(y[i].shape) == 1: y[i] = np.expand_dims(y[i], axis=-1)
+            if len(pred[i].shape) == 1: pred[i] = np.expand_dims(pred[i], axis=-1)
             for j in range(y[i].shape[1]):
                 try:
                     score = self.scorer(y_true=y[i][:, j], y_score=pred[i][:, j])
