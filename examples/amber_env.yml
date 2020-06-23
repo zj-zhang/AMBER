@@ -2,6 +2,7 @@ name: amber
 channels:
   - bioconda
   - defaults
+  - conda-forge
 dependencies:
   - _anaconda_depends=2019.03=py37_0
   - _libgcc_mutex=0.1=main
@@ -39,7 +40,7 @@ dependencies:
   - c-ares=1.15.0=h7b6447c_1001
   - ca-certificates=2020.1.1=0
   - cairo=1.14.12=h8948797_3
-  - certifi=2019.11.28=py37_1
+  - certifi=2020.4.5.1=py37_0
   - cffi=1.12.3=py37h2e261b9_0
   - chardet=3.0.4=py37_1003
   - click=7.0=py37_0
@@ -158,6 +159,7 @@ dependencies:
   - make=4.2.1=h1bed415_1
   - markdown=3.1.1=py37_0
   - markupsafe=1.1.1=py37h7b6447c_0
+  - matplotlib=3.1.3=py37_0
   - matplotlib-base=3.1.3=py37hef1b27d_0
   - mccabe=0.6.1=py37_1
   - mistune=0.8.4=py37h7b6447c_0
@@ -187,7 +189,7 @@ dependencies:
   - olefile=0.46=py37_0
   - openjdk=8.0.152=h7b6447c_3
   - openpyxl=2.6.2=py_0
-  - openssl=1.1.1f=h7b6447c_0
+  - openssl=1.1.1g=h7b6447c_0
   - packaging=19.1=py37_0
   - pandas=0.25.1=py37he6710b0_0
   - pandoc=2.2.3.2=0
@@ -223,6 +225,7 @@ dependencies:
   - pycrypto=2.6.1=py37h14c3975_9
   - pycurl=7.43.0.3=py37h1ba5d50_0
   - pydot=1.4.1=py37_0
+  - pyfaidx=0.5.8=py_1
   - pyflakes=2.1.1=py37_0
   - pygments=2.4.2=py_0
   - pylint=2.3.1=py37_0
@@ -466,16 +469,6 @@ dependencies:
     - gitpython==3.1.0
     - gpustat==0.6.0
     - keras==2.2.4
-    - matplotlib==3.1.2
     - nvidia-ml-py3==7.352.0
-    - plotly==4.4.1
-    - pytabix==0.1
-    - ratelimiter==1.2.0.post0
-    - selene-sdk==0.4.4
     - smmap==3.0.1
-    - snakemake==5.11.2
-    - toposort==1.5
-    - torch==1.4.0
-    - torchvision==0.5.0
-prefix: /mnt/home/zzhang/workspace/programs/anaconda3/envs/amber
 

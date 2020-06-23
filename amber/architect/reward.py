@@ -54,8 +54,9 @@ class LossReward(Reward):
         self.c = 1.
 
     def __call__(self, model, data, *args, **kwargs):
-        X, y = data
-        loss_and_metrics = model.evaluate(X, y)
+      #  X, y = data
+       # loss_and_metrics = model.evaluate(X, y)
+        loss_and_metrics = model.evaluate(data)
         # Loss function values will always be the first value
         if type(loss_and_metrics) is list:
             L = loss_and_metrics[0]
