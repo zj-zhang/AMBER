@@ -15,9 +15,10 @@ class TestGenome(unittest.TestCase):
         self.chrom_to_lens = {"seq0": 10,
                               "seq1": 25,
                               "seq2": 24}
+        self.in_memory = False
 
     def _get_small_genome(self):
-        return Genome("amber/utils/tests/files/small_genome.fa")
+        return Genome("amber/utils/tests/files/small_genome.fa", in_memory=self.in_memory)
 
     def test_load_mixed_case_sequence(self):
         expected = "AANNCCTTGG"
@@ -116,5 +117,25 @@ class TestGenome(unittest.TestCase):
         g = self._get_small_genome()
         observed = g.coords_are_valid("seq0", 9, 10)
         self.assertTrue(observed)
+
+    def test_in_memory(self):
+        self.assertFalse(self.in_memory)
+
+    def test_genome_in_memory(self):
+        g = self._get_small_genome()
+        self.assertFalse(g.in_memory)
+
+
+class TestGenomeInMemory(TestGenome):
+    def setUp(self):
+        super(TestGenomeInMemory, self).setUp()
+        self.in_memory = True
+
+    def test_in_memory(self):
+        self.assertTrue(self.in_memory)
+
+    def test_genome_in_memory(self):
+        g = self._get_small_genome()
+        self.assertTrue(g.in_memory)
 
 
