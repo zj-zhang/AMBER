@@ -143,9 +143,10 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
         store_fn='minimal',
         model_compile_dict=model_compile_dict,
         working_dir=wd,
-        verbose=0,
+        verbose=verbose,
         save_full_model=False,
-        model_space=model_space
+        model_space=model_space,
+        fit_kwargs={'workers': 8, 'max_queue_size': 100}
     )
     return manager
 
@@ -219,7 +220,7 @@ def reload_trained_controller(arg):
 
 def train_nas(arg):
     wd = arg.wd
-    verbose = 2
+    verbose = 1
     model_space = get_model_space_common()
     try:
         session = tf.Session()

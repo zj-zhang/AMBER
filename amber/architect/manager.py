@@ -48,11 +48,13 @@ class GeneralManager(BaseNetworkManager):
                  epochs=5,
                  child_batchsize=128,
                  verbose=0,
+                 fit_kwargs=None,
                  **kwargs):
         super(GeneralManager, self).__init__(**kwargs)
         self.train_data = train_data
         self.validation_data = validation_data
         self.working_dir = working_dir
+        self.fit_kwargs = fit_kwargs or {}
         if not os.path.exists(self.working_dir):
             os.makedirs(self.working_dir)
         self.model_compile_dict = kwargs.pop("model_compile_dict", None)
@@ -97,7 +99,8 @@ class GeneralManager(BaseNetworkManager):
                              callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
                                                         monitor='val_loss', verbose=self.verbose,
                                                         save_best_only=True),
-                                        EarlyStopping(monitor='val_loss', patience=5, verbose=self.verbose)]
+                                        EarlyStopping(monitor='val_loss', patience=5, verbose=self.verbose)],
+                             **self.fit_kwargs
                              )
             # load best performance epoch in this training session
             model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
