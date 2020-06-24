@@ -224,14 +224,20 @@ def train_nas(arg):
     # Load in datasets and configurations for them.
     configs = pd.read_csv(arg.config_file).to_dict(orient='index')
     
+    # Build genome. This only works under the assumption that all configs use same genome.
+    k = list(config.keys())[0]
+    genome = EncodedGenome(input_path=configs[k]["genome_file"], in_memory=True),
+
+
     config_keys = list()
     for k in configs.keys():
         # Build datasets for train/test/validate splits.
         for x in ["train", "test", "validate"]:
+
+            #in_memory=(x == "train")),
             configs[k][x] = BatchedBioIntervalSequence(
                 configs[k][x + "_file"],
-                EncodedGenome(input_path=configs[k]["genome_file"],
-                              in_memory=(x == "train")),
+                genome,
                 batch_size=500, seed=1337, shuffle=(x == "train"))
             configs[k][x].set_pad(400) # 1000 total bp = 200 + 400 * 2
 
