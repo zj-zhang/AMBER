@@ -12,6 +12,7 @@ from keras import backend as K
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.models import Model
 
+from .common_ops import unpack_data
 from .store import get_store_fn
 
 __all__ = [
@@ -70,6 +71,8 @@ class GeneralManager(BaseNetworkManager):
         self.reward_fn = reward_fn
         self.store_fn = get_store_fn(store_fn)
 
+
+
     def get_rewards(self, trial, model_arc, **kwargs):
         # print('-'*80, model_arc, '-'*80)
         train_graph = tf.Graph()
@@ -83,8 +86,10 @@ class GeneralManager(BaseNetworkManager):
 
             # train the model using Keras methods
             print(" Trial %i: Start training model..." % trial)
-            hist = model.fit(self.train_data,
-                             #batch_size=self.batchsize,
+            train_x, train_y = unpack_data(self.train_data)
+            hist = model.fit(x=train_x,
+                             y=train_y,
+                             batch_size=self.batchsize if train_y else None,
                              epochs=self.epochs,
                              verbose=self.verbose,
                              #shuffle=True,

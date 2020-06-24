@@ -140,7 +140,7 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
         child_batchsize=child_batch_size,
         reward_fn=reward_fn,
         model_fn=model_fn,
-        store_fn='model_plot',
+        store_fn='minimal',
         model_compile_dict=model_compile_dict,
         working_dir=wd,
         verbose=0,
@@ -191,7 +191,10 @@ def convert_to_dataframe(res, model_space, data_names):
 def reload_trained_controller(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
     model_space = get_model_space_common()
-    session = tf.Session()
+    try:
+        session = tf.Session()
+    except AttributeError:
+        session = tf.compat.v1.Session()
     controller = get_controller(model_space=model_space, session=session, data_description_len=2)
     controller.load_weights(os.path.join(wd, "controller_weights.h5"))
 
@@ -218,7 +221,10 @@ def train_nas(arg):
     wd = arg.wd
     verbose = 2
     model_space = get_model_space_common()
-    session = tf.Session()
+    try:
+        session = tf.Session()
+    except AttributeError:
+        session = tf.compat.v1.Session()
     controller = get_controller(model_space=model_space, session=session, data_description_len=2)
 
     # Load in datasets and configurations for them.

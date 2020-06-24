@@ -5,7 +5,8 @@ This module provides the `BioIntervalSource` class and its children.
 These are essentially wrappers for sets of sequence intervals and
 associated labels.
 """
-import keras
+#import keras
+import tensorflow as tf
 import numpy
 
 
@@ -170,7 +171,7 @@ class BioIntervalSource(object):
         return x, y
 
 
-class BioIntervalSequence(BioIntervalSource, keras.utils.Sequence):
+class BioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
     """This data sequence type holds intervals in a genome and a
     label associated with each interval. Unlike a generator, this
     is based off of `keras.utils.Sequence`, which shifts things like
@@ -267,7 +268,7 @@ class BioIntervalGenerator(BioIntervalSource):
         raise NotImplementedError
 
 
-class BatchedBioIntervalSequence(BioIntervalSource, keras.utils.Sequence):
+class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
     """This data sequence type holds intervals in a genome and a
     label associated with each interval. Unlike a generator, this
     is based off of `keras.utils.Sequence`, which shifts things like

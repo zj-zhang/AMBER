@@ -6,8 +6,21 @@ import tensorflow as tf
 if tf.__version__.startswith("2"):
     tf.compat.v1.disable_eager_execution()
     import tensorflow.compat.v1 as tf
-
 from tensorflow.python.training import moving_averages
+
+
+def unpack_data(data):
+    if type(data) in (tuple, list):
+        x, y = data[0], data[1]
+    elif isinstance(data, tf.keras.utils.Sequence):
+        x = data
+        y = None
+    elif hasattr(data, '__next__'):
+        x = data
+        y = None
+    else:
+        raise Exception("cannot unpack data of type: %s"%type(data))
+    return x, y
 
 
 def batchify(x, y=None, batch_size=None, shuffle=True, drop_remainder=True):
