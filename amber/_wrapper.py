@@ -11,7 +11,7 @@ try:
 except ImportError:
     from tensorflow.compat.v1 import Session
     tf.compat.v1.disable_eager_execution()
-
+import os
 from . import _getter
 
 
@@ -102,3 +102,4 @@ class Amber:
     def run(self):
         assert self.is_built
         self.env.train()
+        self.controller.save_weights(os.path.join(self.env.working_dir, "controller_weights.h5"))

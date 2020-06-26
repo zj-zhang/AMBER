@@ -32,6 +32,7 @@ def read_history(fn_list,
                 t = t[1:]
             elif idx == len(tmp) - 1:
                 t = t[:-1]
+            t = t.strip("[]")
             t = float(t)
             metrics[name].append(t)
     for name in metrics:
