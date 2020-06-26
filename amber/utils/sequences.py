@@ -5,12 +5,12 @@ This module provides the `Sequence` class, which is an abstract class
 that defines the interface for loading biological sequence data.
 """
 import abc
-import copy
 
 import numpy
 import pyfaidx
 
 _DNA_COMP_TABLE = str.maketrans("ATCGN", "TAGCN")
+_STORE_TYPE = numpy.half
 
 class Sequence(metaclass=abc.ABCMeta):
     """This class represents a source of sequence data, which can be
@@ -223,9 +223,9 @@ class EncodedSequence(Encoding, Sequence):
         """
         ret = list()
         for i in range(len(s)):
-            ret.append(self.ALPHABET_TO_ARRAY[s[i]])
+            ret.append(self.ALPHABET_TO_ARRAY[s[i]].copy())
         ret = numpy.stack(ret)
-        return copy.deepcopy(ret)
+        return ret
 
     def get_sequence_from_coords(self, *args, **kwargs):
         """Fetches an encoded sequence at the specified coordinates.
@@ -269,11 +269,11 @@ class EncodedGenome(EncodedSequence, Genome):
         A mapping from characters in the genome to their
         `numpy.ndarray` representations.
     """
-    ALPHABET_TO_ARRAY = dict(A=numpy.array([1, 0, 0, 0]),
-                             C=numpy.array([0, 1, 0, 0]),
-                             G=numpy.array([0, 0, 1, 0]),
-                             T=numpy.array([0, 0, 0, 1]),
-                             N=numpy.array([.25, .25, .25, .25]))
+    ALPHABET_TO_ARRAY = dict(A=numpy.array([1, 0, 0, 0], dtype=_STORE_TYPE),
+                             C=numpy.array([0, 1, 0, 0], dtype=_STORE_TYPE),
+                             G=numpy.array([0, 0, 1, 0], dtype=_STORE_TYPE),
+                             T=numpy.array([0, 0, 0, 1], dtype=_STORE_TYPE),
+                             N=numpy.array([.25, .25, .25, .25], dtype=_STORE_TYPE))
     """
     A dictionary mapping possible characters in the genome to
     their `numpy.ndarray` representations.
@@ -284,3 +284,55 @@ class EncodedGenome(EncodedSequence, Genome):
         Constructs a new `EncodedGenome` object.
         """
         super(EncodedGenome, self).__init__(*args, **kwargs)
+        if self.in_memory is True: # Pre-encode the genome if storing in memory.
+            for k, v in self.data.items():
+                print(k, flush=True)
+                self.data[k] = numpy.zeros((len(v), 4), dtype=_STORE_TYPE)
+                for i in range(self.data[k].shape[0]):
+                    self.data[k][i, :] = self.ALPHABET_TO_ARRAY[v[i]]
+                #self.data[k] = self.encode(self.data[k])#.astype(_STORE_TYPE)
+
+    def get_sequence_from_coords(self, chrom, start, end, strand="+"):
+        """Fetches a string representation of a sequence at
+        the specified coordinates.
+
+
+        Parameters
+        ----------
+        chrom : str
+            Chromosome to query from.
+        start : int
+            First position in queried sequence.
+        end : int
+            One past the last position in the queried sequence.
+        strand : str
+            The strand to sample from.
+
+        Returns
+        -------
+        str
+            The sequence of bases occuring at the queried
+            coordinates.
+
+        Raises
+        ------
+        IndexError
+            If the coordinates are not valid.
+        """
+        if self.in_memory is True:
+            if self.coords_are_valid(chrom, start, end, strand):
+                x = self.data[chrom][start:end].copy()
+                if strand == "-":
+                    x = numpy.flip(numpy.flip(x, 0), 1)
+                return x.astype(numpy.float64)
+            else:
+                s = "Specified coordinates ({} to {} on \"{}\", strand of \"{}\") are invalid!".format(
+                     start, end, chrom, strand)
+                raise IndexError(s)
+        else:
+            return self.encode(
+                super(EncodedSequence, self).get_sequence_from_coords(
+                    chrom=chrom, start=start, end=end, strand=strand)).astype(numpy.float64)
+
+
+

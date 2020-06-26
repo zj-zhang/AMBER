@@ -3,6 +3,7 @@ import unittest
 
 from amber.utils.sequences import EncodedGenome
 
+
 class TestEncodedGenome(unittest.TestCase):
     def setUp(self):
         self.bases = ['A', 'C', 'G', 'T']
@@ -15,9 +16,10 @@ class TestEncodedGenome(unittest.TestCase):
         self.chrom_to_lens = {"seq0": 10,
                               "seq1": 25,
                               "seq2": 24}
+        self.in_memory = False
 
     def _get_small_genome(self):
-        return EncodedGenome("amber/utils/tests/files/small_genome.fa")
+        return EncodedGenome("amber/utils/tests/files/small_genome.fa", in_memory=self.in_memory)
 
     def test_load_mixed_case_sequence(self):
         expected = [
@@ -119,4 +121,24 @@ class TestEncodedGenome(unittest.TestCase):
         g = self._get_small_genome()
         observed = g.coords_are_valid("seq0", 9, 10)
         self.assertTrue(observed)
+
+    def test_in_memory(self):
+        self.assertFalse(self.in_memory)
+
+    def test_genome_in_memory(self):
+        g = self._get_small_genome()
+        self.assertFalse(g.in_memory)
+
+
+class TestEncodedGenomeInMemory(TestEncodedGenome):
+    def setUp(self):
+        super(TestEncodedGenomeInMemory, self).setUp()
+        self.in_memory = True
+
+    def test_in_memory(self):
+        self.assertTrue(self.in_memory)
+
+    def test_genome_in_memory(self):
+        g = self._get_small_genome()
+        self.assertTrue(g.in_memory)
 
