@@ -21,7 +21,19 @@ def convert_file(input_file, output_file):
         ds = h5.create_dataset(chrom, (chrom_len, 4), dtype=g.ALPHABET_TO_ARRAY['N'].dtype)
         s = str(g.data[chrom]).upper()
         for i in range(chrom_len):
-            ds[i, :] = g.ALPHABET_TO_ARRAY[s[i]]
+            if s[i] == 'A':
+                ds[i, 0] = 1
+            elif s[i] == 'C':
+                ds[i, 1] = 1
+            elif s[i] == 'T':
+                ds[i, 2] = 1
+            elif s[i] == 'G':
+                ds[i, 3] = 1
+            elif s[i] == 'N':
+                ds[i, :] = 0.25
+            else:
+                s = "Failed on chrom {} in position {} with character \"{}\"".format(chrom, i, s[i])
+                raise ValueError(s)
 
     # Close.
     h5.close()
