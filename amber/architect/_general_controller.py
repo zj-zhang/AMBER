@@ -138,6 +138,7 @@ class GeneralController(BaseController):
 
         self.optim_algo = optim_algo
         self.name = name
+        self.loss = 0
 
         with tf.variable_scope(self.name):
             self._create_weight()
@@ -510,7 +511,7 @@ class GeneralController(BaseController):
         self.old_probs = [tf.placeholder(shape=self.onehot_probs[i].shape, dtype=tf.float32, name="old_prob_%i" % i) for
                           i in range(len(self.onehot_probs))]
         if self.use_ppo_loss:
-            self.loss = proximal_policy_optimization_loss(
+            self.loss += proximal_policy_optimization_loss(
                 curr_prediction=self.onehot_probs,
                 curr_onehot=self.input_arc_onehot,
                 old_prediction=self.old_probs,
@@ -519,7 +520,7 @@ class GeneralController(BaseController):
                 advantage=self.advantage,
                 clip_val=0.2)
         else:
-            self.loss = tf.reshape(tf.tensordot(self.onehot_log_prob, self.advantage, axes=1), [])
+            self.loss += tf.reshape(tf.tensordot(self.onehot_log_prob, self.advantage, axes=1), [])
             if self.skip_weight is not None:
                 self.loss += self.skip_weight * self.onehot_skip_penaltys
 

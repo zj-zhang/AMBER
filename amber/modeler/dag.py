@@ -100,7 +100,8 @@ def get_layer(x, state):
         return Dropout(**state.Layer_attributes)(x)
 
     elif state.Layer_type == 'identity':
-        return Lambda(lambda t: t, **state.Layer_attributes)(x)
+        #return Lambda(lambda t: t, **state.Layer_attributes)(x)
+        return Lambda(lambda t: t)(x)
 
     elif state.Layer_type == 'gaussian_noise':
         return GaussianNoise(**state.Layer_attributes)(x)

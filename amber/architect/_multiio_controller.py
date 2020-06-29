@@ -526,7 +526,7 @@ class MultiIOController(MultiInputController):
 
         # Attributes unique to the derived class:
         self.with_skip_connection = True
-        self.with_input_blocks = True
+        #self.with_input_blocks = True
         self.with_output_blocks = with_output_blocks
         self.num_output_blocks = num_output_blocks
         self.output_block_unique_connection = output_block_unique_connection
@@ -587,6 +587,7 @@ class MultiIOController(MultiInputController):
                            for i in range(self.total_arc_len, self.total_arc_len + output_arc_len)]
         self.total_arc_len += output_arc_len
 
+        
         layer_hs = [self.train_hidden_states[i][-1] for i in range(1, self.num_layers * 3, 3)]
         layer_hs = tf.transpose(tf.stack(layer_hs), [1, 0, 2])  # shape: batch, num_layers, lstm_size
         output_probs = []

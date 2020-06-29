@@ -37,7 +37,11 @@ from amber.bootstrap.mock_manager import MockManager
 def get_controller(model_space, session, data_description_len=3, is_enas=True):
     with tf.device("/cpu:0"):
         controller = ZeroShotController(
-            data_description_len=data_description_len,
+            data_description_config={
+                "length": 2,
+                "hidden_layer": {"units":8, "activation": "relu"},
+                "regularizer": {"l1":1e-8 }
+                },
             model_space=model_space,
             session=session,
             share_embedding={i:0 for i in range(1, len(model_space))} if is_enas else None,
