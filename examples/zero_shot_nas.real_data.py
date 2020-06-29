@@ -215,6 +215,12 @@ def reload_trained_controller(arg):
 
 
 def train_nas(arg):
+    dfeature_names = list()
+    with open(arg.dfeature_name_file, "r") as read_file:
+        for line in read_file:
+            line = line.strip()
+            if line:
+                dfeature_names.append(line)
     wd = arg.wd
     verbose = 2
     model_space = get_model_space_common()
@@ -243,7 +249,7 @@ def train_nas(arg):
 
         # Build covariates and manager.
         configs[k]["dfeatures"] = np.array(
-            [configs[k][x] for x in ["pol2", "dnase"]]) # TODO: Make cols dynamic.
+            [configs[k][x] for x in dfeature_names]) # TODO: Make cols dynamic.
         print(configs[k]["dfeatures"])
         configs[k]["manager"] = get_manager_common(
             train_data=configs[k]["train"],
@@ -285,7 +291,8 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser(description="experimental zero-shot nas")
         parser.add_argument("--analysis", type=str, choices=['train', 'reload'], required=True, help="analysis type")
         parser.add_argument("--wd", type=str, default="./outputs/zero_shot/", help="working dir")
-        parser.add_argument("--config-file", type=str, required=True, help="Path to the cnofig file to use.")
+        parser.add_argument("--config-file", type=str, required=True, help="Path to the config file to use.")
+        parser.add_argument("--dfeature-name-file", type=str, required=True, help="Path to file with dataset feature names listed one per line.")
 
         arg = parser.parse_args()
 
