@@ -99,13 +99,6 @@ class Genome(Sequence):
             self.data = pyfaidx.Fasta(input_path)
         self.chrom_len_dict = {k: len(self.data[k]) for k in self.data.keys()}
 
-    def __del__(self):
-        """
-        Destructor method for `Genome` object.
-        """
-        if not self.in_memory:
-            self.data.close()
-
     def __len__(self):
         """Number of queryable positions in the genome.
 
