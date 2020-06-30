@@ -226,7 +226,7 @@ def train_nas(arg):
     verbose = 2
     model_space = get_model_space_common()
     session = tf.Session()
-    controller = get_controller(model_space=model_space, session=session, data_description_len=2)
+    controller = get_controller(model_space=model_space, session=session, data_description_len=len(dfeature_names))
 
     # Load in datasets and configurations for them.
     if arg.config_file.endswith("tsv"):
