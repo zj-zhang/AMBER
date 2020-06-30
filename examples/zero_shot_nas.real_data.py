@@ -229,8 +229,17 @@ def train_nas(arg):
     controller = get_controller(model_space=model_space, session=session, data_description_len=2)
 
     # Load in datasets and configurations for them.
-    configs = pd.read_csv(arg.config_file).to_dict(orient='index')
-    
+    if arg.config_file.endswith("tsv"):
+        sep = "\t"
+    else:
+        sep = ","
+    configs = pd.read_csv(arg.config_file, sep=sep)
+    tmp = list(configs.columns) # Because pandas doesn't have infer quotes...
+    if any(["\"" in x for x in tmp]):
+        configs = pd.read_csv(arg.config_file, sep=sep, quoting=2)
+        print("Re-read with quoting")
+    configs = configs.to_dict(orient='index')
+
     # Build genome. This only works under the assumption that all configs use same genome.
     k = list(configs.keys())[0]
     genome = EncodedHDF5Genome(input_path=arg.genome_file, in_memory=False)
@@ -241,12 +250,21 @@ def train_nas(arg):
     for k in configs.keys():
         # Build datasets for train/test/validate splits.
         for x in ["train", "test", "validate"]:
-
+            if x == "train":
+                n = arg.n_train
+            elif x == "test":
+                n = arg.n_test
+            elif x == "validate":
+                n = arg.n_validate
+            else:
+                s = "Unknown mode: {}".format(x)
+                raise ValueError(s)
             #in_memory=(x == "train")),
             configs[k][x] = BatchedBioIntervalSequence(
                 configs[k][x + "_file"],
                 genome,
-                batch_size=500, seed=1337, shuffle=(x == "train"))
+                batch_size=500, seed=1337, shuffle=(x == "train"),
+                n_examples=n)
             configs[k][x].set_pad(400) # 1000 total bp = 200 + 400 * 2
 
         # Build covariates and manager.
@@ -296,6 +314,9 @@ if __name__ == "__main__":
         parser.add_argument("--config-file", type=str, required=True, help="Path to the config file to use.")
         parser.add_argument("--genome-file", type=str, required=True, help="Path to genome file to use.")
         parser.add_argument("--dfeature-name-file", type=str, required=True, help="Path to file with dataset feature names listed one per line.")
+        parser.add_argument("--n-test", type=int, required=True, help="Number of test examples.")
+        parser.add_argument("--n-train", type=int, required=True, help="Number of train examples.")
+        parser.add_argument("--n-validate", type=int, required=True, help="Number of validation examples.")
 
         arg = parser.parse_args()
 
