@@ -270,7 +270,7 @@ def train_nas(arg):
         # Build covariates and manager.
         configs[k]["dfeatures"] = np.array(
             [configs[k][x] for x in dfeature_names]) # TODO: Make cols dynamic.
-        print(configs[k]["dfeatures"])
+        #print(configs[k]["dfeatures"])
         configs[k]["manager"] = get_manager_common(
             train_data=configs[k]["train"],
             val_data=configs[k]["validate"],
