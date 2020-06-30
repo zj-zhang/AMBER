@@ -32,6 +32,7 @@ from amber.architect.manager import GeneralManager
 from amber.architect.model_space import get_layer_shortname
 
 from amber.utils.sequences import EncodedGenome
+from amber.utils.sequences import EncodedHDF5Genome
 from amber.utils.sampler import BatchedBioIntervalSequence
 
 
@@ -232,7 +233,8 @@ def train_nas(arg):
     
     # Build genome. This only works under the assumption that all configs use same genome.
     k = list(configs.keys())[0]
-    genome = EncodedGenome(input_path=configs[k]["genome_file"], in_memory=True)
+    genome = EncodedHDF5Genome(input_path=arg.genome_file, in_memory=False)
+    #genome = EncodedGenome(input_path=configs[k]["genome_file"], in_memory=True)
 
 
     config_keys = list()
@@ -292,6 +294,7 @@ if __name__ == "__main__":
         parser.add_argument("--analysis", type=str, choices=['train', 'reload'], required=True, help="analysis type")
         parser.add_argument("--wd", type=str, default="./outputs/zero_shot/", help="working dir")
         parser.add_argument("--config-file", type=str, required=True, help="Path to the config file to use.")
+        parser.add_argument("--genome-file", type=str, required=True, help="Path to genome file to use.")
         parser.add_argument("--dfeature-name-file", type=str, required=True, help="Path to file with dataset feature names listed one per line.")
 
         arg = parser.parse_args()

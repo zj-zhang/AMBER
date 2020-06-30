@@ -485,7 +485,11 @@ class EncodedHDF5Genome(EncodedGenome):
             If the coordinates are not valid.
         """
         if self.coords_are_valid(chrom, start, end, strand):
-            x = self.data[chrom][start:end].copy()
+            if self.in_memory:
+                x = self.data[chrom][start:end].copy()
+            else:
+                x = numpy.zeros((end - start, 4), dtype=_STORE_TYPE)
+                self.data[chrom].read_direct(x, numpy.s_[start:end], numpy.s_[0:x.shape[0]])
             if strand == "-":
                 x = numpy.flip(numpy.flip(x, 0), 1)
             return x.astype(numpy.float64)
