@@ -20,15 +20,15 @@ from amber.architect.model_space import State, ModelSpace
 from amber.architect.common_ops import count_model_params
 
 #from amber.architect.manager import EnasManager
-from amber.architect.train_env import MultiManagerEnvironment
+from amber.architect.train_env import MultiManagerEnvironment, ParallelMultiManagerEnvironment
 from amber.architect.reward import LossAucReward, LossReward
 from amber.plots import plot_controller_hidden_states
-from amber.utils import run_from_ipython
+from amber.utils import run_from_ipython, get_available_gpus
 from amber.utils.logging import setup_logger
 from amber.utils.data_parser import get_data_from_simdata
 
-from amber.modeler.modeler import build_sequential_model
-from amber.architect.manager import GeneralManager
+from amber.modeler.modeler import build_sequential_model, KerasModelBuilder
+from amber.architect.manager import GeneralManager, DistributedGeneralManager
 from amber.architect.model_space import get_layer_shortname
 
 from amber.utils.sequences import EncodedGenome
@@ -39,7 +39,11 @@ from amber.utils.sampler import BatchedBioIntervalSequence
 def get_controller(model_space, session, data_description_len=3):
     with tf.device("/cpu:0"):
         controller = ZeroShotController(
-            data_description_len=data_description_len,
+            data_description_config={
+                "length": 2,
+                "hidden_layer": {"units":8, "activation": "relu"},
+                "regularizer": {"l1":1e-8 }
+                },
             model_space=model_space,
             session=session,
             #share_embedding={i:0 for i in range(1, len(model_space))},
@@ -59,8 +63,6 @@ def get_controller(model_space, session, data_description_len=3):
             use_ppo_loss=True,
             rescale_advantage_by_reward=True
         )
-        #controller.buffer.rescale_advantage_by_reward = False
-        controller.buffer.rescale_advantage_by_reward = True
     return controller
 
 
@@ -116,6 +118,35 @@ def get_model_space_common():
     return state_space
 
 
+def get_manager_distributed(train_data, val_data, controller, model_space, wd, data_description, verbose=0,
+                            devices=None, **kwargs):
+    reward_fn = LossAucReward(method='auc')
+    input_node = State('input', shape=(1000, 4), name="input", dtype='float32')
+    output_node = State('dense', units=1, activation='sigmoid')
+    model_compile_dict = {
+        'loss': 'binary_crossentropy',
+        'optimizer': 'adam',
+        'metrics': ['acc']
+    }
+    mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space)
+    manager = DistributedGeneralManager(
+        devices=devices,
+        train_data=train_data,
+        validation_data=val_data,
+        epochs=50,
+        child_batchsize=1000,
+        reward_fn=reward_fn,
+        model_fn=mb,
+        store_fn='model_plot',
+        model_compile_dict=model_compile_dict,
+        working_dir=wd,
+        verbose=verbose,
+        save_full_model=False,
+        model_space=model_space
+    )
+    return manager
+
+
 def get_manager_common(train_data, val_data, controller, model_space, wd, data_description, verbose=2, n_feats=1, **kwargs):
     input_node = State('input', shape=(1000, 4), name="input", dtype='float32')
     output_node = State('dense', units=n_feats, activation='sigmoid')
@@ -126,8 +157,8 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
     }
     session = controller.session
 
-    #reward_fn = LossAucReward(method='auc')
-    reward_fn = LossReward() # TODO: IMplement LossAucReward for generator.
+    reward_fn = LossAucReward(method='auc')
+    #reward_fn = LossReward() # TODO: IMplement LossAucReward for generator.
 
     child_batch_size = 500
     # TODO: convert functions in `_keras_modeler.py` to classes, and wrap up this Lambda function step
@@ -141,12 +172,13 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
         child_batchsize=child_batch_size,
         reward_fn=reward_fn,
         model_fn=model_fn,
-        store_fn='model_plot',
+        store_fn='minimal',
         model_compile_dict=model_compile_dict,
         working_dir=wd,
-        verbose=0,
+        verbose=verbose,
         save_full_model=False,
-        model_space=model_space
+        model_space=model_space,
+        #fit_kwargs={'workers': 8, 'max_queue_size': 100, 'use_multiprocessing':True}
     )
     return manager
 
@@ -192,7 +224,10 @@ def convert_to_dataframe(res, model_space, data_names):
 def reload_trained_controller(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
     model_space = get_model_space_common()
-    session = tf.Session()
+    try:
+        session = tf.Session()
+    except AttributeError:
+        session = tf.compat.v1.Session()
     controller = get_controller(model_space=model_space, session=session, data_description_len=2)
     controller.load_weights(os.path.join(wd, "controller_weights.h5"))
 
@@ -223,9 +258,13 @@ def train_nas(arg):
             if line:
                 dfeature_names.append(line)
     wd = arg.wd
-    verbose = 2
+    verbose = 1
     model_space = get_model_space_common()
-    session = tf.Session()
+    try:
+        session = tf.Session()
+    except AttributeError:
+        session = tf.compat.v1.Session()
+
     controller = get_controller(model_space=model_space, session=session, data_description_len=len(dfeature_names))
 
     # Load in datasets and configurations for them.
@@ -239,15 +278,19 @@ def train_nas(arg):
         configs = pd.read_csv(arg.config_file, sep=sep, quoting=2)
         print("Re-read with quoting")
     configs = configs.to_dict(orient='index')
+    
+    # Get available gpus for parsing to DistributedManager
+    gpus = get_available_gpus()
+    gpus_ = gpus * len(configs)
+    print(gpus_)
 
     # Build genome. This only works under the assumption that all configs use same genome.
     k = list(configs.keys())[0]
     genome = EncodedHDF5Genome(input_path=arg.genome_file, in_memory=False)
     #genome = EncodedGenome(input_path=configs[k]["genome_file"], in_memory=True)
-
-
+    
     config_keys = list()
-    for k in configs.keys():
+    for i, k in enumerate(configs.keys()):
         # Build datasets for train/test/validate splits.
         for x in ["train", "test", "validate"]:
             if x == "train":
@@ -271,7 +314,8 @@ def train_nas(arg):
         configs[k]["dfeatures"] = np.array(
             [configs[k][x] for x in dfeature_names]) # TODO: Make cols dynamic.
         #print(configs[k]["dfeatures"])
-        configs[k]["manager"] = get_manager_common(
+        configs[k]["manager"] = get_manager_distributed(
+            devices=[gpus_[i]],
             train_data=configs[k]["train"],
             val_data=configs[k]["validate"],
             controller=controller,
@@ -285,7 +329,8 @@ def train_nas(arg):
 
     logger = setup_logger(wd, verbose_level=logging.INFO)
 
-    env = MultiManagerEnvironment(
+    env = ParallelMultiManagerEnvironment(
+        processes=len(gpus),
         data_descriptive_features=np.stack([configs[k]["dfeatures"] for k in config_keys]),
         controller=controller,
         manager=[configs[k]["manager"] for k in config_keys],

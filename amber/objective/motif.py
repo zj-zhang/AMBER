@@ -57,7 +57,7 @@ class MotifKLDivergence(GeneralKnowledgeObjectiveFunction):
         return self
 
     def knowledge_encoder(self, motif_name_list, motif_file, is_log_motif, autoremove_dup=False):
-        from plots import motif
+        from ..utils import motif
         motif_dict = motif.load_binding_motif_pssm(motif_file, is_log_motif)
         self.W_knowledge = {motif_name: motif_dict[motif_name] for motif_name in motif_name_list}
         if autoremove_dup:

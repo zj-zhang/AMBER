@@ -38,6 +38,7 @@ def store_with_model_plot(
         *args, **kwargs
 ):
     par_dir = os.path.join(working_dir, 'weights', 'trial_%s' % trial)
+    os.makedirs(par_dir, exist_ok=True)
     store_general(trial=trial,
                   model=model,
                   hist=hist,
@@ -47,7 +48,7 @@ def store_with_model_plot(
                   working_dir=working_dir,
                   save_full_model=save_full_model
                   )
-    from keras.utils import plot_model
+    from tensorflow.keras.utils import plot_model
     plot_model(model, to_file=os.path.join(par_dir, "model_arc.png"))
 
 
@@ -104,14 +105,14 @@ def store_general(
     plot_training_history(hist, par_dir)
     if os.path.isfile(os.path.join(working_dir, 'temp_network.h5')):
         shutil.move(os.path.join(working_dir, 'temp_network.h5'), os.path.join(par_dir, 'bestmodel.h5'))
-    # TODO: REVAMP THIS.
-    #metadata = data[2] if len(data) > 2 else None
-    #obs = data[1]
-    #write_pred_to_disk(
-    #    os.path.join(par_dir, 'pred.txt'),
-    #    pred, obs, metadata,
-    #    loss_and_metrics
-    #)
+    # TODO: REVAMP THIS. if data is a generator/keras.utils.Sequence
+    metadata = data[2] if len(data) > 2 else None
+    obs = data[1]
+    write_pred_to_disk(
+        os.path.join(par_dir, 'pred.txt'),
+        pred, obs, metadata,
+        loss_and_metrics
+    )
 
 
 def store_minimal(

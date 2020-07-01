@@ -472,7 +472,7 @@ class EnasAnnModel:
 
     def evaluate_ph(self, x, y, batch_size=None):
         if batch_size is None:
-            batch_size = min(1000, len(x[0]))
+            batch_size = min(100, x.shape[0])
         loss_and_metrics = []
         seen = 0
         for x_, y_ in batchify(x, y, batch_size=batch_size, shuffle=False):

@@ -9,9 +9,11 @@ Date:
     6.12.2019
 """
 import numpy as np
-import tensorflow as tf
-from keras.layers import Concatenate
-from keras.models import Model
+import warnings
+#import tensorflow as tf
+from ..utils import corrected_tf as tf
+from tensorflow.keras.layers import Concatenate
+from tensorflow.keras.models import Model
 # TODO: need to clean up `State` as `Operation`
 from ..architect.model_space import State
 
@@ -21,11 +23,11 @@ from ..architect.common_ops import get_tf_metrics, get_keras_train_ops, get_tf_l
     create_bias, batch_norm1d
 # for get layers
 from keras import backend as K
-from keras.layers import GlobalAveragePooling1D, GlobalMaxPooling1D, GaussianNoise
-from keras.layers.core import Dense, Dropout, Flatten
-from keras.layers.convolutional import Conv1D, MaxPooling1D, AveragePooling1D
-from keras.layers import Input, Lambda, Permute
-from keras.layers.recurrent import LSTM
+from tensorflow.keras.layers import GlobalAveragePooling1D, GlobalMaxPooling1D, GaussianNoise
+from tensorflow.keras.layers import Dense, Dropout, Flatten
+from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
+from tensorflow.keras.layers import Input, Lambda, Permute
+from tensorflow.keras.layers import LSTM
 from ..modeler.operators import Layer_deNovo, SeparableFC, sparsek_vec
 from ..architect.model_space import get_layer_shortname
 
@@ -98,7 +100,8 @@ def get_layer(x, state):
         return Dropout(**state.Layer_attributes)(x)
 
     elif state.Layer_type == 'identity':
-        return Lambda(lambda t: t, **state.Layer_attributes)(x)
+        #return Lambda(lambda t: t, **state.Layer_attributes)(x)
+        return Lambda(lambda t: t)(x)
 
     elif state.Layer_type == 'gaussian_noise':
         return GaussianNoise(**state.Layer_attributes)(x)
@@ -597,6 +600,9 @@ class EnasAnnDAG:
     def _verify_args(self):
         """verify vanilla ANN model space, input nodes, etc.,
          and configure internal attr. like masking steps"""
+        # check the consistency of with_output_blocks and output_op
+        if not self.with_output_blocks and len(self.output_node)>1:
+            warnings.warn("You specified `with_output_blocks=False`, but gave a List of output operations of length %i"%len(self.output_node), stacklevel=2)
         # model space
         assert len(set([tuple(self.model_space[i]) for i in
                         range(self.num_layers)])) == 1, "model_space for EnasDAG must be identical for all layers"
@@ -889,103 +895,104 @@ class EnasAnnDAG:
         metrics = self.model_compile_dict['metrics'] if 'metrics' in self.model_compile_dict else None
         var_scope = var_scope or self.name
 
-        if self.feature_model is None or self.feature_model.pseudo_inputs_pipe is None:
-            labels = self.child_model_label
-        else:
-            # TODO: for now, only use data_pipe for sample_arc
-            if use_pipe:
-                labels = self.child_model_label_pipe
-            else:
+        with tf.compat.v1.variable_scope("compile", reuse=tf.AUTO_REUSE):
+            if self.feature_model is None or self.feature_model.pseudo_inputs_pipe is None:
                 labels = self.child_model_label
+            else:
+                # TODO: for now, only use data_pipe for sample_arc
+                if use_pipe:
+                    labels = self.child_model_label_pipe
+                else:
+                    labels = self.child_model_label
 
-        # TODO: process loss_weights
-        loss_weights = self.model_compile_dict['loss_weights'] if 'loss_weights' in self.model_compile_dict else None
-        if type(loss) is str:
-            loss_ = [get_tf_loss(loss, labels[i], model_output[i]) for i in range(len(model_output))]
-            # loss_ should originally all have the batch_size dim, then reduce_mean to 1-unit sample
-            # if the loss is homogeneous, then take the mean
-            loss_ = tf.reduce_mean(loss_)
-        elif type(loss) is list:
-            loss_ = []
-            for i in range(len(loss)):
-                loss_.append(get_tf_loss(
-                    loss[i],
-                    labels[i],
-                    model_output[i]
-                ))
-            # if the loss are provided by a list, assume its heterogeneous, and return the sum of
-            # each individual loss components
-            loss_ = tf.reduce_sum(loss_)
-        elif callable(loss):
-            loss_ = tf.reduce_sum([loss(labels[i], model_output[i]) for i in range(len(model_output))])
-        else:
-            raise Exception("expect loss to be str, list, dict or callable; got %s" % loss)
-        trainable_var = [var for var in tf.trainable_variables() if var.name.startswith(var_scope)]
-        if self.feature_model_trainable:
-            feature_model_trainable_var = [var for var in tf.trainable_variables() if
-                                           var.name.startswith(self.feature_model.name)]
-            assert len(feature_model_trainable_var) > 0, "You asked me to train featureModel but there is no trainable " \
-                                                         "variables in featureModel"
-            trainable_var += feature_model_trainable_var
-        regularization_penalty = 0.
-        if self.l1_reg > 0:
-            l1_regularizer = tf.contrib.layers.l1_regularizer(
-                scale=self.l1_reg, scope=self.name
-            )
-            l1_regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer,
-                                                                               [var[0] for var in w_masks])
-            loss_ += l1_regularization_penalty
-        else:
-            l1_regularization_penalty = 0.
+            # TODO: process loss_weights
+            loss_weights = self.model_compile_dict['loss_weights'] if 'loss_weights' in self.model_compile_dict else None
+            if type(loss) is str:
+                loss_ = [get_tf_loss(loss, labels[i], model_output[i]) for i in range(len(model_output))]
+                # loss_ should originally all have the batch_size dim, then reduce_mean to 1-unit sample
+                # if the loss is homogeneous, then take the mean
+                loss_ = tf.reduce_mean(loss_)
+            elif type(loss) is list:
+                loss_ = []
+                for i in range(len(loss)):
+                    loss_.append(get_tf_loss(
+                        loss[i],
+                        labels[i],
+                        model_output[i]
+                    ))
+                # if the loss are provided by a list, assume its heterogeneous, and return the sum of
+                # each individual loss components
+                loss_ = tf.reduce_sum(loss_)
+            elif callable(loss):
+                loss_ = tf.reduce_sum([loss(labels[i], model_output[i]) for i in range(len(model_output))])
+            else:
+                raise Exception("expect loss to be str, list, dict or callable; got %s" % loss)
+            trainable_var = [var for var in tf.trainable_variables() if var.name.startswith(var_scope)]
+            if self.feature_model_trainable:
+                feature_model_trainable_var = [var for var in tf.trainable_variables() if
+                                               var.name.startswith(self.feature_model.name)]
+                assert len(feature_model_trainable_var) > 0, "You asked me to train featureModel but there is no trainable " \
+                                                             "variables in featureModel"
+                trainable_var += feature_model_trainable_var
+            regularization_penalty = 0.
+            if self.l1_reg > 0:
+                l1_regularizer = tf.contrib.layers.l1_regularizer(
+                    scale=self.l1_reg, scope=self.name
+                )
+                l1_regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer,
+                                                                                   [var[0] for var in w_masks])
+                loss_ += l1_regularization_penalty
+            else:
+                l1_regularization_penalty = 0.
 
-        if self.l2_reg > 0:
-            l2_regularizer = tf.contrib.layers.l2_regularizer(
-                scale=self.l2_reg, scope=self.name
-            )
-            l2_regularization_penalty = tf.contrib.layers.apply_regularization(l2_regularizer,
-                                                                               [var[0] for var in w_masks])
-            loss_ += l2_regularization_penalty
-        else:
-            l2_regularization_penalty = 0.
+            if self.l2_reg > 0:
+                l2_regularizer = tf.contrib.layers.l2_regularizer(
+                    scale=self.l2_reg, scope=self.name
+                )
+                l2_regularization_penalty = tf.contrib.layers.apply_regularization(l2_regularizer,
+                                                                                   [var[0] for var in w_masks])
+                loss_ += l2_regularization_penalty
+            else:
+                l2_regularization_penalty = 0.
 
-        regularization_penalty += l1_regularization_penalty + l2_regularization_penalty
+            regularization_penalty += l1_regularization_penalty + l2_regularization_penalty
 
-        # default settings used from enas
-        if self.child_train_op_kwargs is None:
-            # more sensible default values
-            train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
-                # get_train_ops(
-                loss=loss_,
-                tf_variables=trainable_var,
-                optim_algo=optimizer,
-                train_step=self.train_step)
-        # user specific settings; useful when training the final searched arc
-        else:
-            train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
-                # get_train_ops
-                loss=loss_,
-                tf_variables=trainable_var,
-                train_step=self.train_step,
-                optim_algo=optimizer,
-                **self.child_train_op_kwargs)
-        if metrics is None:
-            metrics = []
-        else:
-            metrics = [get_tf_metrics(x) for x in metrics]
-        # TODO: this needs fixing to be more generic;
-        # TODO: for example, the squeeze op is not usable for
-        # TODO: other metrics such as Acc
-        metrics_ = [f(tf.squeeze(self.child_model_label[i]), tf.squeeze(model_output[i]))
-                    for i in range(len(model_output)) for f in metrics]
-        ops = {'train_op': train_op,
-               'lr': lr,
-               'grad_norm': grad_norm,
-               'optimizer': optimizer,
-               'loss': loss_,
-               'metrics': metrics_,
-               'reg_cost': regularization_penalty
-               }
-        return ops
+            # default settings used from enas
+            if self.child_train_op_kwargs is None:
+                # more sensible default values
+                train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
+                    # get_train_ops(
+                    loss=loss_,
+                    tf_variables=trainable_var,
+                    optim_algo=optimizer,
+                    train_step=self.train_step)
+            # user specific settings; useful when training the final searched arc
+            else:
+                train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
+                    # get_train_ops
+                    loss=loss_,
+                    tf_variables=trainable_var,
+                    train_step=self.train_step,
+                    optim_algo=optimizer,
+                    **self.child_train_op_kwargs)
+            if metrics is None:
+                metrics = []
+            else:
+                metrics = [get_tf_metrics(x) for x in metrics]
+            # TODO: this needs fixing to be more generic;
+            # TODO: for example, the squeeze op is not usable for
+            # TODO: other metrics such as Acc
+            metrics_ = [f(tf.squeeze(self.child_model_label[i]), tf.squeeze(model_output[i]))
+                        for i in range(len(model_output)) for f in metrics]
+            ops = {'train_op': train_op,
+                   'lr': lr,
+                   'grad_norm': grad_norm,
+                   'optimizer': optimizer,
+                   'loss': loss_,
+                   'metrics': metrics_,
+                   'reg_cost': regularization_penalty
+                   }
+            return ops
 
     def connect_controller(self, controller):
         self.sample_arc = controller.sample_arc
@@ -1425,12 +1432,20 @@ class EnasConv1dDAG:
                 x = tf.nn.dropout(x, rate=dropout_placeholders[-1])
             with tf.variable_scope("fc"):
                 fc_units = self.stem_config['fc_units'] if 'fc_units' in self.stem_config else 1000
-                if flatten_op == 'global_avg_pool':
-                    inp_c = x.get_shape()[-1].value
+                if flatten_op == 'global_avg_pool' or flatten_op == 'gap':
+                    try:
+                        inp_c = x.get_shape()[-1].value
+                    except AttributeError:
+                        inp_c = x.get_shape()[-1]
                     w = create_weight("w_fc", [inp_c, fc_units])
                 elif flatten_op == 'flatten':
-                    inp_c = np.prod(x.get_shape()[1:]).value
+                    try:
+                        inp_c = np.prod(x.get_shape()[1:]).value
+                    except AttributeError:
+                        inp_c = np.prod(x.get_shape()[1:])
                     w = create_weight("w_fc", [inp_c, fc_units])
+                else:
+                    raise Exception("Unknown fc string: %s" % flatten_op)
                 b = create_bias("b_fc", shape=[fc_units])
                 x = tf.matmul(x, w) + b
                 x = tf.nn.relu(x)
@@ -1449,10 +1464,16 @@ class EnasConv1dDAG:
     def _refactorized_channels_for_skipcon(self, layer, out_filters, is_training):
         """for dealing with mismatch-dimensions in skip connections: use a linear transformation"""
         if self.data_format == 'NWC':
-            inp_c = layer.get_shape()[-1].value
+            try:
+                inp_c = layer.get_shape()[-1].value
+            except AttributeError:
+                inp_c = layer.get_shape()[-1]
             actual_data_format = 'channels_last'
         elif self.data_format == 'NCW':
-            inp_c = layer.get_shape()[1].value
+            try:    
+                inp_c = layer.get_shape()[1].value
+            except AttributeError:
+                inp_c = layer.get_shape()[1]
             actual_data_format = 'channels_first'
 
         with tf.variable_scope("path1_conv"):
@@ -1465,11 +1486,21 @@ class EnasConv1dDAG:
     def _layer(self, arc_seq, layer_id, prev_layers, start_idx, out_filters, is_training):
         inputs = prev_layers[-1]
         if self.data_format == "NWC":
-            inp_w = inputs.get_shape()[1].value
-            inp_c = inputs.get_shape()[2].value
+            try:
+                inp_w = inputs.get_shape()[1].value
+                inp_c = inputs.get_shape()[2].value
+            except AttributeError:    # for newer tf2
+                inp_w = inputs.get_shape()[1]
+                inp_c = inputs.get_shape()[2]
+
         elif self.data_format == "NCW":
-            inp_c = inputs.get_shape()[1].value
-            inp_w = inputs.get_shape()[2].value
+            try:
+                inp_c = inputs.get_shape()[1].value
+                inp_w = inputs.get_shape()[2].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[1]
+                inp_w = inputs.get_shape()[2]
+
         else:
             raise Exception("cannot understand data format: %s" % self.data_format)
         count = arc_seq[start_idx]
@@ -1541,10 +1572,15 @@ class EnasConv1dDAG:
         dilation = layer_attr['dilation'] if 'dilation' in layer_attr else 1
         filters = layer_attr['filters']
         if self.data_format == "NWC":
-            inp_c = inputs.get_shape()[-1].value
+            try:
+                inp_c = inputs.get_shape()[-1].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[-1]
         elif self.data_format == "NCW":
-            inp_c = inputs.get_shape()[1].value
-
+            try:
+                inp_c = inputs.get_shape()[1].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[1]
         w = create_weight("w", [kernel_size, inp_c, filters])
         x = tf.nn.conv1d(inputs, filters=w, stride=1, padding="SAME", dilations=dilation)
         x = batch_norm1d(x, is_training, data_format=self.data_format)
@@ -1557,10 +1593,16 @@ class EnasConv1dDAG:
         strides = layer_attr['strides']
         filters = layer_attr['filters']
         if self.data_format == "NWC":
-            inp_c = inputs.get_shape()[-1].value
+            try:
+                inp_c = inputs.get_shape()[-1].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[-1]
             actual_data_format = "channels_last"
         elif self.data_format == "NCW":
-            inp_c = inputs.get_shape()[1].value
+            try:
+                inp_c = inputs.get_shape()[1].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[1]
             actual_data_format = "channels_first"
         else:
             raise Exception("Unknown data format: %s" % self.data_format)

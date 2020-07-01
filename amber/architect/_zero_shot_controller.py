@@ -10,12 +10,22 @@ from ._general_controller import GeneralController
 from .common_ops import create_bias, create_weight
 from .buffer import MultiManagerBuffer
 import tensorflow as tf
+from tensorflow.keras.regularizers import L1L2
+if tf.__version__.startswith('2'):
+    tf.compat.v1.disable_eager_execution()
+    import tensorflow.compat.v1 as tf
 import sys
+from .common_ops import get_tf_layer
 
 
 class ZeroShotController(GeneralController):
-    def __init__(self, data_description_len, *args, **kwargs):
-        self.data_description_len = data_description_len
+    def __init__(self, data_description_config, *args, **kwargs):
+        """
+        Args:
+            data_description_config: dict, must have key "length".
+                optional keys: "hidden_layer" (dict), "regularizer" (dict).
+        """
+        self.data_description_config = data_description_config
         super().__init__(*args, **kwargs)
         assert isinstance(self.buffer, MultiManagerBuffer), "ZeroShotController must have MultiManagerBuffer;" \
                                                             " got %s" % self.buffer
@@ -24,11 +34,31 @@ class ZeroShotController(GeneralController):
     def _create_weight(self):
         super()._create_weight()
         with tf.variable_scope("description_features", initializer=tf.random_uniform_initializer(minval=-0.1, maxval=0.1)):
-            self.data_descriptive_feature = tf.placeholder(shape=(None, self.data_description_len),
+            self.data_descriptive_feature = tf.placeholder(shape=(None, self.data_description_config['length']),
                                                            dtype=tf.float32, name='description_features')
-            self.w_dd = create_weight(name="w_dd", shape=(self.data_description_len, self.lstm_size))
-            self.b_dd = create_bias(name="b_dd", shape=(self.lstm_size,))
-            self.g_emb = tf.matmul(self.data_descriptive_feature, self.w_dd) + self.b_dd  # shape: none, lstm_size
+            self.w_dd = []
+            self.b_dd = []
+            data_description_len = self.data_description_config['length']
+            if 'hidden_layer' in self.data_description_config:
+                try:
+                    hidden_units = self.data_description_config['hidden_layer']['units']
+                    hidden_actv = self.data_description_config['hidden_layer']['activation']
+                except KeyError:
+                    raise KeyError("Error in parsing data_description_config: missing keys units or activation")
+                w_dd_1 = create_weight(name="w_dd_1", shape=(data_description_len, hidden_units))
+                b_dd_1 = create_bias(name="b_dd_1", shape=(hidden_units,))
+                self.w_dd.append(w_dd_1)
+                self.b_dd.append(b_dd_1)
+                h = get_tf_layer(hidden_actv)(tf.matmul(self.data_descriptive_feature, w_dd_1) + b_dd_1)
+                input_dim = hidden_units
+            else:
+                h = self.data_descriptive_feature
+                input_dim = data_description_len
+            w_dd = create_weight(name="w_dd", shape=(input_dim, self.lstm_size))
+            b_dd = create_bias(name="b_dd", shape=(self.lstm_size,))
+            self.w_dd.append(w_dd)
+            self.b_dd.append(b_dd)
+            self.g_emb = tf.matmul(h, w_dd) + b_dd  # shape: none, lstm_size
 
     # overwrite
     def get_action(self, description_feature, *args, **kwargs):
@@ -87,3 +117,15 @@ class ZeroShotController(GeneralController):
                 )
 
         return aloss / g_t
+
+    def _build_train_op(self):
+        """add the L1/L2 regularizations to controller loss
+        """
+        if 'regularizer' in self.data_description_config:
+            l1 = self.data_description_config["regularizer"].pop('l1', 0)
+            l2 = self.data_description_config["regularizer"].pop('l2', 0)
+            l1l2_reg = L1L2(l1=l1, l2=l2)
+            dd_reg = tf.reduce_sum([ l1l2_reg(x) for x in self.w_dd])
+            self.loss += dd_reg
+
+        super()._build_train_op()

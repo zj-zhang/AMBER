@@ -4,8 +4,7 @@ import csv
 import datetime
 import shutil
 import warnings
-
-from keras.optimizers import *
+from collections import defaultdict
 
 from .buffer import parse_action_str, parse_action_str_squeezed
 from ._operation_controller import *
@@ -483,24 +482,25 @@ class MultiManagerEnvironment(EnasTrainEnv):
             else:
                 self.is_enas = False
 
-    def train(self):
-        action_probs_record = []
-        loss_and_metrics_list = []
-        controller_step = self.start_ep * self.max_step_per_ep
+    def _warmup(self):
+        assert self.is_enas, "You can only set warm_up_epochs>0 if is_enas=True"
+        self.logger.info("warm-up for child model: %i epochs" % self.child_warm_up_epochs)
+        warmup_nsteps = None
+        for i in range(1, self.child_warm_up_epochs + 1):
+            self.logger.info("warm-up : %i epoch" % i)
+            for j in range(self.manager_cnt):
+                self.manager[j].get_rewards(trial=-i, model_arc=None, nsteps=warmup_nsteps)
+
+    def _train_loop(self):
         if self.resume_prev_run:
             f = open(os.path.join(self.working_dir, 'train_history.csv'), mode='a+')
         else:
             f = open(os.path.join(self.working_dir, 'train_history.csv'), mode='w')
         writer = csv.writer(f)
         starttime = datetime.datetime.now()
-        if self.child_warm_up_epochs > 0:
-            assert self.is_enas, "You can only set warm_up_epochs>0 if is_enas=True"
-            self.logger.info("warm-up for child model: %i epochs" % self.child_warm_up_epochs)
-            warmup_nsteps = None
-            for i in range(1, self.child_warm_up_epochs + 1):
-                self.logger.info("warm-up : %i epoch" % i)
-                for j in range(self.manager_cnt):
-                    self.manager[j].get_rewards(trial=-i, model_arc=None, nsteps=warmup_nsteps, )
+        action_probs_record = []
+        loss_and_metrics_list = []
+        controller_step = self.start_ep * self.max_step_per_ep
         for child_step in range(self.start_ep, self.max_episode):
             try:
                 if self.is_enas:
@@ -511,12 +511,9 @@ class MultiManagerEnvironment(EnasTrainEnv):
 
                 # train controller parameters theta
                 ep_reward = 0
-                loss_and_metrics_ep = {'knowledge': 0, 'acc': 0, 'loss': 0}
+                loss_and_metrics_ep = defaultdict(float)
                 for step in range(self.max_step_per_ep):
                     for j in range(self.manager_cnt):
-                        if 'metrics' in self.manager[j].model_compile_dict:
-                            loss_and_metrics_ep.update({x: 0 for x in self.manager[j].model_compile_dict['metrics']})
-
                         ep_probs = []
                         arc_seq, probs = self.controller.get_action(
                             description_feature=self.data_descriptive_features[[j]])    # preserve the first dimension
@@ -534,11 +531,9 @@ class MultiManagerEnvironment(EnasTrainEnv):
                         ep_reward += reward
                         for x in loss_and_metrics.keys():
                             loss_and_metrics_ep[x] += loss_and_metrics[x]
-
                         # save the arc_seq and reward
                         self.controller.store(prob=probs, action=arc_seq, reward=reward,
                                               description=self.data_descriptive_features[[j]])
-
                         # write the results of this trial into a file
                         data = [controller_step, [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
                                 reward]
@@ -548,10 +543,8 @@ class MultiManagerEnvironment(EnasTrainEnv):
                             data.extend(action_list)
                         writer.writerow(data)
                         f.flush()
-
                     # update trial
                     controller_step += 1
-
                 loss_and_metrics_list.append({x: (v / self.max_step_per_ep) for x, v in loss_and_metrics_ep.items()})
                 # average probs over trajectory
                 ep_p = [sum(p) / len(p) for p in zip(*ep_probs)]
@@ -570,10 +563,10 @@ class MultiManagerEnvironment(EnasTrainEnv):
                 if self.save_controller_every is not None and child_step % self.save_controller_every == 0:
                     self.controller.save_weights(
                         os.path.join(self.working_dir, "controller_weights-epoch-%i.h5" % child_step))
-
             except KeyboardInterrupt:
                 self.logger.info("User disrupted training")
                 break
+
             consumed_time = (datetime.datetime.now() - starttime).total_seconds()
             self.logger.info("used time: %.2f %%" % (consumed_time / self.time_budget * 100))
             if consumed_time >= self.time_budget:
@@ -581,12 +574,20 @@ class MultiManagerEnvironment(EnasTrainEnv):
                 break
 
         self.logger.debug("Total Reward : %s" % self.total_reward)
-
         f.close()
+        return action_probs_record, loss_and_metrics_list
+
+    def train(self):
+        if self.child_warm_up_epochs > 0:
+            self._warmup()
+
+        action_probs_record, loss_and_metrics_list = self._train_loop()
+
+        metrics_dict = {k: v for k, v in zip(sorted(loss_and_metrics_list[0].keys()),
+                                             range(len(loss_and_metrics_list[0])))}
         plot_controller_performance(os.path.join(self.working_dir, 'train_history.csv'),
-                                    metrics_dict={k: v for k, v in
-                                                  zip(sorted(loss_and_metrics.keys()), range(len(loss_and_metrics)))},
-                                    save_fn=os.path.join(self.working_dir, 'train_history.png'), N_sma=10)
+                                    metrics_dict=metrics_dict,
+                                    save_fn=os.path.join(self.working_dir, 'train_history.png'), N_sma=5)
         plot_environment_entropy(self.entropy_record,
                                  os.path.join(self.working_dir, 'entropy.png'))
         save_kwargs = {}
@@ -596,7 +597,6 @@ class MultiManagerEnvironment(EnasTrainEnv):
         save_action_weights(action_probs_record, self.controller.state_space, self.working_dir,
                             with_input_blocks=self.with_input_blocks, with_skip_connection=self.with_skip_connection,
                             **save_kwargs)
-        self.action_probs_record = loss_and_metrics_list
         save_stats(loss_and_metrics_list, self.working_dir)
 
         if self.should_plot:
@@ -606,7 +606,176 @@ class MultiManagerEnvironment(EnasTrainEnv):
 
         # return converged config idx
         act_idx = []
-        for p in ep_p:
+        for p in action_probs_record[-1]:
             act_idx.append(np.argmax(p))
         return act_idx
 
+
+class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
+    def __init__(self, processes=2, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.processes = processes
+        assert self.processes <= self.manager_cnt, "Cannot have more processes than managers"
+        assert self.processes >= 1
+
+    @staticmethod
+    def _reward_getter(args):
+        pid = os.getpid()
+        res = []
+        for i in range(len(args)):
+            print("PID %i: %i/%i run" % (pid, i, len(args)))
+            # this = reward, loss_and_metrics
+            try:
+                reward, loss_and_metrics = args[i]['manager'].get_rewards(
+                    trial=args[i]['trial'], model_arc=args[i]['model_arc'], nsteps=args[i]['nsteps'])
+            except Exception as e:
+                raise Exception("child pid %i has exception %s" % (pid, e))
+            res.append({'reward': reward, 'loss_and_metrics': loss_and_metrics})
+        return res
+
+    # overwrite
+    def _train_loop(self):
+        if self.resume_prev_run:
+            f = open(os.path.join(self.working_dir, 'train_history.csv'), mode='a+')
+        else:
+            f = open(os.path.join(self.working_dir, 'train_history.csv'), mode='w')
+        writer = csv.writer(f)
+        starttime = datetime.datetime.now()
+        action_probs_record = []
+        loss_and_metrics_list = []
+        controller_step = self.start_ep * self.max_step_per_ep
+
+        # Plain `Pool` won't work; see here for a very nice explanation:
+        # https://pythonspeed.com/articles/python-multiprocessing/
+        from multiprocessing import set_start_method, get_context
+        set_start_method("spawn")
+        with get_context('spawn').Pool(processes=self.processes) as pool:
+            for child_step in range(self.start_ep, self.max_episode):
+                try:
+                    if self.is_enas:
+                        # train child parameters w, if is_enas
+                        pool_args = []
+                        for j in range(self.manager_cnt):
+                            pool_args.append(
+                                [{
+                                    'manager': self.manager[j],
+                                    'trial': child_step,
+                                    'model_arc': None,
+                                    'nsteps': self.child_train_steps
+                                }]
+                            )
+                        self.logger.info("sampling of n=%i managers executed in parallel.." % self.manager_cnt)
+                        _ = pool.map(self._reward_getter, pool_args)
+
+                    # train controller parameters theta
+                    ep_reward = 0
+                    loss_and_metrics_ep = defaultdict(float)
+
+                    # pool_args is a list of list; each element is list of args (dict)
+                    # for a spawned process handling one manager
+                    pool_args = []
+                    # store_args is a list of list; each element is list of args (dict)
+                    # for controller.store; ordered the same as pool_args
+                    store_args = []
+
+                    for j in range(self.manager_cnt):
+                        this_pool = []
+                        this_store = []
+                        controller_step_ = controller_step
+                        for step in range(self.max_step_per_ep):
+                            ep_probs = []
+                            arc_seq, probs = self.controller.get_action(
+                                description_feature=self.data_descriptive_features[[j]])  # preserve the first dimension
+                            self.entropy_record.append(compute_entropy(probs))
+                            ep_probs.append(probs)
+                            # LOGGER.debug the action probabilities
+                            action_list = parse_action_str_squeezed(arc_seq, self.controller.state_space)
+                            self.logger.debug("Manager {}, Predicted actions : {}".format(j, [str(x) for x in action_list]))
+
+                            this_pool.append(
+                                {
+                                    'manager': self.manager[j],
+                                    'trial': controller_step_,
+                                    'model_arc': arc_seq,
+                                    'nsteps': self.child_train_steps
+                                }
+                            )
+
+                            this_store.append(
+                                {
+                                    'prob': probs,
+                                    'action': arc_seq,
+                                    'description': self.data_descriptive_features[[j]]
+                                }
+                            )
+
+                            controller_step_ += 1
+
+                        # append the j-th manager's args to the pool
+                        pool_args.append(this_pool)
+                        store_args.append(this_store)
+
+                    # update trial
+                    controller_step += self.max_step_per_ep
+
+                    # distribute args to the pool of workers
+                    if self.processes > 1:
+                        self.logger.info("distributing reward-getter to a pool of %i workers" % self.processes)
+                        res_list = pool.map(self._reward_getter, pool_args)
+                    else:
+                        self.logger.info("Only %i worker, running sequentially" % self.processes)
+                        res_list = []
+                        for x in pool_args:
+                            res_list.append(self._reward_getter(x))
+
+                    for store_, res_ in zip(store_args, res_list):  # manager level
+                        for store, res in zip(store_, res_):        # trial level
+                            reward, loss_and_metrics = res['reward'], res['loss_and_metrics']
+                            probs, arc_seq, description = store['prob'], store['action'], store['description']
+                            ep_reward += reward
+                            for x in loss_and_metrics.keys():
+                                loss_and_metrics_ep[x] += loss_and_metrics[x]
+                            # save the arc_seq and reward
+                            self.controller.store(prob=probs, action=arc_seq, reward=reward,
+                                                  description=self.data_descriptive_features[[j]])
+                            # write the results of this trial into a file
+                            data = [controller_step, [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
+                                    reward]
+                            if self.squeezed_action:
+                                data.extend(arc_seq)
+                            else:
+                                data.extend(action_list)
+                            writer.writerow(data)
+                            f.flush()
+                            loss_and_metrics_list.append({x: (v / self.max_step_per_ep) for x, v in loss_and_metrics_ep.items()})
+                            # average probs over trajectory
+                            ep_p = [sum(p) / len(p) for p in zip(*ep_probs)]
+                            action_probs_record.append(ep_p)
+
+                    if child_step >= self.initial_buffering_queue - 1:
+                        # train the controller on the saved state and the discounted rewards
+                        loss = self.controller.train(child_step, self.working_dir)
+                        self.total_reward += np.sum(np.array(self.controller.buffer.lt_adv[-1]).flatten())
+                        self.logger.info("Total reward : " + str(self.total_reward))
+                        self.logger.info("END episode %d: Controller loss : %0.6f" % (child_step, loss))
+                        self.logger.info("-" * 10)
+                    else:
+                        self.logger.info("END episode %d: Buffering" % child_step)
+                        self.logger.info("-" * 10)
+
+                    if self.save_controller_every is not None and child_step % self.save_controller_every == 0:
+                        self.controller.save_weights(
+                            os.path.join(self.working_dir, "controller_weights-epoch-%i.h5" % child_step))
+                except KeyboardInterrupt:
+                    self.logger.info("User disrupted training")
+                    break
+
+                consumed_time = (datetime.datetime.now() - starttime).total_seconds()
+                self.logger.info("used time: %.2f %%" % (consumed_time / self.time_budget * 100))
+                if consumed_time >= self.time_budget:
+                    self.logger.info("training ceased because run out of time budget")
+                    break
+
+        self.logger.debug("Total Reward : %s" % self.total_reward)
+        f.close()
+        return action_probs_record, loss_and_metrics_list
