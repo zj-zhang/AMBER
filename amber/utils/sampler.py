@@ -26,6 +26,12 @@ class BioIntervalSource(object):
     reference_sequence : Sequence
         The reference sequence used to generate the input sequences
         from the example coordinates.
+    seed : int, optional
+        Default is `1337`. The value used to seed random number generation.
+    n_examples : int, optional
+        Default is `None`. The number of examples. If left as `None`, will
+        use all of the examples in the file. If fewer than `n_examples`
+        are found, and error will be thrown.
 
     Attributes
     ----------
@@ -40,11 +46,19 @@ class BioIntervalSource(object):
         The length of padding added to the left side of the interval.
     right_pad : int
         The length of padding added to the right side of the interval.
+    random_state : numpy.random.RandomState
+        A random number generator to use.
+    seed : int
+        The value used to seed the random number generator.
     """
-    def __init__(self, example_file, reference_sequence):
+    def __init__(self, example_file, reference_sequence, n_examples=None, seed=1337):
         self.reference_sequence = reference_sequence
         self.left_pad = 0
         self.right_pad = 0
+
+        # Setup RNG.
+        self.seed = seed
+        self.random_state = numpy.random.RandomState(seed=self.seed)
 
         # Load examples.
         self.labels = list()
@@ -59,6 +73,29 @@ class BioIntervalSource(object):
                         label = [int(x) for x in line[4:]]
                         self.labels.append(numpy.array(label))
                         self.examples.append((chrom, int(start), int(end), strand))
+        # TODO: Consider using separate random states for index shuffling and this part?
+        if n_examples is not None:
+            if len(self.examples) < n_examples:
+                s = ("Specified value of examples was {}".format(n_examples) +
+                     ", but only {} were found in \"{}\".".format(len(self.examples),
+                                                                  example_file))
+                raise RuntimeError(s)
+            elif len(self.examples) > n_examples:
+                idx = self.random_state.choice(len(self.examples),
+                                              len(self.examples) - n_examples,
+                                              replace=False)
+                idx.sort()
+                idx = idx[::-1]
+                for i in idx.tolist():
+                    self.examples.pop(i)
+                    self.labels.pop(i)
+            else:
+                # Ensure random state not affected by using input with length of n_examples.
+                idx = self.random_state.choice(2, 1, replace=False)
+                del idx
+        else: # Ensure random state not affected by not using n_examples.
+            idx = self.random.state.choice(2, 1, replace=False)
+            del idx
 
     def padding_is_valid(self, value):
         """Determine if the specified value is a valid value for padding
@@ -190,6 +227,12 @@ class BioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
     reference_sequence : Sequence
         The reference sequence used to generate the input sequences
         from the example coordinates.
+    n_examples : int, optional
+        Default is `None`. The number of examples. If left as `None`, will
+        use all of the examples in the file. If fewer than `n_examples` are
+        found, an error will be thrown.
+    seed : int, optional
+        Default is `1337`. The value used to seed random number generation.
 
     Attributes
     ----------
@@ -204,10 +247,16 @@ class BioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         The length of padding added to the left side of the interval.
     right_pad : int
         The length of padding added to the right side of the interval.
+    random_state : numpy.random.RandomState
+        A random number generator to use.
+    seed : int
+        The value used to seed the random number generator.
     """
-    def __init__(self, example_file, reference_sequence):
+    def __init__(self, example_file, reference_sequence, n_examples=None, seed=1337):
         super(BioIntervalSequence, self).__init__(
-            example_file, reference_sequence)
+            example_file=example_file,
+            reference_sequence=reference_sequence,
+            n_examples=n_examples, seed=seed)
 
     def __getitem__(self, item):
         """
@@ -247,6 +296,12 @@ class BioIntervalGenerator(BioIntervalSource):
     reference_sequence : Sequence
         The reference sequence used to generate the input sequences
         from the example coordinates.
+    n_examples : int, optional
+        Default is `None`. The number of examples. If left as `None`, will
+        use all of the examples in the file. If fewer than `n_examples` are
+        found, an error will be thrown.
+    seed : int, optional
+        Default is `1337`. The value used to seed random number generation.
 
     Attributes
     ----------
@@ -261,10 +316,18 @@ class BioIntervalGenerator(BioIntervalSource):
         The length of padding added to the left side of the interval.
     right_pad : int
         The length of padding added to the right side of the interval.
+    random_state : numpy.random.RandomState
+        A random number generator to use.
+    seed : int
+        The value used to seed random number generation.
+
     """
-    def __init__(self, example_file, reference_sequence):
+    def __init__(self, example_file, reference_sequence, n_examples=None, seed=1337):
         super(BioIntervalGenerator, self).__init__(
-            example_file, reference_sequence)
+            example_file=example_file,
+            reference_sequence=reference_sequence,
+            n_examples=n_examples,
+            seed=seed)
         raise NotImplementedError
 
 
@@ -291,9 +354,12 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         Specifies size of the mini-batches.
     shuffle : bool
         Specifies whether to shuffle the mini-batches.
-    seed : int
-        Value to seed random number generator with.
-
+    n_examples : int, optional
+        Default is `None`. The number of examples. If left as `None`, will
+        use all of the examples in the file. If fewer than `n_examples` are
+        found, an error will be thrown.
+    seed : int, optional
+        Default is `1337`. The value used to seed random number generation.
 
     Attributes
     ----------
@@ -312,19 +378,20 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         Specifies size of the mini-batches.
     shuffle : bool
         Specifies whether to shuffle the mini-batches.
-    seed : int
-        Value to seed random number generator with.
     random_state : numpy.random.RandomState
         A random number generator to use.
+    seed : int
+        The value used to seed the random number generator.
     """
     def __init__(self, example_file, reference_sequence,
-                 batch_size, seed=1337, shuffle=True):
+                 batch_size, shuffle=True, n_examples=None, seed=1337):
         super(BatchedBioIntervalSequence, self).__init__(
-            example_file, reference_sequence)
+            example_file=example_file,
+            reference_sequence=reference_sequence,
+            n_examples=n_examples,
+            seed=seed)
         self.batch_size = batch_size
-        self.seed = seed
         self.shuffle = shuffle
-        self.random_state = numpy.random.RandomState(seed=self.seed)
         self.index = numpy.arange(len(self.examples))
 
     def __len__(self):

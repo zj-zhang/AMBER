@@ -32,6 +32,7 @@ from amber.architect.manager import GeneralManager, DistributedGeneralManager
 from amber.architect.model_space import get_layer_shortname
 
 from amber.utils.sequences import EncodedGenome
+from amber.utils.sequences import EncodedHDF5Genome
 from amber.utils.sampler import BatchedBioIntervalSequence
 
 
@@ -250,6 +251,12 @@ def reload_trained_controller(arg):
 
 
 def train_nas(arg):
+    dfeature_names = list()
+    with open(arg.dfeature_name_file, "r") as read_file:
+        for line in read_file:
+            line = line.strip()
+            if line:
+                dfeature_names.append(line)
     wd = arg.wd
     verbose = 1
     model_space = get_model_space_common()
@@ -257,35 +264,56 @@ def train_nas(arg):
         session = tf.Session()
     except AttributeError:
         session = tf.compat.v1.Session()
-    controller = get_controller(model_space=model_space, session=session, data_description_len=2)
+
+    controller = get_controller(model_space=model_space, session=session, data_description_len=len(dfeature_names))
 
     # Load in datasets and configurations for them.
-    configs = pd.read_csv(arg.config_file).to_dict(orient='index')
+    if arg.config_file.endswith("tsv"):
+        sep = "\t"
+    else:
+        sep = ","
+    configs = pd.read_csv(arg.config_file, sep=sep)
+    tmp = list(configs.columns) # Because pandas doesn't have infer quotes...
+    if any(["\"" in x for x in tmp]):
+        configs = pd.read_csv(arg.config_file, sep=sep, quoting=2)
+        print("Re-read with quoting")
+    configs = configs.to_dict(orient='index')
+    
+    # Get available gpus for parsing to DistributedManager
     gpus = get_available_gpus()
     gpus_ = gpus * len(configs)
     print(gpus_)
-    
+
     # Build genome. This only works under the assumption that all configs use same genome.
     k = list(configs.keys())[0]
-    genome = EncodedGenome(input_path=configs[k]["genome_file"], in_memory=False)
-
+    genome = EncodedHDF5Genome(input_path=arg.genome_file, in_memory=False)
+    #genome = EncodedGenome(input_path=configs[k]["genome_file"], in_memory=True)
     
     config_keys = list()
     for i, k in enumerate(configs.keys()):
         # Build datasets for train/test/validate splits.
         for x in ["train", "test", "validate"]:
-
+            if x == "train":
+                n = arg.n_train
+            elif x == "test":
+                n = arg.n_test
+            elif x == "validate":
+                n = arg.n_validate
+            else:
+                s = "Unknown mode: {}".format(x)
+                raise ValueError(s)
             #in_memory=(x == "train")),
             configs[k][x] = BatchedBioIntervalSequence(
                 configs[k][x + "_file"],
                 genome,
-                batch_size=1000, seed=1337, shuffle=(x == "train"))
+                batch_size=500, seed=1337, shuffle=(x == "train"),
+                n_examples=n)
             configs[k][x].set_pad(400) # 1000 total bp = 200 + 400 * 2
 
         # Build covariates and manager.
         configs[k]["dfeatures"] = np.array(
-            [configs[k][x] for x in ["pol2", "dnase"]]) # TODO: Make cols dynamic.
-        print(configs[k]["dfeatures"])
+            [configs[k][x] for x in dfeature_names]) # TODO: Make cols dynamic.
+        #print(configs[k]["dfeatures"])
         configs[k]["manager"] = get_manager_distributed(
             devices=[gpus_[i]],
             train_data=configs[k]["train"],
@@ -328,7 +356,12 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser(description="experimental zero-shot nas")
         parser.add_argument("--analysis", type=str, choices=['train', 'reload'], required=True, help="analysis type")
         parser.add_argument("--wd", type=str, default="./outputs/zero_shot/", help="working dir")
-        parser.add_argument("--config-file", type=str, required=True, help="Path to the cnofig file to use.")
+        parser.add_argument("--config-file", type=str, required=True, help="Path to the config file to use.")
+        parser.add_argument("--genome-file", type=str, required=True, help="Path to genome file to use.")
+        parser.add_argument("--dfeature-name-file", type=str, required=True, help="Path to file with dataset feature names listed one per line.")
+        parser.add_argument("--n-test", type=int, required=True, help="Number of test examples.")
+        parser.add_argument("--n-train", type=int, required=True, help="Number of train examples.")
+        parser.add_argument("--n-validate", type=int, required=True, help="Number of validation examples.")
 
         arg = parser.parse_args()
 
