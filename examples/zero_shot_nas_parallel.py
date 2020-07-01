@@ -27,7 +27,53 @@ from amber.modeler.modeler import build_sequential_model, KerasModelBuilder
 from amber.architect.manager import GeneralManager, DistributedGeneralManager
 from amber.architect.model_space import get_layer_shortname
 
-from zero_shot_nas import get_model_space_common, read_data, get_samples_controller, convert_to_dataframe
+from zero_shot_nas import read_data, get_samples_controller, convert_to_dataframe
+
+def get_model_space_common():
+    state_space = ModelSpace()
+    state_space.add_layer(0, [
+        State('conv1d', filters=100, kernel_size=8, kernel_initializer='glorot_uniform', activation='relu',
+              name="conv1"),
+        State('conv1d', filters=100, kernel_size=14, kernel_initializer='glorot_uniform', activation='relu',
+              name="conv1"),
+        State('conv1d', filters=100, kernel_size=20, kernel_initializer='glorot_uniform', activation='relu',
+              name="conv1"),
+    ])
+    state_space.add_layer(1, [
+        State('Identity'),
+        State('maxpool1d', pool_size=4, strides=4),
+        State('avgpool1d', pool_size=4, strides=4),
+
+    ])
+    state_space.add_layer(2, [
+        State('conv1d', filters=200, kernel_size=8, kernel_initializer='glorot_uniform', activation='relu'),
+        State('conv1d', filters=200, kernel_size=14, kernel_initializer='glorot_uniform', activation='relu'),
+        State('conv1d', filters=200, kernel_size=20, kernel_initializer='glorot_uniform', activation='relu'),
+    ])
+    state_space.add_layer(3, [
+        State('Identity'),
+        State('maxpool1d', pool_size=4, strides=4),
+        State('avgpool1d', pool_size=4, strides=4),
+
+    ])
+    state_space.add_layer(4, [
+        State('conv1d', filters=300, kernel_size=8, kernel_initializer='glorot_uniform', activation='relu'),
+        State('conv1d', filters=300, kernel_size=14, kernel_initializer='glorot_uniform', activation='relu'),
+        State('conv1d', filters=300, kernel_size=20, kernel_initializer='glorot_uniform', activation='relu'),
+    ])
+    state_space.add_layer(5, [
+        State('Flatten'),
+        State('GlobalMaxPool1D'),
+        State('GlobalAvgPool1D'),
+    ])
+    state_space.add_layer(6, [
+        State('Dense', units=30, activation='relu'),
+        State('Dense', units=100, activation='relu'),
+        State('Identity')
+    ])
+    return state_space
+
+
 
 
 model_space = get_model_space_common()
@@ -40,7 +86,7 @@ model_compile_dict = {
 }
 
 reward_fn = LossAucReward(method='auc')
-child_batch_size = 500
+child_batch_size = 1000
 
 
 def get_model_builder():
@@ -51,7 +97,11 @@ def get_model_builder():
 def get_controller(model_space, session, data_description_len=3):
     with tf.device("/cpu:0"):
         controller = ZeroShotController(
-            data_description_len=data_description_len,
+            data_description_config={
+                "length": data_description_len,
+                "hidden_layer": {"units":8, "activation": "relu"},
+                "regularizer": {"l1":1e-8 }
+            },
             model_space=model_space,
             session=session,
             #share_embedding={i:0 for i in range(1, len(model_space))},
@@ -70,7 +120,7 @@ def get_controller(model_space, session, data_description_len=3):
             batch_size=5,
             use_ppo_loss=True
         )
-        controller.buffer.rescale_advantage_by_reward = False
+        #controller.buffer.rescale_advantage_by_reward = False
     return controller
 
 
@@ -89,7 +139,8 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         working_dir=wd,
         verbose=verbose,
         save_full_model=False,
-        model_space=model_space
+        model_space=model_space,
+        fit_kwargs={'workers':8, 'use_multiprocessing':True}
     )
     return manager
 
@@ -137,8 +188,10 @@ def train_nas(arg):
     gpus = get_available_gpus()
     #gpus = tf.config.experimental.list_physical_devices('GPU')
     if len(gpus) > 1:
-        dev1 = gpus[:len(gpus)//2]
-        dev2 = gpus[len(gpus)//2 :]
+        #dev1 = gpus[:len(gpus)//2]
+        #dev2 = gpus[len(gpus)//2 :]
+        dev1 = [gpus[0]]
+        dev2 = [gpus[1]]
         print(dev1)
         print(dev2)
     else:
