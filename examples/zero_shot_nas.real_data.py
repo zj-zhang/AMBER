@@ -90,7 +90,7 @@ def get_model_space_common():
     conv_seen = 0
     for i in range(len(param_list)):
         # Build conv states for this layer.
-        conv_states = list()
+        conv_states = [State("Identity")]
         for j in range(len(param_list[i])):
             d = copy.deepcopy(default_params)
             for k, v in param_list[i][j].items():
@@ -145,7 +145,7 @@ def get_model_space_with_long_model():
     conv_seen = 0
     for i in range(len(param_list)):
         # Build conv states for this layer.
-        conv_states = list()
+        conv_states = [State("Identity")]
         second_conv_states = [State("Identity")]
         for j in range(len(param_list[i])):
             d = copy.deepcopy(default_params)
@@ -213,7 +213,7 @@ def get_model_space_with_dilation():
     conv_seen = 0
     for i in range(len(param_list)):
         # Build conv states for this layer.
-        conv_states = list()
+        conv_states = [State("Identity")]
         for j in range(len(param_list[i])):
             d = copy.deepcopy(default_params)
             for k, v in param_list[i][j].items():
@@ -277,7 +277,7 @@ def get_model_space_with_long_model_and_dilation():
     conv_seen = 0
     for i in range(len(param_list)):
         # Build conv states for this layer.
-        conv_states = list()
+        conv_states = [State("Identity")]
         second_conv_states = [State("Identity")]
         for j in range(len(param_list[i])):
             d = copy.deepcopy(default_params)
@@ -413,7 +413,8 @@ def convert_to_dataframe(res, model_space, data_names):
 
 def reload_trained_controller(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
-    model_space = get_model_space_common()
+    #model_space = get_model_space_common()
+    model_space = get_model_space_with_long_model()
     try:
         session = tf.Session()
     except AttributeError:
@@ -526,7 +527,7 @@ def train_nas(arg):
         max_episode=200,
         max_step_per_ep=15,
         working_dir=wd,
-        time_budget="1:00:00",
+        time_budget="24:00:00",
         with_input_blocks=False,
         with_skip_connection=False,
     )
