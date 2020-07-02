@@ -59,16 +59,18 @@ def build_sequential_model(model_states, input_state, output_state, model_compil
             raise Exception("cannot understand %s of type %s" % (state, type(state)))
     out = get_layer(x, output_state)
     model = Model(inputs=inp, outputs=out)
-    model.compile(**model_compile_dict)
+    if not kwargs.pop('stop_compile', False):
+        model.compile(**model_compile_dict)
     return model
 
 
 def build_multi_gpu_sequential_model(model_states, input_state, output_state, model_compile_dict, gpus=4, **kwargs):
     try:
-        from keras.utils import multi_gpu_model
+        from tensorflow.keras.utils import multi_gpu_model
     except Exception as e:
         raise Exception("multi gpu not supported in keras. check your version. Error: %s" % e)
-    vanilla_model = build_sequential_model(model_states, input_state, output_state, model_compile_dict, **kwargs)
+    with tf.device('/cpu:0'):
+        vanilla_model = build_sequential_model(model_states, input_state, output_state, model_compile_dict, stop_compile=True, **kwargs)
     model = multi_gpu_model(vanilla_model, gpus=gpus)
     model.compile(**model_compile_dict)
     return model

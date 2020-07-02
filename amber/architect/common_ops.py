@@ -9,17 +9,25 @@ if tf.__version__.startswith("2"):
 from tensorflow.python.training import moving_averages
 
 
-def unpack_data(data):
+def unpack_data(data, unroll_generator=False):
+    is_generator = False
     if type(data) in (tuple, list):
         x, y = data[0], data[1]
     elif isinstance(data, tf.keras.utils.Sequence):
         x = data
         y = None
+        is_generator = True
     elif hasattr(data, '__next__'):
         x = data
         y = None
+        is_generator = True
     else:
         raise Exception("cannot unpack data of type: %s"%type(data))
+    if is_generator and unroll_generator:
+        gen = data if hasattr(data, '__next__') else iter(data)
+        d_ = [d for d in zip(*data)]
+        x = np.concatenate(d_[0], axis=0)
+        y = np.concatenate(d_[1], axis=0)
     return x, y
 
 

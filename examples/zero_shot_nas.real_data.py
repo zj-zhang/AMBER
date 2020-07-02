@@ -17,9 +17,8 @@ import argparse
 from amber.modeler import EnasCnnModelBuilder
 from amber.architect.controller import ZeroShotController
 from amber.architect.model_space import State, ModelSpace
-from amber.architect.common_ops import count_model_params
+from amber.architect.common_ops import count_model_params, unpack_data
 
-#from amber.architect.manager import EnasManager
 from amber.architect.train_env import MultiManagerEnvironment, ParallelMultiManagerEnvironment
 from amber.architect.reward import LossAucReward, LossReward
 from amber.plots import plot_controller_hidden_states
@@ -40,13 +39,12 @@ def get_controller(model_space, session, data_description_len=3):
     with tf.device("/cpu:0"):
         controller = ZeroShotController(
             data_description_config={
-                "length": 2,
+                "length": data_description_len,
                 "hidden_layer": {"units":8, "activation": "relu"},
                 "regularizer": {"l1":1e-8 }
                 },
             model_space=model_space,
             session=session,
-            #share_embedding={i:0 for i in range(1, len(model_space))},
             with_skip_connection=False,
             skip_weight=None,
             skip_target=0.2,
@@ -66,53 +64,46 @@ def get_controller(model_space, session, data_description_len=3):
     return controller
 
 
-def get_model_space_enas(out_filters=16, num_layers=3, num_pool=3):
-    state_space = ModelSpace()
-    if num_pool == 4:
-        expand_layers = [num_layers//4-1, num_layers//4*2-1, num_layers//4*3-1]
-    elif num_pool == 3:
-        expand_layers = [num_layers//3-1, num_layers//3*2-1]
-    else:
-        raise Exception("Unsupported pooling num: %i"%num_pool)
-    for i in range(num_layers):
-        state_space.add_layer(i, [
-            State('conv1d', filters=out_filters, kernel_size=4, activation='relu'),
-            State('conv1d', filters=out_filters, kernel_size=8, activation='relu'),
-            State('conv1d', filters=out_filters, kernel_size=12, activation='relu'),
-            # max/avg pool has underlying 1x1 conv
-            State('maxpool1d', filters=out_filters, pool_size=4, strides=1),
-            State('avgpool1d', filters=out_filters, pool_size=4, strides=1),
-            State('identity', filters=out_filters),
-      ])
-        if i in expand_layers:
-            out_filters *= 2
-    return state_space
-
-
 def get_model_space_common():
     state_space = ModelSpace()
     state_space.add_layer(0, [
-        State('conv1d', filters=3, kernel_size=8, kernel_initializer='glorot_uniform', activation='relu',
+        State('conv1d', filters=100, kernel_size=8, kernel_initializer='glorot_uniform', activation='relu',
               name="conv1"),
-        State('conv1d', filters=3, kernel_size=14, kernel_initializer='glorot_uniform', activation='relu',
+        State('conv1d', filters=100, kernel_size=14, kernel_initializer='glorot_uniform', activation='relu',
               name="conv1"),
-        State('conv1d', filters=3, kernel_size=20, kernel_initializer='glorot_uniform', activation='relu',
+        State('conv1d', filters=100, kernel_size=20, kernel_initializer='glorot_uniform', activation='relu',
               name="conv1"),
     ])
     state_space.add_layer(1, [
         State('Identity'),
-        State('maxpool1d', pool_size=8, strides=8),
-        State('avgpool1d', pool_size=8, strides=8),
+        State('maxpool1d', pool_size=4, strides=4),
+        State('avgpool1d', pool_size=4, strides=4),
 
     ])
     state_space.add_layer(2, [
+        State('conv1d', filters=200, kernel_size=8, kernel_initializer='glorot_uniform', activation='relu'),
+        State('conv1d', filters=200, kernel_size=14, kernel_initializer='glorot_uniform', activation='relu'),
+        State('conv1d', filters=200, kernel_size=20, kernel_initializer='glorot_uniform', activation='relu'),
+    ])
+    state_space.add_layer(3, [
+        State('Identity'),
+        State('maxpool1d', pool_size=4, strides=4),
+        State('avgpool1d', pool_size=4, strides=4),
+
+    ])
+    state_space.add_layer(4, [
+        State('conv1d', filters=300, kernel_size=8, kernel_initializer='glorot_uniform', activation='relu'),
+        State('conv1d', filters=300, kernel_size=14, kernel_initializer='glorot_uniform', activation='relu'),
+        State('conv1d', filters=300, kernel_size=20, kernel_initializer='glorot_uniform', activation='relu'),
+    ])
+    state_space.add_layer(5, [
         State('Flatten'),
         State('GlobalMaxPool1D'),
         State('GlobalAvgPool1D'),
     ])
-    state_space.add_layer(3, [
-        State('Dense', units=3, activation='relu'),
-        State('Dense', units=10, activation='relu'),
+    state_space.add_layer(6, [
+        State('Dense', units=30, activation='relu'),
+        State('Dense', units=100, activation='relu'),
         State('Identity')
     ])
     return state_space
@@ -128,11 +119,11 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         'optimizer': 'adam',
         'metrics': ['acc']
     }
-    mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space)
+    mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space, gpus=len(devices))
     manager = DistributedGeneralManager(
         devices=devices,
         train_data=train_data,
-        validation_data=val_data,
+        validation_data=unpack_data(val_data, unroll_generator=True),
         epochs=50,
         child_batchsize=1000,
         reward_fn=reward_fn,
@@ -158,27 +149,24 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
     session = controller.session
 
     reward_fn = LossAucReward(method='auc')
-    #reward_fn = LossReward() # TODO: IMplement LossAucReward for generator.
-
-    child_batch_size = 500
-    # TODO: convert functions in `_keras_modeler.py` to classes, and wrap up this Lambda function step
-    model_fn = lambda model_arc: build_sequential_model(
-        model_states=model_arc, input_state=input_node, output_state=output_node, model_compile_dict=model_compile_dict,
-        model_space=model_space)
+    num_gpus = 4
+    mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space, gpus=num_gpus)
+ 
+    child_batch_size = 500*num_gpus
     manager = GeneralManager(
         train_data=train_data,
         validation_data=val_data,
         epochs=30,
         child_batchsize=child_batch_size,
         reward_fn=reward_fn,
-        model_fn=model_fn,
+        model_fn=mb,
         store_fn='minimal',
         model_compile_dict=model_compile_dict,
         working_dir=wd,
         verbose=verbose,
         save_full_model=False,
         model_space=model_space,
-        #fit_kwargs={'workers': 8, 'max_queue_size': 100, 'use_multiprocessing':True}
+        fit_kwargs={'workers': 8, 'max_queue_size': 100, 'use_multiprocessing':False}
     )
     return manager
 
@@ -213,7 +201,7 @@ def convert_to_dataframe(res, model_space, data_names):
                 layer.extend([j]*T)
                 operation.extend([o]*T)
     df = pd.DataFrame({
-        'description':description, 
+        'description':description,
         'layer': layer,
         'operation': operation,
         'prob': probs
@@ -282,13 +270,12 @@ def train_nas(arg):
     # Get available gpus for parsing to DistributedManager
     gpus = get_available_gpus()
     gpus_ = gpus * len(configs)
-    print(gpus_)
 
     # Build genome. This only works under the assumption that all configs use same genome.
     k = list(configs.keys())[0]
     genome = EncodedHDF5Genome(input_path=arg.genome_file, in_memory=False)
-    #genome = EncodedGenome(input_path=configs[k]["genome_file"], in_memory=True)
-    
+
+    manager_getter = get_manager_distributed if arg.parallel else get_manager_common
     config_keys = list()
     for i, k in enumerate(configs.keys()):
         # Build datasets for train/test/validate splits.
@@ -302,7 +289,6 @@ def train_nas(arg):
             else:
                 s = "Unknown mode: {}".format(x)
                 raise ValueError(s)
-            #in_memory=(x == "train")),
             configs[k][x] = BatchedBioIntervalSequence(
                 configs[k][x + "_file"],
                 genome,
@@ -313,8 +299,7 @@ def train_nas(arg):
         # Build covariates and manager.
         configs[k]["dfeatures"] = np.array(
             [configs[k][x] for x in dfeature_names]) # TODO: Make cols dynamic.
-        #print(configs[k]["dfeatures"])
-        configs[k]["manager"] = get_manager_distributed(
+        configs[k]["manager"] = manager_getter(
             devices=[gpus_[i]],
             train_data=configs[k]["train"],
             val_data=configs[k]["validate"],
@@ -330,7 +315,8 @@ def train_nas(arg):
     logger = setup_logger(wd, verbose_level=logging.INFO)
 
     env = ParallelMultiManagerEnvironment(
-        processes=len(gpus),
+        #processes=len(gpus) if arg.parallel else 1,
+        processes=1,
         data_descriptive_features=np.stack([configs[k]["dfeatures"] for k in config_keys]),
         controller=controller,
         manager=[configs[k]["manager"] for k in config_keys],
@@ -356,6 +342,7 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser(description="experimental zero-shot nas")
         parser.add_argument("--analysis", type=str, choices=['train', 'reload'], required=True, help="analysis type")
         parser.add_argument("--wd", type=str, default="./outputs/zero_shot/", help="working dir")
+        parser.add_argument("--parallel", default=False, action="store_true", help="Use parallel")
         parser.add_argument("--config-file", type=str, required=True, help="Path to the config file to use.")
         parser.add_argument("--genome-file", type=str, required=True, help="Path to genome file to use.")
         parser.add_argument("--dfeature-name-file", type=str, required=True, help="Path to file with dataset feature names listed one per line.")
