@@ -149,7 +149,8 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
     session = controller.session
 
     reward_fn = LossAucReward(method='auc')
-    num_gpus = 4
+    gpus = get_available_gpus()
+    num_gpus = len(gpus)
     mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space, gpus=num_gpus)
  
     child_batch_size = 500*num_gpus
@@ -254,7 +255,13 @@ def train_nas(arg):
         session = tf.compat.v1.Session()
 
     controller = get_controller(model_space=model_space, session=session, data_description_len=len(dfeature_names))
-
+    # Re-load previously saved weights, if specified
+    if arg.resume:
+        try:
+            controller.load_weights(os.path.join(wd, "controller_weights.h5"))
+            print("loaded existing weights")
+        except Exception as e:
+            print("cannot load controller weights because of %s"%e)
     # Load in datasets and configurations for them.
     if arg.config_file.endswith("tsv"):
         sep = "\t"
@@ -266,7 +273,6 @@ def train_nas(arg):
         configs = pd.read_csv(arg.config_file, sep=sep, quoting=2)
         print("Re-read with quoting")
     configs = configs.to_dict(orient='index')
-    
     # Get available gpus for parsing to DistributedManager
     gpus = get_available_gpus()
     gpus_ = gpus * len(configs)
@@ -315,8 +321,7 @@ def train_nas(arg):
     logger = setup_logger(wd, verbose_level=logging.INFO)
 
     env = ParallelMultiManagerEnvironment(
-        #processes=len(gpus) if arg.parallel else 1,
-        processes=1,
+        processes=len(gpus) if arg.parallel else 1,
         data_descriptive_features=np.stack([configs[k]["dfeatures"] for k in config_keys]),
         controller=controller,
         manager=[configs[k]["manager"] for k in config_keys],
@@ -343,6 +348,7 @@ if __name__ == "__main__":
         parser.add_argument("--analysis", type=str, choices=['train', 'reload'], required=True, help="analysis type")
         parser.add_argument("--wd", type=str, default="./outputs/zero_shot/", help="working dir")
         parser.add_argument("--parallel", default=False, action="store_true", help="Use parallel")
+        parser.add_argument("--resume", default=False, action="store_true", help="resume previous run")
         parser.add_argument("--config-file", type=str, required=True, help="Path to the config file to use.")
         parser.add_argument("--genome-file", type=str, required=True, help="Path to genome file to use.")
         parser.add_argument("--dfeature-name-file", type=str, required=True, help="Path to file with dataset feature names listed one per line.")
