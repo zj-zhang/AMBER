@@ -119,7 +119,7 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         'optimizer': 'adam',
         'metrics': ['acc']
     }
-    mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space, gpus=len(devices))
+    mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space,  gpus=devices)
     manager = DistributedGeneralManager(
         devices=devices,
         train_data=train_data,
@@ -329,7 +329,7 @@ def train_nas(arg):
         max_episode=200,
         max_step_per_ep=15,
         working_dir=wd,
-        time_budget="1:00:00",
+        time_budget="4:00:00",
         with_input_blocks=False,
         with_skip_connection=False,
     )
