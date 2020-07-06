@@ -141,8 +141,9 @@ class GeneralManager(BaseNetworkManager):
 
 
 class DistributedGeneralManager(GeneralManager):
-    def __init__(self, devices, *args, **kwargs):
+    def __init__(self, devices, train_data_kwargs, *args, **kwargs):
         self.devices = devices
+        self.train_data_kwargs = train_data_kwargs
         super().__init__(*args, **kwargs)
         assert len(self.devices) == 1, "Only supports one GPU device currently"
 
@@ -163,7 +164,7 @@ class DistributedGeneralManager(GeneralManager):
                 model = self.model_fn(model_arc)  # a compiled keras Model
 
                 # unpack the dataset
-                X_train, y_train = unpack_data(self.train_data)
+                X_train, y_train = unpack_data(self.train_data, callable_kwargs=self.train_data_kwargs)
 
                 # train the model using Keras methods
                 print(" Trial %i: Start training model..." % trial)

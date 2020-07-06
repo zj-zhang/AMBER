@@ -9,7 +9,7 @@ if tf.__version__.startswith("2"):
 from tensorflow.python.training import moving_averages
 
 
-def unpack_data(data, unroll_generator=False):
+def unpack_data(data, unroll_generator=False, callable_kwargs=None):
     is_generator = False
     if type(data) in (tuple, list):
         x, y = data[0], data[1]
@@ -21,6 +21,9 @@ def unpack_data(data, unroll_generator=False):
         x = data
         y = None
         is_generator = True
+    elif callable(data):
+        callable_kwargs = callable_kwargs or {}
+        x, y = unpack_data(data=data(**callable_kwargs), unroll_generator=unroll_generator)
     else:
         raise Exception("cannot unpack data of type: %s"%type(data))
     if is_generator and unroll_generator:

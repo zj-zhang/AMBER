@@ -110,7 +110,7 @@ def get_model_space_common():
 
 
 def get_manager_distributed(train_data, val_data, controller, model_space, wd, data_description, verbose=0,
-                            devices=None, **kwargs):
+                            devices=None, train_data_kwargs=None, **kwargs):
     reward_fn = LossAucReward(method='auc')
     input_node = State('input', shape=(1000, 4), name="input", dtype='float32')
     output_node = State('dense', units=1, activation='sigmoid')
@@ -119,9 +119,11 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         'optimizer': 'adam',
         'metrics': ['acc']
     }
-    mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space,  gpus=devices)
+    #mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space,  gpus=devices)
+    mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space)
     manager = DistributedGeneralManager(
         devices=devices,
+        train_data_kwargs = train_data_kwargs or None,
         train_data=train_data,
         validation_data=unpack_data(val_data, unroll_generator=True),
         epochs=50,
@@ -239,6 +241,21 @@ def reload_trained_controller(arg):
     return res
 
 
+def thread_train_handle_getter(genome_file, bed_file, num_samples):
+    #def get():
+    #    genome = EncodedHDF5Genome(input_path=genome_file, in_memory=False)
+    #    gen = BatchedBioIntervalSequence(
+    #                bed_file,
+    #                genome,
+    #                batch_size=500, seed=1337, shuffle=True,
+    #                n_examples=num_samples)
+    #    gen.set_pad(400) # 1000 total bp = 200 + 400 * 2
+    #    return gen
+    #return get
+    pass
+
+
+
 def train_nas(arg):
     dfeature_names = list()
     with open(arg.dfeature_name_file, "r") as read_file:
@@ -295,12 +312,20 @@ def train_nas(arg):
             else:
                 s = "Unknown mode: {}".format(x)
                 raise ValueError(s)
-            configs[k][x] = BatchedBioIntervalSequence(
-                configs[k][x + "_file"],
-                genome,
-                batch_size=500, seed=1337, shuffle=(x == "train"),
-                n_examples=n)
-            configs[k][x].set_pad(400) # 1000 total bp = 200 + 400 * 2
+            d = {
+                        'example_file': configs[k][x + "_file"],
+                        'reference_sequence': arg.genome_file,
+                        'batch_size': 500, 
+                        'seed': 1337, 
+                        'shuffle': True,
+                        'n_examples': n,
+                        'pad': 400
+                    }
+            if x == "train":
+                configs[k][x] = BatchedBioIntervalSequence
+                configs[k]['train_data_kwargs'] = d
+            else:
+                configs[k][x] = BatchedBioIntervalSequence(**d)
 
         # Build covariates and manager.
         configs[k]["dfeatures"] = np.array(
@@ -311,11 +336,13 @@ def train_nas(arg):
             val_data=configs[k]["validate"],
             controller=controller,
             model_space=model_space,
-            wd=wd,
+            wd=os.path.join(wd, "manager_%s"%k),
             data_description=configs[k]["dfeatures"],
             dag_name="AmberDAG{}".format(k),
-            verbose=verbose,
-            n_feats=configs[k]["n_feats"])
+            verbose=2,
+            n_feats=configs[k]["n_feats"],
+            train_data_kwargs=configs[k]['train_data_kwargs']
+            )
         config_keys.append(k)
 
     logger = setup_logger(wd, verbose_level=logging.INFO)

@@ -624,7 +624,7 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
         res = []
         for i in range(len(args)):
             print("PID %i: %i/%i run" % (pid, i, len(args)))
-            # this = reward, loss_and_metrics
+            # INSERT HERE TO GET THREAD-SPECIFIC FILE HANDLER
             try:
                 reward, loss_and_metrics = args[i]['manager'].get_rewards(
                     trial=args[i]['trial'], model_arc=args[i]['model_arc'], nsteps=args[i]['nsteps'])
