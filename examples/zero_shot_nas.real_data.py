@@ -286,7 +286,7 @@ def train_nas(arg):
     manager_getter = get_manager_distributed if arg.parallel else get_manager_common
     config_keys = list()
     for i, k in enumerate(configs.keys()):
-        if i > 3: break
+        # DEBUG; remove before real use
         # Build datasets for train/test/validate splits.
         for x in ["train", "test", "validate"]:
             if x == "train":
@@ -340,11 +340,12 @@ def train_nas(arg):
         manager=[configs[k]["manager"] for k in config_keys],
         logger=logger,
         max_episode=200,
-        max_step_per_ep=15,
+        max_step_per_ep=15, 
         working_dir=wd,
         time_budget="4:00:00",
         with_input_blocks=False,
         with_skip_connection=False,
+        save_controller_every=1
     )
 
     try:
