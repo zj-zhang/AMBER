@@ -542,12 +542,12 @@ def train_nas(arg):
         manager=[configs[k]["manager"] for k in config_keys],
         logger=logger,
         max_episode=200,
-        max_step_per_ep=15,
+        max_step_per_ep=15, 
         working_dir=wd,
         time_budget="150:00:00",
-        save_controller_every=1,
         with_input_blocks=False,
         with_skip_connection=False,
+        save_controller_every=1
     )
 
     try:
