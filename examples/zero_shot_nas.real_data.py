@@ -358,7 +358,7 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
     manager = GeneralManager(
         train_data=train_data,
         validation_data=val_data,
-        epochs=30,
+        epochs=50,
         child_batchsize=child_batch_size,
         reward_fn=reward_fn,
         model_fn=mb,
@@ -414,7 +414,7 @@ def convert_to_dataframe(res, model_space, data_names):
 def reload_trained_controller(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
     #model_space = get_model_space_common()
-    model_space = get_model_space_with_long_model()
+    model_space = get_model_space_with_long_model_and_dilation()
     try:
         session = tf.Session()
     except AttributeError:
@@ -482,7 +482,7 @@ def train_nas(arg):
     config_keys = list()
     for i, k in enumerate(configs.keys()):
         # Build datasets for train/test/validate splits.
-        for x in ["train", "test", "validate"]:
+        for x in ["train", "validate"]:
             if x == "train":
                 n = arg.n_train
             elif x == "test":
@@ -517,9 +517,9 @@ def train_nas(arg):
 
     logger = setup_logger(wd, verbose_level=logging.INFO)
 
-    env = ParallelMultiManagerEnvironment(
+    env = MultiManagerEnvironment(
         #processes=len(gpus) if arg.parallel else 1,
-        processes=1,
+        #processes=1,
         data_descriptive_features=np.stack([configs[k]["dfeatures"] for k in config_keys]),
         controller=controller,
         manager=[configs[k]["manager"] for k in config_keys],
@@ -527,7 +527,8 @@ def train_nas(arg):
         max_episode=200,
         max_step_per_ep=15,
         working_dir=wd,
-        time_budget="24:00:00",
+        time_budget="150:00:00",
+        save_controller_every=1,
         with_input_blocks=False,
         with_skip_connection=False,
     )
