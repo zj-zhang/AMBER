@@ -86,8 +86,8 @@ class BioIntervalSource(object):
                 raise RuntimeError(s)
             elif len(self.examples) > n_examples:
                 idx = self.random_state.choice(len(self.examples),
-                                              len(self.examples) - n_examples,
-                                              replace=False)
+                                               n_examples,
+                                               replace=False)
                 idx.sort()
                 self.examples = numpy.array(self.examples, dtype='O')[idx].tolist()
                 self.labels = numpy.array(self.labels, dtype='O')[idx].tolist()
