@@ -448,3 +448,8 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
                                                   len(self.examples),
                                                   replace=False)
 
+    def close(self):
+        """
+        Close the file connection of Sequence
+        """
+        self.reference_sequence.close()

@@ -489,3 +489,9 @@ class EncodedHDF5Genome(EncodedGenome):
         else:
             s = "Specified coordinates ({} to {} on \"{}\", strand of \"{}\") are invalid!".format(start, end, chrom, strand)
             raise IndexError(s)
+
+    def close(self):
+        """
+        Close the file connection to HDF5
+        """
+        self.data.close()

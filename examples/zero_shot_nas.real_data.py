@@ -241,21 +241,6 @@ def reload_trained_controller(arg):
     return res
 
 
-def thread_train_handle_getter(genome_file, bed_file, num_samples):
-    #def get():
-    #    genome = EncodedHDF5Genome(input_path=genome_file, in_memory=False)
-    #    gen = BatchedBioIntervalSequence(
-    #                bed_file,
-    #                genome,
-    #                batch_size=500, seed=1337, shuffle=True,
-    #                n_examples=num_samples)
-    #    gen.set_pad(400) # 1000 total bp = 200 + 400 * 2
-    #    return gen
-    #return get
-    pass
-
-
-
 def train_nas(arg):
     dfeature_names = list()
     with open(arg.dfeature_name_file, "r") as read_file:
@@ -301,6 +286,7 @@ def train_nas(arg):
     manager_getter = get_manager_distributed if arg.parallel else get_manager_common
     config_keys = list()
     for i, k in enumerate(configs.keys()):
+        if i > 3: break
         # Build datasets for train/test/validate splits.
         for x in ["train", "test", "validate"]:
             if x == "train":
@@ -339,7 +325,7 @@ def train_nas(arg):
             wd=os.path.join(wd, "manager_%s"%k),
             data_description=configs[k]["dfeatures"],
             dag_name="AmberDAG{}".format(k),
-            verbose=2,
+            verbose=0,
             n_feats=configs[k]["n_feats"],
             train_data_kwargs=configs[k]['train_data_kwargs']
             )
