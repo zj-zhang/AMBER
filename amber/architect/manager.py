@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 
 import gc
-import os
+import os, sys
 import warnings
 
 import numpy as np
@@ -11,6 +11,7 @@ import tensorflow as tf2
 from keras import backend as K
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.models import Model
+import time
 
 from .common_ops import unpack_data
 from .store import get_store_fn
@@ -72,7 +73,6 @@ class GeneralManager(BaseNetworkManager):
         self.model_fn = model_fn
         self.reward_fn = reward_fn
         self.store_fn = get_store_fn(store_fn)
-
 
 
     def get_rewards(self, trial, model_arc, **kwargs):
@@ -141,15 +141,33 @@ class GeneralManager(BaseNetworkManager):
 
 
 class DistributedGeneralManager(GeneralManager):
-    def __init__(self, devices, *args, **kwargs):
+    def __init__(self, devices, train_data_kwargs, *args, **kwargs):
         self.devices = devices
+        self.train_data_kwargs = train_data_kwargs
         super().__init__(*args, **kwargs)
         assert len(self.devices) == 1, "Only supports one GPU device currently"
+        # for keeping & closing file connection at multi-processing
+        self.train_x = None
+        self.train_y = None
+        self.file_connected = False
+
+    def close_handler(self):
+        if self.file_connected:
+            self.train_x.close()
+            if self.train_y:
+                self.train_y.close()
+            self.train_x = None
+            self.train_y = None
+            self.file_connected = False
 
     def get_rewards(self, trial, model_arc, **kwargs):
+        # TODO: use tensorflow distributed strategy
         #strategy = tf2.distribute.MirroredStrategy(devices=self.devices)
         #print('Number of devices: {} - {}'.format(strategy.num_replicas_in_sync, self.devices))
         #with strategy.scope():
+        pid = os.getpid()
+        sys.stderr.write("[%s] Preprocessing.."%pid)
+        start_time = time.time()
         train_graph = tf.Graph()
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
@@ -163,11 +181,18 @@ class DistributedGeneralManager(GeneralManager):
                 model = self.model_fn(model_arc)  # a compiled keras Model
 
                 # unpack the dataset
-                X_train, y_train = unpack_data(self.train_data)
+                if not self.file_connected:
+                    X_train, y_train = unpack_data(self.train_data, callable_kwargs=self.train_data_kwargs)
+                    self.train_x = X_train
+                    self.train_y = y_train
+                    self.file_connected = True
+                elapse_time = time.time() - start_time
+                sys.stderr.write("  %.3f sec\n"%elapse_time)
 
                 # train the model using Keras methods
-                print(" Trial %i: Start training model..." % trial)
-                hist = model.fit(X_train, y_train,
+                start_time = time.time()
+                sys.stderr.write("[%s] Trial %i: Start training model.." % (pid, trial))
+                hist = model.fit(self.train_x, self.train_y,
                                  batch_size=self.batchsize,
                                  epochs=self.epochs,
                                  verbose=self.verbose,
@@ -179,7 +204,11 @@ class DistributedGeneralManager(GeneralManager):
                                  )
                 # load best performance epoch in this training session
                 model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
+                elapse_time = time.time() - start_time
+                sys.stderr.write("  %.3f sec\n"%elapse_time)
 
+                start_time = time.time()
+                sys.stderr.write("[%s] Postprocessing.."% pid )
                 # evaluate the model by `reward_fn`
                 this_reward, loss_and_metrics, reward_metrics = \
                     self.reward_fn(model, self.validation_data,
@@ -207,13 +236,19 @@ class DistributedGeneralManager(GeneralManager):
                         save_full_model=self.save_full_model,
                         knowledge_func=self.reward_fn.knowledge_function
                     )
+                elapse_time = time.time() - start_time
+                sys.stderr.write("  %.3f sec\n"%elapse_time)
 
         # clean up resources and GPU memory
+        start_time = time.time()
+        sys.stderr.write("[%s] Cleaning up.."%pid)
         del model
         del hist
         del train_sess
         del train_graph
         gc.collect()
+        elapse_time = time.time() - start_time
+        sys.stderr.write("  %.3f sec\n"%elapse_time)
         return this_reward, loss_and_metrics
 
 

@@ -8,6 +8,7 @@ associated labels.
 #import keras
 import tensorflow as tf
 import numpy
+from .sequences import EncodedHDF5Genome
 
 
 class BioIntervalSource(object):
@@ -51,8 +52,11 @@ class BioIntervalSource(object):
     seed : int
         The value used to seed the random number generator.
     """
-    def __init__(self, example_file, reference_sequence, n_examples=None, seed=1337):
-        self.reference_sequence = reference_sequence
+    def __init__(self, example_file, reference_sequence, n_examples=None, seed=1337, pad=400):
+        if type(reference_sequence) is str:
+            self.reference_sequence = EncodedHDF5Genome(input_path=reference_sequence, in_memory=False)
+        else:
+            self.reference_sequence = reference_sequence
         self.left_pad = 0
         self.right_pad = 0
 
@@ -95,6 +99,8 @@ class BioIntervalSource(object):
         else: # Ensure random state not affected by not using n_examples.
             idx = self.random.state.choice(2, 1, replace=False)
             del idx
+
+        self.set_pad(pad)
 
     def padding_is_valid(self, value):
         """Determine if the specified value is a valid value for padding
@@ -346,9 +352,10 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         Specifically, this file will have one example per line, with
         the chromosome, start, end, and label for the example. Each
         column is separated by tabs.
-    reference_sequence : Sequence
+    reference_sequence : Sequence or str
         The reference sequence used to generate the input sequences
-        from the example coordinates.
+        from the example coordinates; could be a Sequence instance or a 
+        filepath to reference sequence.
     batch_size : int
         Specifies size of the mini-batches.
     shuffle : bool
@@ -383,12 +390,14 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         The value used to seed the random number generator.
     """
     def __init__(self, example_file, reference_sequence,
-                 batch_size, shuffle=True, n_examples=None, seed=1337):
+                 batch_size, shuffle=True, n_examples=None, seed=1337, pad=0):
         super(BatchedBioIntervalSequence, self).__init__(
             example_file=example_file,
             reference_sequence=reference_sequence,
             n_examples=n_examples,
-            seed=seed)
+            seed=seed,
+            pad=pad
+            )
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.index = numpy.arange(len(self.examples))
@@ -438,3 +447,8 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
                                                   len(self.examples),
                                                   replace=False)
 
+    def close(self):
+        """
+        Close the file connection of Sequence
+        """
+        self.reference_sequence.close()

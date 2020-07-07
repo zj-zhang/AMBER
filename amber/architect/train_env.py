@@ -1,5 +1,5 @@
 # -*- coding: UTF-8 -*-
-
+import os, sys
 import csv
 import datetime
 import shutil
@@ -624,14 +624,17 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
         pid = os.getpid()
         res = []
         for i in range(len(args)):
-            print("PID %i: %i/%i run" % (pid, i, len(args)))
-            # this = reward, loss_and_metrics
             try:
+                devices = args[i]['manager'].devices
+                print("PID %i: %i/%i run; devices=%s" % (pid, i, len(args), devices))
                 reward, loss_and_metrics = args[i]['manager'].get_rewards(
                     trial=args[i]['trial'], model_arc=args[i]['model_arc'], nsteps=args[i]['nsteps'])
             except Exception as e:
                 raise Exception("child pid %i has exception %s" % (pid, e))
             res.append({'reward': reward, 'loss_and_metrics': loss_and_metrics})
+        # close all handlers opened in this thread
+        for i in range(len(args)):
+            args[i]['manager'].close_handler()
         return res
 
     # overwrite

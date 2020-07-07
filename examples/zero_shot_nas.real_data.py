@@ -312,7 +312,7 @@ def get_model_space_with_long_model_and_dilation():
 
 
 def get_manager_distributed(train_data, val_data, controller, model_space, wd, data_description, verbose=0,
-                            devices=None, **kwargs):
+                            devices=None, train_data_kwargs=None, **kwargs):
     reward_fn = LossAucReward(method='auc')
     input_node = State('input', shape=(1000, 4), name="input", dtype='float32')
     output_node = State('dense', units=1, activation='sigmoid')
@@ -321,9 +321,11 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         'optimizer': 'adam',
         'metrics': ['acc']
     }
-    mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space, gpus=len(devices))
+    #mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space,  gpus=devices)
+    mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space)
     manager = DistributedGeneralManager(
         devices=devices,
+        train_data_kwargs = train_data_kwargs or None,
         train_data=train_data,
         validation_data=unpack_data(val_data, unroll_generator=True),
         epochs=50,
@@ -351,7 +353,8 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
     session = controller.session
 
     reward_fn = LossAucReward(method='auc')
-    num_gpus = 4
+    gpus = get_available_gpus()
+    num_gpus = len(gpus)
     mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space, gpus=num_gpus)
  
     child_batch_size = 500*num_gpus
@@ -457,7 +460,13 @@ def train_nas(arg):
         session = tf.compat.v1.Session()
 
     controller = get_controller(model_space=model_space, session=session, data_description_len=len(dfeature_names))
-
+    # Re-load previously saved weights, if specified
+    if arg.resume:
+        try:
+            controller.load_weights(os.path.join(wd, "controller_weights.h5"))
+            print("loaded existing weights")
+        except Exception as e:
+            print("cannot load controller weights because of %s"%e)
     # Load in datasets and configurations for them.
     if arg.config_file.endswith("tsv"):
         sep = "\t"
@@ -469,7 +478,6 @@ def train_nas(arg):
         configs = pd.read_csv(arg.config_file, sep=sep, quoting=2)
         print("Re-read with quoting")
     configs = configs.to_dict(orient='index')
-    
     # Get available gpus for parsing to DistributedManager
     gpus = get_available_gpus()
     gpus_ = gpus * len(configs)
@@ -492,12 +500,20 @@ def train_nas(arg):
             else:
                 s = "Unknown mode: {}".format(x)
                 raise ValueError(s)
-            configs[k][x] = BatchedBioIntervalSequence(
-                configs[k][x + "_file"],
-                genome,
-                batch_size=500, seed=1337, shuffle=(x == "train"),
-                n_examples=n)
-            configs[k][x].set_pad(400) # 1000 total bp = 200 + 400 * 2
+            d = {
+                        'example_file': configs[k][x + "_file"],
+                        'reference_sequence': arg.genome_file,
+                        'batch_size': 500, 
+                        'seed': 1337, 
+                        'shuffle': True,
+                        'n_examples': n,
+                        'pad': 400
+                    }
+            if x == "train":
+                configs[k][x] = BatchedBioIntervalSequence
+                configs[k]['train_data_kwargs'] = d
+            else:
+                configs[k][x] = BatchedBioIntervalSequence(**d)
 
         # Build covariates and manager.
         configs[k]["dfeatures"] = np.array(
@@ -508,18 +524,19 @@ def train_nas(arg):
             val_data=configs[k]["validate"],
             controller=controller,
             model_space=model_space,
-            wd=wd,
+            wd=os.path.join(wd, "manager_%s"%k),
             data_description=configs[k]["dfeatures"],
             dag_name="AmberDAG{}".format(k),
-            verbose=verbose,
-            n_feats=configs[k]["n_feats"])
+            verbose=0,
+            n_feats=configs[k]["n_feats"],
+            train_data_kwargs=configs[k]['train_data_kwargs']
+            )
         config_keys.append(k)
 
     logger = setup_logger(wd, verbose_level=logging.INFO)
 
-    env = MultiManagerEnvironment(
-        #processes=len(gpus) if arg.parallel else 1,
-        #processes=1,
+    env = ParallelMultiManagerEnvironment(
+        processes=len(gpus) if arg.parallel else 1,
         data_descriptive_features=np.stack([configs[k]["dfeatures"] for k in config_keys]),
         controller=controller,
         manager=[configs[k]["manager"] for k in config_keys],
@@ -547,6 +564,7 @@ if __name__ == "__main__":
         parser.add_argument("--analysis", type=str, choices=['train', 'reload'], required=True, help="analysis type")
         parser.add_argument("--wd", type=str, default="./outputs/zero_shot/", help="working dir")
         parser.add_argument("--parallel", default=False, action="store_true", help="Use parallel")
+        parser.add_argument("--resume", default=False, action="store_true", help="resume previous run")
         parser.add_argument("--config-file", type=str, required=True, help="Path to the config file to use.")
         parser.add_argument("--genome-file", type=str, required=True, help="Path to genome file to use.")
         parser.add_argument("--dfeature-name-file", type=str, required=True, help="Path to file with dataset feature names listed one per line.")

@@ -24,8 +24,8 @@ class KerasModelBuilder(ModelBuilder):
                         model_compile_dict=self.model_compile_dict,
                         model_space=self.model_space
                         )
-        else:
-             model = build_multi_gpu_sequential_model(
+        elif type(self.gpus) is int:
+            model = build_multi_gpu_sequential_model(
                         model_states=model_states,
                         input_state=self.input_node,
                         output_state=self.output_node,
@@ -33,6 +33,16 @@ class KerasModelBuilder(ModelBuilder):
                         model_space=self.model_space,
                         gpus=self.gpus
                         )
+        elif type(self.gpus) is list:
+            mirrored_strategy = tf.distribute.MirroredStrategy(devices=self.gpus)
+            with mirrored_strategy.scope():
+                model = build_sequential_model(
+                            model_states=model_states,
+                            input_state=self.input_node,
+                            output_state=self.output_node,
+                            model_compile_dict=self.model_compile_dict,
+                            model_space=self.model_space
+                            )
         return model
 
 
