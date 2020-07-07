@@ -9,6 +9,7 @@ May 14, 2020
 import tensorflow as tf
 import numpy as np
 import os
+import copy
 import logging
 import pickle
 import pandas as pd
@@ -65,47 +66,248 @@ def get_controller(model_space, session, data_description_len=3):
 
 
 def get_model_space_common():
+
+    # Setup and params.
     state_space = ModelSpace()
-    state_space.add_layer(0, [
-        State('conv1d', filters=100, kernel_size=8, kernel_initializer='glorot_uniform', activation='relu',
-              name="conv1"),
-        State('conv1d', filters=100, kernel_size=14, kernel_initializer='glorot_uniform', activation='relu',
-              name="conv1"),
-        State('conv1d', filters=100, kernel_size=20, kernel_initializer='glorot_uniform', activation='relu',
-              name="conv1"),
-    ])
-    state_space.add_layer(1, [
-        State('Identity'),
-        State('maxpool1d', pool_size=4, strides=4),
-        State('avgpool1d', pool_size=4, strides=4),
+    default_params = {"kernel_initializer": "glorot_uniform",
+                      "activation": "relu"}
+    param_list = [
+            # Block 1:
+            [{"filters": 100, "kernel_size": 8},
+             {"filters": 100, "kernel_size": 14},
+             {"filters": 100, "kernel_size": 20}],
+            # Block 2:
+            [{"filters": 200, "kernel_size": 8},
+             {"filters": 200, "kernel_size": 14},
+             {"filters": 200, "kernel_size": 20}],
+            # Block 3:
+            [{"filters": 300, "kernel_size": 8},
+             {"filters": 300, "kernel_size": 14},
+             {"filters": 300, "kernel_size": 20}],
+        ]
 
-    ])
-    state_space.add_layer(2, [
-        State('conv1d', filters=200, kernel_size=8, kernel_initializer='glorot_uniform', activation='relu'),
-        State('conv1d', filters=200, kernel_size=14, kernel_initializer='glorot_uniform', activation='relu'),
-        State('conv1d', filters=200, kernel_size=20, kernel_initializer='glorot_uniform', activation='relu'),
-    ])
-    state_space.add_layer(3, [
-        State('Identity'),
-        State('maxpool1d', pool_size=4, strides=4),
-        State('avgpool1d', pool_size=4, strides=4),
+    # Build state space.
+    conv_seen = 0
+    for i in range(len(param_list)):
+        # Build conv states for this layer.
+        conv_states = [State("Identity")]
+        for j in range(len(param_list[i])):
+            d = copy.deepcopy(default_params)
+            for k, v in param_list[i][j].items():
+                d[k] = v
+            conv_states.append(State('conv1d', name="conv{}".format(conv_seen), **d))
+        state_space.add_layer(conv_seen * 2, conv_states)
+        conv_seen += 1
 
-    ])
-    state_space.add_layer(4, [
-        State('conv1d', filters=300, kernel_size=8, kernel_initializer='glorot_uniform', activation='relu'),
-        State('conv1d', filters=300, kernel_size=14, kernel_initializer='glorot_uniform', activation='relu'),
-        State('conv1d', filters=300, kernel_size=20, kernel_initializer='glorot_uniform', activation='relu'),
-    ])
-    state_space.add_layer(5, [
-        State('Flatten'),
-        State('GlobalMaxPool1D'),
-        State('GlobalAvgPool1D'),
-    ])
-    state_space.add_layer(6, [
-        State('Dense', units=30, activation='relu'),
-        State('Dense', units=100, activation='relu'),
-        State('Identity')
-    ])
+        # Add pooling states.
+        if i < len(param_list) - 1:
+            pool_states = [State('Identity'),
+                           State('maxpool1d', pool_size=4, strides=4),
+                           State('avgpool1d', pool_size=4, strides=4)]
+        else:
+            pool_states = [State('Flatten'),
+                           State('GlobalMaxPool1D'),
+                           State('GlobalAvgPool1D')]
+        state_space.add_layer(conv_seen * 2 - 1, pool_states)
+
+    # Add final classifier layer.
+    state_space.add_layer(conv_seen * 2, [
+            State('Dense', units=30, activation='relu'),
+            State('Dense', units=100, activation='relu'),
+            State('Identity')
+        ])
+    return state_space
+
+
+def get_model_space_with_long_model():
+    # Allow option for convolution to be smaller but have two layers instead of just 1.
+
+    # Setup and params.
+    state_space = ModelSpace()
+    default_params = {"kernel_initializer": "glorot_uniform",
+                      "activation": "relu"}
+    param_list = [
+            # Block 1:
+            [{"filters": 100, "kernel_size": 8},
+             {"filters": 100, "kernel_size": 14},
+             {"filters": 100, "kernel_size": 20}],
+            # Block 2:
+            [{"filters": 200, "kernel_size": 8},
+             {"filters": 200, "kernel_size": 14},
+             {"filters": 200, "kernel_size": 20}],
+            # Block 3:
+            [{"filters": 300, "kernel_size": 8},
+             {"filters": 300, "kernel_size": 14},
+             {"filters": 300, "kernel_size": 20}]
+        ]
+
+    # Build state space.
+    conv_seen = 0
+    for i in range(len(param_list)):
+        # Build conv states for this layer.
+        conv_states = [State("Identity")]
+        second_conv_states = [State("Identity")]
+        for j in range(len(param_list[i])):
+            d = copy.deepcopy(default_params)
+            for k, v in param_list[i][j].items():
+                d[k] = v
+            conv_states.append(State('conv1d', name="conv{}.1".format(conv_seen), **d))
+            d["kernel_size"] = d["kernel_size"] // 2
+            conv_states.append(State('conv1d', name="conv{}.1".format(conv_seen), **d))
+            second_conv_states.append(State("conv1d", name="conv{}.2".format(conv_seen), **d))
+        state_space.add_layer(conv_seen * 3, conv_states)
+        state_space.add_layer(conv_seen * 3 + 1, second_conv_states)
+        conv_seen += 1
+
+        # Add pooling states.
+        if i < len(param_list) - 1:
+            pool_states = [State('Identity'),
+                           State('maxpool1d', pool_size=4, strides=4),
+                           State('avgpool1d', pool_size=4, strides=4)]
+        else:
+            pool_states = [State('Flatten'),
+                           State('GlobalMaxPool1D'),
+                           State('GlobalAvgPool1D')]
+        state_space.add_layer(conv_seen * 3 - 1, pool_states)
+
+    # Add final classifier layer.
+    state_space.add_layer(conv_seen * 2, [
+            State('Dense', units=30, activation='relu'),
+            State('Dense', units=100, activation='relu'),
+            State('Identity')
+        ])
+    return state_space
+
+
+def get_model_space_with_dilation():
+
+    # Setup and params.
+    state_space = ModelSpace()
+    default_params = {"kernel_initializer": "glorot_uniform",
+                      "activation": "relu"}
+    param_list = [
+            # Block 1:
+            [{"filters": 100, "kernel_size": 8},
+             {"filters": 100, "kernel_size": 14},
+             {"filters": 100, "kernel_size": 20},
+             {"filters": 100, "kernel_size": 8, "dilation_rate": 2},
+             {"filters": 100, "kernel_size": 14, "dilation_rate": 2},
+             {"filters": 100, "kernel_size": 20, "dilation_rate": 2}],
+            # Block 2:
+            [{"filters": 200, "kernel_size": 8},
+             {"filters": 200, "kernel_size": 14},
+             {"filters": 200, "kernel_size": 20},
+             {"filters": 200, "kernel_size": 8, "dilation_rate": 2},
+             {"filters": 200, "kernel_size": 14, "dilation_rate": 2},
+             {"filters": 200, "kernel_size": 20, "dilation_rate": 2}],
+            # Block 3:
+            [{"filters": 300, "kernel_size": 8},
+             {"filters": 300, "kernel_size": 14},
+             {"filters": 300, "kernel_size": 20},
+             {"filters": 300, "kernel_size": 8, "dilation_rate": 2},
+             {"filters": 300, "kernel_size": 14, "dilation_rate": 2},
+             {"filters": 300, "kernel_size": 20, "dilation_rate": 2}],
+        ]
+
+    # Build state space.
+    conv_seen = 0
+    for i in range(len(param_list)):
+        # Build conv states for this layer.
+        conv_states = [State("Identity")]
+        for j in range(len(param_list[i])):
+            d = copy.deepcopy(default_params)
+            for k, v in param_list[i][j].items():
+                d[k] = v
+            conv_states.append(State('conv1d', name="conv{}".format(conv_seen), **d))
+        state_space.add_layer(conv_seen * 2, conv_states)
+        conv_seen += 1
+
+        # Add pooling states.
+        if i < len(param_list) - 1:
+            pool_states = [State('Identity'),
+                           State('maxpool1d', pool_size=4, strides=4),
+                           State('avgpool1d', pool_size=4, strides=4)]
+        else:
+            pool_states = [State('Flatten'),
+                           State('GlobalMaxPool1D'),
+                           State('GlobalAvgPool1D')]
+        state_space.add_layer(conv_seen * 2 - 1, pool_states)
+
+    # Add final classifier layer.
+    state_space.add_layer(conv_seen * 2, [
+            State('Dense', units=30, activation='relu'),
+            State('Dense', units=100, activation='relu'),
+            State('Identity')
+        ])
+    return state_space
+
+
+def get_model_space_with_long_model_and_dilation():
+    # Allow option for convolution to be smaller but have two layers instead of just 1.
+
+    # Setup and params.
+    state_space = ModelSpace()
+    default_params = {"kernel_initializer": "glorot_uniform",
+                      "activation": "relu"}
+    param_list = [
+            # Block 1:
+            [{"filters": 100, "kernel_size": 8},
+             {"filters": 100, "kernel_size": 14},
+             {"filters": 100, "kernel_size": 20},
+             {"filters": 100, "kernel_size": 8, "dilation_rate": 2},
+             {"filters": 100, "kernel_size": 14, "dilation_rate": 2},
+             {"filters": 100, "kernel_size": 20, "dilation_rate": 2}],
+            # Block 2:
+            [{"filters": 200, "kernel_size": 8},
+             {"filters": 200, "kernel_size": 14},
+             {"filters": 200, "kernel_size": 20},
+             {"filters": 200, "kernel_size": 8, "dilation_rate": 2},
+             {"filters": 200, "kernel_size": 14, "dilation_rate": 2},
+             {"filters": 200, "kernel_size": 20, "dilation_rate": 2}],
+            # Block 3:
+            [{"filters": 300, "kernel_size": 8},
+             {"filters": 300, "kernel_size": 14},
+             {"filters": 300, "kernel_size": 20},
+             {"filters": 300, "kernel_size": 8, "dilation_rate": 2},
+             {"filters": 300, "kernel_size": 14, "dilation_rate": 2},
+             {"filters": 300, "kernel_size": 20, "dilation_rate": 2}],
+        ]
+
+    # Build state space.
+    conv_seen = 0
+    for i in range(len(param_list)):
+        # Build conv states for this layer.
+        conv_states = [State("Identity")]
+        second_conv_states = [State("Identity")]
+        for j in range(len(param_list[i])):
+            d = copy.deepcopy(default_params)
+            for k, v in param_list[i][j].items():
+                d[k] = v
+            conv_states.append(State('conv1d', name="conv{}.1".format(conv_seen), **d))
+            d["kernel_size"] = d["kernel_size"] // 2
+            conv_states.append(State('conv1d', name="conv{}.1".format(conv_seen), **d))
+            second_conv_states.append(State("conv1d", name="conv{}.2".format(conv_seen), **d))
+        state_space.add_layer(conv_seen * 3, conv_states)
+        state_space.add_layer(conv_seen * 3 + 1, second_conv_states)
+        conv_seen += 1
+
+        # Add pooling states.
+        if i < len(param_list) - 1:
+            pool_states = [State('Identity'),
+                           State('maxpool1d', pool_size=4, strides=4),
+                           State('avgpool1d', pool_size=4, strides=4)]
+        else:
+            pool_states = [State('Flatten'),
+                           State('GlobalMaxPool1D'),
+                           State('GlobalAvgPool1D')]
+        state_space.add_layer(conv_seen * 3 - 1, pool_states)
+
+    # Add final classifier layer.
+    state_space.add_layer(conv_seen * 2, [
+            State('Dense', units=30, activation='relu'),
+            State('Dense', units=100, activation='relu'),
+            State('Identity')
+        ])
     return state_space
 
 
@@ -159,7 +361,7 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
     manager = GeneralManager(
         train_data=train_data,
         validation_data=val_data,
-        epochs=30,
+        epochs=50,
         child_batchsize=child_batch_size,
         reward_fn=reward_fn,
         model_fn=mb,
@@ -214,7 +416,8 @@ def convert_to_dataframe(res, model_space, data_names):
 
 def reload_trained_controller(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
-    model_space = get_model_space_common()
+    #model_space = get_model_space_common()
+    model_space = get_model_space_with_long_model_and_dilation()
     try:
         session = tf.Session()
     except AttributeError:
@@ -286,9 +489,8 @@ def train_nas(arg):
     manager_getter = get_manager_distributed if arg.parallel else get_manager_common
     config_keys = list()
     for i, k in enumerate(configs.keys()):
-        # DEBUG; remove before real use
         # Build datasets for train/test/validate splits.
-        for x in ["train", "test", "validate"]:
+        for x in ["train", "validate"]:
             if x == "train":
                 n = arg.n_train
             elif x == "test":
@@ -342,7 +544,7 @@ def train_nas(arg):
         max_episode=200,
         max_step_per_ep=15, 
         working_dir=wd,
-        time_budget="4:00:00",
+        time_budget="150:00:00",
         with_input_blocks=False,
         with_skip_connection=False,
         save_controller_every=1
