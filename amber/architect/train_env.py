@@ -411,6 +411,7 @@ class EnasTrainEnv(ControllerTrainEnvironment):
                     LOGGER.info("-" * 10)
 
                 if self.save_controller_every is not None and child_step % self.save_controller_every == 0:
+                    self.logger.info("Saving controller weights for epoch %d" % child_step)
                     self.controller.save_weights(
                         os.path.join(self.working_dir, "controller_weights-epoch-%i.h5" % child_step))
 
@@ -768,6 +769,7 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                         self.logger.info("-" * 10)
 
                     if self.save_controller_every is not None and child_step % self.save_controller_every == 0:
+                        self.logger.info("Saving controller weights for epoch %d" % child_step)
                         self.controller.save_weights(
                             os.path.join(self.working_dir, "controller_weights-epoch-%i.h5" % child_step))
                 except KeyboardInterrupt:
