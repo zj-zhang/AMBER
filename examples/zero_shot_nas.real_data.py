@@ -416,7 +416,6 @@ def convert_to_dataframe(res, model_space, data_names):
 
 def reload_trained_controller(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
-    #model_space = get_model_space_common()
     model_space = get_model_space_with_long_model_and_dilation()
     try:
         session = tf.Session()
@@ -453,7 +452,8 @@ def train_nas(arg):
                 dfeature_names.append(line)
     wd = arg.wd
     verbose = 1
-    model_space = get_model_space_common()
+    #model_space = get_model_space_common()
+    model_space = get_model_space_with_long_model_and_dilation()
     try:
         session = tf.Session()
     except AttributeError:

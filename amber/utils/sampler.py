@@ -67,7 +67,33 @@ class BioIntervalSource(object):
         # Load examples.
         self.labels = list()
         self.examples = list()
-        with open(example_file, "r") as read_file:
+        self._example_file = example_file
+        self._initialized = False
+        self.set_pad(pad)
+
+        # Get number of examples.
+        i = 0
+        with open(self._example_file, "r") as read_file:
+            for line in read_file:
+                line = line.strip()
+                if not line.startswith("#"):
+                    i += 1 # Assumes that all examples are well-formatted.
+
+        # Set length.
+        if n_examples is None:
+            self.n_examples = i
+        elif n_examples > i:
+            s = ("Specified value of examples was {}".format(n_examples) +
+                 ", but only {} were found in \"{}\".".format(i,
+                                                              example_file))
+            raise RuntimeError(s)
+        else:
+            self.n_examples = n_examples
+
+    def _lazy_init(self):
+        """Delays reading in examples until first use.
+        """
+        with open(self._example_file, "r") as read_file:
             for line in read_file:
                 line = line.strip()
                 if not line.startswith("#"):
@@ -78,29 +104,27 @@ class BioIntervalSource(object):
                         self.labels.append(numpy.array(label))
                         self.examples.append((chrom, int(start), int(end), strand))
         # TODO: Consider using separate random states for index shuffling and this part?
-        if n_examples is not None:
-            if len(self.examples) < n_examples:
-                s = ("Specified value of examples was {}".format(n_examples) +
-                     ", but only {} were found in \"{}\".".format(len(self.examples),
-                                                                  example_file))
-                raise RuntimeError(s)
-            elif len(self.examples) > n_examples:
-                idx = self.random_state.choice(len(self.examples),
-                                               n_examples,
-                                               replace=False)
-                idx.sort()
-                self.examples = numpy.array(self.examples, dtype='O')[idx].tolist()
-                self.labels = numpy.array(self.labels, dtype='O')[idx].tolist()
-                self.labels = [numpy.array(x) for x in self.labels]
-            else:
-                # Ensure random state not affected by using input with length of n_examples.
-                idx = self.random_state.choice(2, 1, replace=False)
-                del idx
-        else: # Ensure random state not affected by not using n_examples.
-            idx = self.random.state.choice(2, 1, replace=False)
+        if len(self.examples) < self.n_examples:
+            s = ("Specified value of examples was {}".format(self.n_examples) +
+                 ", but only {} were found in \"{}\".".format(len(self.examples),
+                                                              self._example_file))
+            raise RuntimeError(s)
+        elif len(self.examples) > self.n_examples:
+            idx = self.random_state.choice(len(self.examples),
+                                           self.n_examples,
+                                           replace=False)
+            tmp0 = list()
+            tmp1 = list()
+            for i in idx.tolist():
+                tmp0.append(self.examples[i])
+                tmp1.append(self.labels[i])
+            self.examples = tmp0
+            self.labels = tmp1
+        else:
+            # Ensure random state not affected by using input with length of n_examples.
+            idx = self.random_state.choice(2, 1, replace=False)
             del idx
-
-        self.set_pad(pad)
+        self._initialized = True
 
     def padding_is_valid(self, value):
         """Determine if the specified value is a valid value for padding
@@ -193,7 +217,7 @@ class BioIntervalSource(object):
         int
             The number of examples available.
         """
-        return len(self.examples)
+        return self.n_examples
 
     def _load_unshuffled(self, item):
         """Loads example `item` from the unshuffled list of examples.
@@ -207,6 +231,8 @@ class BioIntervalSource(object):
         -------
         tuple(numpy.ndarray, numpy.ndarray)
         """
+        if self._initialized is False:
+            self._lazy_init()
         chrom, start, end, strand = self.examples[item]
         x = self.reference_sequence.get_sequence_from_coords(chrom, start - self.left_pad, end + self.right_pad, strand)
         y = self.labels[item]
@@ -400,7 +426,8 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
             )
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.index = numpy.arange(len(self.examples))
+        self.index = None
+        self._index_initialized = False
 
     def __len__(self):
         """Number of examples available.
@@ -412,6 +439,22 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         """
         l = super(BatchedBioIntervalSequence, self).__len__()
         return l // self.batch_size
+
+    def _refresh_index(self):
+        """
+        Function to build or re-shuffle the index. If this is called when
+        the index has yet to be built, it will initialize the index. If the
+        index has already been initialized, it will do nothing unless the
+        index is supposed to be shuffled, in which case, it will re-shuffle
+        the index.
+        """
+        if self.shuffle is True: # If shuffling, always reinit when called.
+            self.index = self.random_state.choice(super().__len__(),
+                                                  super().__len__(),
+                                                  replace=False)
+        elif self._index_initialized is False: # If not shuffling, only build on first call.
+            self.index = numpy.arange(super().__len__())
+        self._index_initialized = True
 
     def __getitem__(self, item):
         """
@@ -428,6 +471,8 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
             A tuple consisting of the example and the target label.
 
         """
+        if self._index_initialized is False:
+            self._refresh_index()
         x = list()
         y = list()
         for i in range(self.batch_size):
@@ -442,10 +487,7 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         """
         If applicable, shuffle the examples at the end of an epoch.
         """
-        if self.shuffle:
-            self.index = self.random_state.choice(len(self.examples),
-                                                  len(self.examples),
-                                                  replace=False)
+        self._refresh_index()
 
     def close(self):
         """
