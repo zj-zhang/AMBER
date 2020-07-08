@@ -93,6 +93,8 @@ class BioIntervalSource(object):
     def _lazy_init(self):
         """Delays reading in examples until first use.
         """
+        self.examples = list()
+        self.labels = list()
         with open(self._example_file, "r") as read_file:
             for line in read_file:
                 line = line.strip()
@@ -392,6 +394,10 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         found, an error will be thrown.
     seed : int, optional
         Default is `1337`. The value used to seed random number generation.
+    resample : bool, optional
+        Specifies if we should resample examples from file at the end of each
+        epoch. This helps add diversity to the examples, which is critical in
+        genomics applications.
 
     Attributes
     ----------
@@ -414,9 +420,11 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         A random number generator to use.
     seed : int
         The value used to seed the random number generator.
+    resample : bool
+        Specifies if we do resampling of examples at the end of an epoch.
     """
     def __init__(self, example_file, reference_sequence,
-                 batch_size, shuffle=True, n_examples=None, seed=1337, pad=0):
+                 batch_size, shuffle=True, n_examples=None, seed=1337, pad=0, resample=False):
         super(BatchedBioIntervalSequence, self).__init__(
             example_file=example_file,
             reference_sequence=reference_sequence,
@@ -428,6 +436,7 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         self.shuffle = shuffle
         self.index = None
         self._index_initialized = False
+        self.resample = resample
 
     def __len__(self):
         """Number of examples available.
@@ -487,6 +496,8 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         """
         If applicable, shuffle the examples at the end of an epoch.
         """
+        if self.resample is True:
+            super()._lazy_init()
         self._refresh_index()
 
     def close(self):

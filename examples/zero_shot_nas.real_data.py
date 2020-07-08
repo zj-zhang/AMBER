@@ -488,9 +488,14 @@ def train_nas(arg):
 
     manager_getter = get_manager_distributed if arg.parallel else get_manager_common
     config_keys = list()
+    seed_generator = np.random.RandomState(seed=1337)
     for i, k in enumerate(configs.keys()):
         # Build datasets for train/test/validate splits.
         for x in ["train", "validate"]:
+            if arg.lockstep_sampling is False and x == "train":
+                cur_seed = seed_generator.randint(0, np.iinfo(np.uint32).max)
+            else:
+                cur_seed = 1337
             if x == "train":
                 n = arg.n_train
             elif x == "test":
@@ -503,8 +508,8 @@ def train_nas(arg):
             d = {
                         'example_file': configs[k][x + "_file"],
                         'reference_sequence': arg.genome_file,
-                        'batch_size': 500, 
-                        'seed': 1337, 
+                        'batch_size': 500,
+                        'seed': cur_seed,
                         'shuffle': True,
                         'n_examples': n,
                         'pad': 400
@@ -512,7 +517,9 @@ def train_nas(arg):
             if x == "train":
                 configs[k][x] = BatchedBioIntervalSequence
                 configs[k]['train_data_kwargs'] = d
+                configs[k]['resample'] = True
             else:
+                configs[k]["resample"] = False
                 configs[k][x] = BatchedBioIntervalSequence(**d)
 
         # Build covariates and manager.
@@ -571,6 +578,7 @@ if __name__ == "__main__":
         parser.add_argument("--n-test", type=int, required=True, help="Number of test examples.")
         parser.add_argument("--n-train", type=int, required=True, help="Number of train examples.")
         parser.add_argument("--n-validate", type=int, required=True, help="Number of validation examples.")
+        parser.add_argument("--lockstep-sampling", default=False, action="store_true", help="Ensure same training samples used for all models.")
 
         arg = parser.parse_args()
 
