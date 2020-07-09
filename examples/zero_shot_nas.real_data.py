@@ -360,18 +360,18 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
     child_batch_size = 500*num_gpus
     manager = GeneralManager(
         train_data=train_data,
-        validation_data=val_data,
+        validation_data=unpack_data(val_data, unroll_generator=True),
         epochs=50,
         child_batchsize=child_batch_size,
         reward_fn=reward_fn,
         model_fn=mb,
-        store_fn='minimal',
+        store_fn='model_plot',
         model_compile_dict=model_compile_dict,
         working_dir=wd,
         verbose=verbose,
         save_full_model=False,
         model_space=model_space,
-        fit_kwargs={'workers': 8, 'max_queue_size': 100, 'use_multiprocessing':False}
+        fit_kwargs={'workers': 8, 'max_queue_size': 100, 'use_multiprocessing':True}
     )
     return manager
 
@@ -452,8 +452,8 @@ def train_nas(arg):
                 dfeature_names.append(line)
     wd = arg.wd
     verbose = 1
-    #model_space = get_model_space_common()
-    model_space = get_model_space_with_long_model_and_dilation()
+    model_space = get_model_space_common()
+    #model_space = get_model_space_with_long_model_and_dilation()
     try:
         session = tf.Session()
     except AttributeError:
@@ -514,17 +514,19 @@ def train_nas(arg):
                         'n_examples': n,
                         'pad': 400
                     }
-            if x == "train":
+            if x == "train" and arg.parallel is True:
                 configs[k][x] = BatchedBioIntervalSequence
                 configs[k]['train_data_kwargs'] = d
                 configs[k]['resample'] = True
             else:
-                configs[k]["resample"] = False
+                configs[k]["resample"] = (x == "train")
                 configs[k][x] = BatchedBioIntervalSequence(**d)
 
         # Build covariates and manager.
         configs[k]["dfeatures"] = np.array(
             [configs[k][x] for x in dfeature_names]) # TODO: Make cols dynamic.
+
+        tmp = dict() if arg.parallel is False else dict(train_data_kwargs=configs[k]['train_data_kwargs'])
         configs[k]["manager"] = manager_getter(
             devices=[gpus_[i]],
             train_data=configs[k]["train"],
@@ -536,26 +538,32 @@ def train_nas(arg):
             dag_name="AmberDAG{}".format(k),
             verbose=0,
             n_feats=configs[k]["n_feats"],
-            train_data_kwargs=configs[k]['train_data_kwargs']
+            **tmp
             )
         config_keys.append(k)
 
     logger = setup_logger(wd, verbose_level=logging.INFO)
 
-    env = ParallelMultiManagerEnvironment(
-        processes=len(gpus) if arg.parallel else 1,
-        data_descriptive_features=np.stack([configs[k]["dfeatures"] for k in config_keys]),
-        controller=controller,
-        manager=[configs[k]["manager"] for k in config_keys],
-        logger=logger,
-        max_episode=200,
-        max_step_per_ep=15, 
-        working_dir=wd,
-        time_budget="150:00:00",
-        with_input_blocks=False,
-        with_skip_connection=False,
-        save_controller_every=1
-    )
+    # Setup env kwargs.
+    tmp = dict(data_descriptive_features=np.stack([configs[k]["dfeatures"] for k in config_keys]),
+               controller=controller,
+               manager=[configs[k]["manager"] for k in config_keys],
+               logger=logger,
+               max_episode=200,
+               max_step_per_ep=15, 
+               working_dir=wd,
+               time_budget="150:00:00",
+               with_input_blocks=False,
+               with_skip_connection=False,
+               save_controller_every=1
+           )
+
+    if arg.parallel is True:
+        env = ParallelMultiManagerEnvironment(
+                    processes=len(gpus) if arg.parallel else 1,
+                    **tmp)
+    else:
+        env = MultiManagerEnvironment(**tmp)
 
     try:
         env.train()
