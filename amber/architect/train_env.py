@@ -507,7 +507,7 @@ class MultiManagerEnvironment(EnasTrainEnv):
                 if self.is_enas:
                     # train child parameters w, if is_enas
                     for j in range(self.manager_cnt):
-                        self.logger.info("sampling with mananger %i" % j)
+                        self.logger.info("sampling with manager %i" % j)
                         self.manager[j].get_rewards(child_step, None, nsteps=self.child_train_steps)
 
                 # train controller parameters theta
@@ -626,8 +626,11 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
         res = []
         for i in range(len(args)):
             try:
-                devices = args[i]['manager'].devices
-                print("PID %i: %i/%i run; devices=%s" % (pid, i, len(args), devices))
+                if hasattr(args[i]['manager'], 'devices'):
+                    devices = args[i]['manager'].devices
+                else:
+                    devices = "NoAttribute"
+                sys.stderr.write("PID %i: %i/%i run; devices=%s\n" % (pid, i, len(args), devices))
                 reward, loss_and_metrics = args[i]['manager'].get_rewards(
                     trial=args[i]['trial'], model_arc=args[i]['model_arc'], nsteps=args[i]['nsteps'])
             except Exception as e:
@@ -635,7 +638,8 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
             res.append({'reward': reward, 'loss_and_metrics': loss_and_metrics})
         # close all handlers opened in this thread
         for i in range(len(args)):
-            args[i]['manager'].close_handler()
+            if hasattr(args[i]['manager'], "close_handler"):
+                args[i]['manager'].close_handler()
         return res
 
     # overwrite
@@ -734,9 +738,10 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                         res_list = []
                         for x in pool_args:
                             res_list.append(self._reward_getter(x))
-
-                for store_, res_ in zip(store_args, res_list):  # manager level
-                    for store, res in zip(store_, res_):        # trial level
+                
+                for m, (store_, res_) in enumerate(zip(store_args, res_list)):  # manager level
+                    for t, (store, res) in enumerate(zip(store_, res_)):        # trial level
+                        
                         reward, loss_and_metrics = res['reward'], res['loss_and_metrics']
                         probs, arc_seq, description = store['prob'], store['action'], store['description']
                         ep_reward += reward
@@ -746,7 +751,7 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                         self.controller.store(prob=probs, action=arc_seq, reward=reward,
                                               description=self.data_descriptive_features[[j]])
                         # write the results of this trial into a file
-                        data = [controller_step, [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
+                        data = [m, t, [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
                                 reward]
                         if self.squeezed_action:
                             data.extend(arc_seq)

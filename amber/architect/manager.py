@@ -12,6 +12,7 @@ from keras import backend as K
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.models import Model
 import time
+from collections import defaultdict
 
 from .common_ops import unpack_data
 from .store import get_store_fn
@@ -141,15 +142,18 @@ class GeneralManager(BaseNetworkManager):
 
 
 class DistributedGeneralManager(GeneralManager):
-    def __init__(self, devices, train_data_kwargs, *args, **kwargs):
+    def __init__(self, devices, train_data_kwargs, validate_data_kwargs, *args, **kwargs):
         self.devices = devices
         self.train_data_kwargs = train_data_kwargs
         super().__init__(*args, **kwargs)
         assert len(self.devices) == 1, "Only supports one GPU device currently"
-        # for keeping & closing file connection at multi-processing
+        # For keeping & closing file connection at multi-processing
+        self.validate_data_kwargs = validate_data_kwargs or {}
         self.train_x = None
         self.train_y = None
         self.file_connected = False
+        # For resampling; TODO: how to implement a Bayesian version of this?
+        self.arc_records = defaultdict(dict)
 
     def close_handler(self):
         if self.file_connected:
@@ -185,59 +189,75 @@ class DistributedGeneralManager(GeneralManager):
                     X_train, y_train = unpack_data(self.train_data, callable_kwargs=self.train_data_kwargs)
                     self.train_x = X_train
                     self.train_y = y_train
+                    assert callable(self.validation_data)
+                    self.validation_data = self.validation_data(**self.validate_data_kwargs)
                     self.file_connected = True
                 elapse_time = time.time() - start_time
                 sys.stderr.write("  %.3f sec\n"%elapse_time)
+                
+                model_arc_ = tuple(model_arc)
+                if model_arc_ in self.arc_records:
+                    this_reward = self.arc_records[model_arc_]['reward'] 
+                    old_trial = self.arc_records[model_arc_]['trial'] 
+                    loss_and_metrics = self.arc_records[model_arc_]['loss_and_metrics'] 
+                    sys.stderr.write("[%s] Trial %i: Re-sampled from history %i\n" % (pid, old_trial))
+                else:
+                    # train the model using Keras methods
+                    start_time = time.time()
+                    sys.stderr.write("[%s] Trial %i: Start training model.." % (pid, trial))
+                    hist = model.fit(self.train_x, self.train_y,
+                                     batch_size=self.batchsize,
+                                     epochs=self.epochs,
+                                     verbose=self.verbose,
+                                     validation_data=self.validation_data,
+                                     callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
+                                                                monitor='val_loss', verbose=self.verbose,
+                                                                save_best_only=True),
+                                                EarlyStopping(monitor='val_loss', patience=5, verbose=self.verbose)],
+                                     **self.fit_kwargs
+                                     )
 
-                # train the model using Keras methods
-                start_time = time.time()
-                sys.stderr.write("[%s] Trial %i: Start training model.." % (pid, trial))
-                hist = model.fit(self.train_x, self.train_y,
-                                 batch_size=self.batchsize,
-                                 epochs=self.epochs,
-                                 verbose=self.verbose,
-                                 validation_data=self.validation_data,
-                                 callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
-                                                            monitor='val_loss', verbose=self.verbose,
-                                                            save_best_only=True),
-                                            EarlyStopping(monitor='val_loss', patience=5, verbose=self.verbose)]
-                                 )
-                # load best performance epoch in this training session
-                model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
-                elapse_time = time.time() - start_time
-                sys.stderr.write("  %.3f sec\n"%elapse_time)
+                    # load best performance epoch in this training session
+                    model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
+                    elapse_time = time.time() - start_time
+                    sys.stderr.write("  %.3f sec\n"%elapse_time)
 
-                start_time = time.time()
-                sys.stderr.write("[%s] Postprocessing.."% pid )
-                # evaluate the model by `reward_fn`
-                this_reward, loss_and_metrics, reward_metrics = \
-                    self.reward_fn(model, self.validation_data,
-                                   session=train_sess,
-                                   )
-                loss = loss_and_metrics.pop(0)
-                loss_and_metrics = {str(self.model_compile_dict['metrics'][i]): loss_and_metrics[i] for i in
-                                    range(len(loss_and_metrics))}
-                loss_and_metrics['loss'] = loss
-                if reward_metrics:
-                    loss_and_metrics.update(reward_metrics)
+                    start_time = time.time()
+                    sys.stderr.write("[%s] Postprocessing.."% pid )
+                    # evaluate the model by `reward_fn`
+                    this_reward, loss_and_metrics, reward_metrics = \
+                        self.reward_fn(model, self.validation_data,
+                                       session=train_sess,
+                                       )
+                    loss = loss_and_metrics.pop(0)
+                    loss_and_metrics = {str(self.model_compile_dict['metrics'][i]): loss_and_metrics[i] for i in
+                                        range(len(loss_and_metrics))}
+                    loss_and_metrics['loss'] = loss
+                    if reward_metrics:
+                        loss_and_metrics.update(reward_metrics)
 
-                # do any post processing,
-                # e.g. save child net, plot training history, plot scattered prediction.
-                if self.store_fn:
-                    val_pred = model.predict(self.validation_data)
-                    self.store_fn(
-                        trial=trial,
-                        model=model,
-                        hist=hist,
-                        data=self.validation_data,
-                        pred=val_pred,
-                        loss_and_metrics=loss_and_metrics,
-                        working_dir=self.working_dir,
-                        save_full_model=self.save_full_model,
-                        knowledge_func=self.reward_fn.knowledge_function
-                    )
-                elapse_time = time.time() - start_time
-                sys.stderr.write("  %.3f sec\n"%elapse_time)
+                    # do any post processing,
+                    # e.g. save child net, plot training history, plot scattered prediction.
+                    if self.store_fn:
+                        val_pred = model.predict(self.validation_data)
+                        self.store_fn(
+                            trial=trial,
+                            model=model,
+                            hist=hist,
+                            data=self.validation_data,
+                            pred=val_pred,
+                            loss_and_metrics=loss_and_metrics,
+                            working_dir=self.working_dir,
+                            save_full_model=self.save_full_model,
+                            knowledge_func=self.reward_fn.knowledge_function
+                        )
+                    elapse_time = time.time() - start_time
+                    sys.stderr.write("  %.3f sec\n"%elapse_time)
+
+                    # store the rewards in records
+                    self.arc_records[model_arc_]['trial'] = trial
+                    self.arc_records[model_arc_]['reward'] = this_reward
+                    self.arc_records[model_arc_]['loss_and_metrics'] = loss_and_metrics
 
         # clean up resources and GPU memory
         start_time = time.time()

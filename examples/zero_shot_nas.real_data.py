@@ -6,6 +6,8 @@ ZZ
 May 14, 2020
 """
 
+# TODO: set weight_sharing once the model space is fixed
+
 import tensorflow as tf
 import numpy as np
 import os
@@ -33,7 +35,7 @@ from amber.architect.model_space import get_layer_shortname
 
 from amber.utils.sequences import EncodedGenome
 from amber.utils.sequences import EncodedHDF5Genome
-from amber.utils.sampler import BatchedBioIntervalSequence
+from amber.utils.sampler import BatchedBioIntervalSequence, BatchedBioIntervalSequenceGenerator
 
 
 def get_controller(model_space, session, data_description_len=3):
@@ -312,7 +314,7 @@ def get_model_space_with_long_model_and_dilation():
 
 
 def get_manager_distributed(train_data, val_data, controller, model_space, wd, data_description, verbose=0,
-                            devices=None, train_data_kwargs=None, **kwargs):
+                            devices=None, train_data_kwargs=None, validate_data_kwargs=None, **kwargs):
     reward_fn = LossAucReward(method='auc')
     input_node = State('input', shape=(1000, 4), name="input", dtype='float32')
     output_node = State('dense', units=1, activation='sigmoid')
@@ -321,14 +323,14 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         'optimizer': 'adam',
         'metrics': ['acc']
     }
-    #mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space,  gpus=devices)
     mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space)
     manager = DistributedGeneralManager(
         devices=devices,
-        train_data_kwargs = train_data_kwargs or None,
+        train_data_kwargs=train_data_kwargs,
         train_data=train_data,
-        validation_data=unpack_data(val_data, unroll_generator=True),
-        epochs=50,
+        validate_data_kwargs=validate_data_kwargs,
+        validation_data=val_data,
+        epochs=10,
         child_batchsize=1000,
         reward_fn=reward_fn,
         model_fn=mb,
@@ -336,8 +338,9 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         model_compile_dict=model_compile_dict,
         working_dir=wd,
         verbose=verbose,
-        save_full_model=False,
-        model_space=model_space
+        save_full_model=True,
+        model_space=model_space,
+        fit_kwargs={'steps_per_epoch': 15}
     )
     return manager
 
@@ -356,22 +359,23 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
     gpus = get_available_gpus()
     num_gpus = len(gpus)
     mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space, gpus=num_gpus)
- 
+
+    # TODO: batch_size here is not effective because it's been set at generator init
     child_batch_size = 500*num_gpus
     manager = GeneralManager(
         train_data=train_data,
         validation_data=val_data,
-        epochs=50,
+        epochs=10,
         child_batchsize=child_batch_size,
         reward_fn=reward_fn,
         model_fn=mb,
-        store_fn='minimal',
+        store_fn='model_plot',
         model_compile_dict=model_compile_dict,
         working_dir=wd,
         verbose=verbose,
-        save_full_model=False,
+        save_full_model=True,
         model_space=model_space,
-        fit_kwargs={'workers': 8, 'max_queue_size': 100, 'use_multiprocessing':False}
+        fit_kwargs={'steps_per_epoch': 15} #, 'workers':8, 'max_queue_size':100}
     )
     return manager
 
@@ -416,7 +420,6 @@ def convert_to_dataframe(res, model_space, data_names):
 
 def reload_trained_controller(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
-    #model_space = get_model_space_common()
     model_space = get_model_space_with_long_model_and_dilation()
     try:
         session = tf.Session()
@@ -454,6 +457,7 @@ def train_nas(arg):
     wd = arg.wd
     verbose = 1
     model_space = get_model_space_common()
+    #model_space = get_model_space_with_long_model_and_dilation()
     try:
         session = tf.Session()
     except AttributeError:
@@ -488,9 +492,15 @@ def train_nas(arg):
 
     manager_getter = get_manager_distributed if arg.parallel else get_manager_common
     config_keys = list()
+    seed_generator = np.random.RandomState(seed=1337)
     for i, k in enumerate(configs.keys()):
+        if i > 1: break
         # Build datasets for train/test/validate splits.
         for x in ["train", "validate"]:
+            if arg.lockstep_sampling is False and x == "train":
+                cur_seed = seed_generator.randint(0, np.iinfo(np.uint32).max)
+            else:
+                cur_seed = 1337
             if x == "train":
                 n = arg.n_train
             elif x == "test":
@@ -503,21 +513,26 @@ def train_nas(arg):
             d = {
                         'example_file': configs[k][x + "_file"],
                         'reference_sequence': arg.genome_file,
-                        'batch_size': 500, 
-                        'seed': 1337, 
-                        'shuffle': True,
+                        'batch_size': 500 if arg.parallel else 500*len(gpus),
+                        'seed': cur_seed,
+                        'shuffle': x=='train',
                         'n_examples': n,
                         'pad': 400
                     }
-            if x == "train":
-                configs[k][x] = BatchedBioIntervalSequence
-                configs[k]['train_data_kwargs'] = d
+            if arg.parallel is True:
+                configs[k][x] = BatchedBioIntervalSequenceGenerator if x=='train' else BatchedBioIntervalSequence
+                configs[k]['%s_data_kwargs'%x] = d
             else:
-                configs[k][x] = BatchedBioIntervalSequence(**d)
+                configs[k][x] = BatchedBioIntervalSequenceGenerator(**d) if x=='train' else BatchedBioIntervalSequence(**d)
 
         # Build covariates and manager.
         configs[k]["dfeatures"] = np.array(
             [configs[k][x] for x in dfeature_names]) # TODO: Make cols dynamic.
+
+        tmp = dict() if arg.parallel is False else dict(
+                train_data_kwargs=configs[k]['train_data_kwargs'],
+                validate_data_kwargs=configs[k]["validate_data_kwargs"]
+                )
         configs[k]["manager"] = manager_getter(
             devices=[gpus_[i]],
             train_data=configs[k]["train"],
@@ -527,28 +542,34 @@ def train_nas(arg):
             wd=os.path.join(wd, "manager_%s"%k),
             data_description=configs[k]["dfeatures"],
             dag_name="AmberDAG{}".format(k),
-            verbose=0,
+            verbose=0 if arg.parallel is True else 2,
             n_feats=configs[k]["n_feats"],
-            train_data_kwargs=configs[k]['train_data_kwargs']
+            **tmp
             )
         config_keys.append(k)
 
     logger = setup_logger(wd, verbose_level=logging.INFO)
 
-    env = ParallelMultiManagerEnvironment(
-        processes=len(gpus) if arg.parallel else 1,
-        data_descriptive_features=np.stack([configs[k]["dfeatures"] for k in config_keys]),
-        controller=controller,
-        manager=[configs[k]["manager"] for k in config_keys],
-        logger=logger,
-        max_episode=200,
-        max_step_per_ep=15, 
-        working_dir=wd,
-        time_budget="150:00:00",
-        with_input_blocks=False,
-        with_skip_connection=False,
-        save_controller_every=1
-    )
+    # Setup env kwargs.
+    tmp = dict(data_descriptive_features=np.stack([configs[k]["dfeatures"] for k in config_keys]),
+               controller=controller,
+               manager=[configs[k]["manager"] for k in config_keys],
+               logger=logger,
+               max_episode=200,
+               max_step_per_ep=5, 
+               working_dir=wd,
+               time_budget="150:00:00",
+               with_input_blocks=False,
+               with_skip_connection=False,
+               save_controller_every=1
+           )
+
+    if arg.parallel is True:
+        env = ParallelMultiManagerEnvironment(
+                    processes=len(gpus) if arg.parallel else 1,
+                    **tmp)
+    else:
+        env = MultiManagerEnvironment(**tmp)
 
     try:
         env.train()
@@ -571,6 +592,7 @@ if __name__ == "__main__":
         parser.add_argument("--n-test", type=int, required=True, help="Number of test examples.")
         parser.add_argument("--n-train", type=int, required=True, help="Number of train examples.")
         parser.add_argument("--n-validate", type=int, required=True, help="Number of validation examples.")
+        parser.add_argument("--lockstep-sampling", default=False, action="store_true", help="Ensure same training samples used for all models.")
 
         arg = parser.parse_args()
 
