@@ -90,7 +90,7 @@ class LossAucReward(Reward):
         self.pred = kwargs.pop('pred', None)
 
     def __call__(self, model, data, *args, **kwargs):
-        X, y = unpack_data(data, unroll_generator=True)
+        X, y = unpack_data(data, unroll_generator_y=True)
         if self.pred is None:
             pred = model.predict(X)
         else:

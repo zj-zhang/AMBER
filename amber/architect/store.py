@@ -5,6 +5,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from ..plots import plot_hessian, plot_training_history
+from .common_ops import unpack_data
 
 
 def get_store_fn(arg):
@@ -106,6 +107,7 @@ def store_general(
     if os.path.isfile(os.path.join(working_dir, 'temp_network.h5')):
         shutil.move(os.path.join(working_dir, 'temp_network.h5'), os.path.join(par_dir, 'bestmodel.h5'))
     # TODO: REVAMP THIS. if data is a generator/keras.utils.Sequence
+    data = unpack_data(data, unroll_generator_y=True)
     metadata = data[2] if len(data) > 2 else None
     obs = data[1]
     write_pred_to_disk(

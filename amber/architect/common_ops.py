@@ -9,8 +9,9 @@ if tf.__version__.startswith("2"):
 from tensorflow.python.training import moving_averages
 
 
-def unpack_data(data, unroll_generator=False, callable_kwargs=None):
+def unpack_data(data, unroll_generator_x=False, unroll_generator_y=False, callable_kwargs=None):
     is_generator = False
+    unroll_generator = unroll_generator_x or unroll_generator_y
     if type(data) in (tuple, list):
         x, y = data[0], data[1]
     elif isinstance(data, tf.keras.utils.Sequence):
@@ -23,14 +24,19 @@ def unpack_data(data, unroll_generator=False, callable_kwargs=None):
         is_generator = True
     elif callable(data):
         callable_kwargs = callable_kwargs or {}
-        x, y = unpack_data(data=data(**callable_kwargs), unroll_generator=unroll_generator)
+        x, y = unpack_data(data=data(**callable_kwargs),
+                unroll_generator_x=unroll_generator_x,
+                unroll_generator_y=unroll_generator_y)
     else:
         raise Exception("cannot unpack data of type: %s"%type(data))
     if is_generator and unroll_generator:
         gen = data if hasattr(data, '__next__') else iter(data)
-        d_ = [d for d in zip(*data)]
-        x = np.concatenate(d_[0], axis=0)
-        y = np.concatenate(d_[1], axis=0)
+        d_ = [d for d in zip(*gen)]
+        if unroll_generator_x ^ unroll_generator_y:
+            if hasattr(data, "shuffle"):
+                assert data.shuffle == False
+        x = np.concatenate(d_[0], axis=0) if unroll_generator_x else data
+        y = np.concatenate(d_[1], axis=0) if unroll_generator_y else None
     return x, y
 
 

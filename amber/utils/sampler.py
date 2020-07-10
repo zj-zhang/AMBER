@@ -499,8 +499,10 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
                 self._refresh_index()
         x = list()
         y = list()
-        for i in range(self.batch_size):
-            cur_x, cur_y = self._load_unshuffled(self.index[item + i])
+        #for i in range(self.batch_size):
+        #    cur_x, cur_y = self._load_unshuffled(self.index[item + i])
+        for i in range(item*self.batch_size, (item+1)*self.batch_size):
+            cur_x, cur_y = self._load_unshuffled(self.index[i])
             x.append(cur_x)
             y.append(cur_y)
         x = numpy.stack(x)
@@ -521,3 +523,37 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         Close the file connection of Sequence
         """
         self.reference_sequence.close()
+
+
+class BatchedBioIntervalSequenceGenerator(BatchedBioIntervalSequence):
+    """This class modifies on top of BatchedBioIntervalSequence by performing the 
+    generator loop infinitely
+    """
+    def __init__(self, *args, **kwargs):
+        super(BatchedBioIntervalSequenceGenerator, self).__init__(*args, **kwargs)
+        self.step = 0
+
+    def __getitem__(self, item):
+        x = list()
+        y = list()
+        self.step += 1
+        if self.step == len(self) and self.shuffle:
+            self._shuffle()
+            print(self.step)
+            self.step = 0
+        for i in range(self.step*self.batch_size, (self.step+1)*self.batch_size):
+            cur_x, cur_y = self._load_unshuffled(self.index[i])
+            x.append(cur_x)
+            y.append(cur_y)
+        x = numpy.stack(x)
+        y = numpy.stack(y)
+        return x, y
+
+    def _shuffle(self):
+        print("Shuffled")
+        self.index = self.random_state.choice(len(self.examples),
+                                              len(self.examples),
+                                              replace=False)
+
+    def on_epoch_end(self):
+        pass
