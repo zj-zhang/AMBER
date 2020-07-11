@@ -6,9 +6,9 @@ ZZ
 May 14, 2020
 """
 
-# TODO: set weight_sharing once the model space is fixed
 
 import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 import numpy as np
 import os
 import copy
@@ -38,7 +38,7 @@ from amber.utils.sequences import EncodedHDF5Genome
 from amber.utils.sampler import BatchedBioIntervalSequence, BatchedBioIntervalSequenceGenerator
 
 
-def get_controller(model_space, session, data_description_len=3):
+def get_controller(model_space, session, data_description_len=3, layer_embedding_sharing=None):
     with tf.device("/cpu:0"):
         controller = ZeroShotController(
             data_description_config={
@@ -46,12 +46,13 @@ def get_controller(model_space, session, data_description_len=3):
                 "hidden_layer": {"units":8, "activation": "relu"},
                 "regularizer": {"l1":1e-8 }
                 },
+            share_embedding=layer_embedding_sharing,
             model_space=model_space,
             session=session,
             with_skip_connection=False,
             skip_weight=None,
             skip_target=0.2,
-            lstm_size=32,
+            lstm_size=64,
             lstm_num_layers=1,
             kl_threshold=0.01,
             train_pi_iter=100,
@@ -62,7 +63,7 @@ def get_controller(model_space, session, data_description_len=3):
             buffer_size=5,
             batch_size=5,
             use_ppo_loss=True,
-            rescale_advantage_by_reward=True
+            rescale_advantage_by_reward=False
         )
     return controller
 
@@ -75,20 +76,27 @@ def get_model_space_common():
                       "activation": "relu"}
     param_list = [
             # Block 1:
-            [{"filters": 100, "kernel_size": 8},
-             {"filters": 100, "kernel_size": 14},
-             {"filters": 100, "kernel_size": 20}],
+            [
+                {"filters": 64, "kernel_size": 8},
+                {"filters": 64, "kernel_size": 14},
+                {"filters": 64, "kernel_size": 20}
+            ],
             # Block 2:
-            [{"filters": 200, "kernel_size": 8},
-             {"filters": 200, "kernel_size": 14},
-             {"filters": 200, "kernel_size": 20}],
+            [
+                {"filters": 128, "kernel_size": 8},
+                {"filters": 128, "kernel_size": 14},
+                {"filters": 128, "kernel_size": 20}
+            ],
             # Block 3:
-            [{"filters": 300, "kernel_size": 8},
-             {"filters": 300, "kernel_size": 14},
-             {"filters": 300, "kernel_size": 20}],
+            [
+                {"filters": 256, "kernel_size": 8},
+                {"filters": 256, "kernel_size": 14},
+                {"filters": 256, "kernel_size": 20}
+            ],
         ]
 
     # Build state space.
+    layer_embedding_sharing = {}
     conv_seen = 0
     for i in range(len(param_list)):
         # Build conv states for this layer.
@@ -98,7 +106,9 @@ def get_model_space_common():
             for k, v in param_list[i][j].items():
                 d[k] = v
             conv_states.append(State('conv1d', name="conv{}".format(conv_seen), **d))
-        state_space.add_layer(conv_seen * 2, conv_states)
+        state_space.add_layer(conv_seen*3, conv_states)
+        if i > 0:
+            layer_embedding_sharing[conv_seen*3] = 0
         conv_seen += 1
 
         # Add pooling states.
@@ -106,19 +116,34 @@ def get_model_space_common():
             pool_states = [State('Identity'),
                            State('maxpool1d', pool_size=4, strides=4),
                            State('avgpool1d', pool_size=4, strides=4)]
+            if i > 0:
+                layer_embedding_sharing[conv_seen*3-2] = 1
         else:
-            pool_states = [State('Flatten'),
-                           State('GlobalMaxPool1D'),
-                           State('GlobalAvgPool1D')]
-        state_space.add_layer(conv_seen * 2 - 1, pool_states)
+            pool_states = [
+                    State('Flatten'),
+                    State('GlobalMaxPool1D'),
+                    State('GlobalAvgPool1D')
+                ]
+        state_space.add_layer(conv_seen*3-2, pool_states)
+
+
+        # Add dropout
+        state_space.add_layer(conv_seen*3-1, [
+            State('Identity'),
+            State('Dropout', rate=0.1),
+            State('Dropout', rate=0.3),
+            State('Dropout', rate=0.5)
+            ])
+        if i > 0:
+            layer_embedding_sharing[conv_seen*3-1] = 2
 
     # Add final classifier layer.
-    state_space.add_layer(conv_seen * 2, [
+    state_space.add_layer(conv_seen*3, [
             State('Dense', units=30, activation='relu'),
             State('Dense', units=100, activation='relu'),
             State('Identity')
         ])
-    return state_space
+    return state_space, layer_embedding_sharing
 
 
 def get_model_space_with_long_model():
@@ -330,7 +355,7 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         train_data=train_data,
         validate_data_kwargs=validate_data_kwargs,
         validation_data=val_data,
-        epochs=10,
+        epochs=1000,
         child_batchsize=1000,
         reward_fn=reward_fn,
         model_fn=mb,
@@ -340,7 +365,10 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         verbose=verbose,
         save_full_model=True,
         model_space=model_space,
-        fit_kwargs={'steps_per_epoch': 15}
+        fit_kwargs={
+            'steps_per_epoch': 50,
+            'workers': 3, 'max_queue_size': 50,
+            'earlystop_patience': 20}
     )
     return manager
 
@@ -361,11 +389,11 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
     mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space, gpus=num_gpus)
 
     # TODO: batch_size here is not effective because it's been set at generator init
-    child_batch_size = 500*num_gpus
+    child_batch_size = 1000*num_gpus
     manager = GeneralManager(
         train_data=train_data,
         validation_data=val_data,
-        epochs=10,
+        epochs=1000,
         child_batchsize=child_batch_size,
         reward_fn=reward_fn,
         model_fn=mb,
@@ -375,7 +403,10 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
         verbose=verbose,
         save_full_model=True,
         model_space=model_space,
-        fit_kwargs={'steps_per_epoch': 15} #, 'workers':8, 'max_queue_size':100}
+        fit_kwargs={
+            'steps_per_epoch': 50,
+            'workers': 8, 'max_queue_size': 50,
+            'earlystop_patience': 20}
     )
     return manager
 
@@ -456,14 +487,18 @@ def train_nas(arg):
                 dfeature_names.append(line)
     wd = arg.wd
     verbose = 1
-    model_space = get_model_space_common()
-    #model_space = get_model_space_with_long_model_and_dilation()
+    model_space, layer_embedding_sharing = get_model_space_common()
+    print(layer_embedding_sharing)
     try:
         session = tf.Session()
     except AttributeError:
         session = tf.compat.v1.Session()
 
-    controller = get_controller(model_space=model_space, session=session, data_description_len=len(dfeature_names))
+    controller = get_controller(
+            model_space=model_space,
+            session=session,
+            data_description_len=len(dfeature_names),
+            layer_embedding_sharing=layer_embedding_sharing)
     # Re-load previously saved weights, if specified
     if arg.resume:
         try:
@@ -487,14 +522,12 @@ def train_nas(arg):
     gpus_ = gpus * len(configs)
 
     # Build genome. This only works under the assumption that all configs use same genome.
-    k = list(configs.keys())[0]
     genome = EncodedHDF5Genome(input_path=arg.genome_file, in_memory=False)
 
     manager_getter = get_manager_distributed if arg.parallel else get_manager_common
     config_keys = list()
     seed_generator = np.random.RandomState(seed=1337)
     for i, k in enumerate(configs.keys()):
-        if i > 1: break
         # Build datasets for train/test/validate splits.
         for x in ["train", "validate"]:
             if arg.lockstep_sampling is False and x == "train":
@@ -513,7 +546,7 @@ def train_nas(arg):
             d = {
                         'example_file': configs[k][x + "_file"],
                         'reference_sequence': arg.genome_file,
-                        'batch_size': 500 if arg.parallel else 500*len(gpus),
+                        'batch_size': 1000 if arg.parallel else 1000*len(gpus),
                         'seed': cur_seed,
                         'shuffle': x=='train',
                         'n_examples': n,
@@ -556,7 +589,7 @@ def train_nas(arg):
                manager=[configs[k]["manager"] for k in config_keys],
                logger=logger,
                max_episode=200,
-               max_step_per_ep=5, 
+               max_step_per_ep=3,
                working_dir=wd,
                time_budget="150:00:00",
                with_input_blocks=False,

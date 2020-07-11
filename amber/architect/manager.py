@@ -12,6 +12,7 @@ from keras import backend as K
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.models import Model
 import time
+from datetime import datetime
 from collections import defaultdict
 
 from .common_ops import unpack_data
@@ -100,7 +101,7 @@ class GeneralManager(BaseNetworkManager):
                              callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
                                                         monitor='val_loss', verbose=self.verbose,
                                                         save_best_only=True),
-                                        EarlyStopping(monitor='val_loss', patience=5, verbose=self.verbose)],
+                                        EarlyStopping(monitor='val_loss', patience=self.fit_kwargs.pop("earlystop_patience", 5), verbose=self.verbose)],
                              **self.fit_kwargs
                              )
             # load best performance epoch in this training session
@@ -144,10 +145,10 @@ class GeneralManager(BaseNetworkManager):
 class DistributedGeneralManager(GeneralManager):
     def __init__(self, devices, train_data_kwargs, validate_data_kwargs, *args, **kwargs):
         self.devices = devices
-        self.train_data_kwargs = train_data_kwargs
         super().__init__(*args, **kwargs)
         assert len(self.devices) == 1, "Only supports one GPU device currently"
         # For keeping & closing file connection at multi-processing
+        self.train_data_kwargs = train_data_kwargs or {}
         self.validate_data_kwargs = validate_data_kwargs or {}
         self.train_x = None
         self.train_y = None
@@ -170,7 +171,7 @@ class DistributedGeneralManager(GeneralManager):
         #print('Number of devices: {} - {}'.format(strategy.num_replicas_in_sync, self.devices))
         #with strategy.scope():
         pid = os.getpid()
-        sys.stderr.write("[%s] Preprocessing.."%pid)
+        sys.stderr.write("[%s][%s] Preprocessing.."%(pid, datetime.now().strftime("%H:%M:%S") ))
         start_time = time.time()
         train_graph = tf.Graph()
         config = tf.ConfigProto()
@@ -200,11 +201,11 @@ class DistributedGeneralManager(GeneralManager):
                     this_reward = self.arc_records[model_arc_]['reward'] 
                     old_trial = self.arc_records[model_arc_]['trial'] 
                     loss_and_metrics = self.arc_records[model_arc_]['loss_and_metrics'] 
-                    sys.stderr.write("[%s] Trial %i: Re-sampled from history %i\n" % (pid, old_trial))
+                    sys.stderr.write("[%s][%s] Trial %i: Re-sampled from history %i\n" % (pid, datetime.now().strftime("%H:%M:%S"), old_trial))
                 else:
                     # train the model using Keras methods
                     start_time = time.time()
-                    sys.stderr.write("[%s] Trial %i: Start training model.." % (pid, trial))
+                    sys.stderr.write("[%s][%s] Trial %i: Start training model.." % (pid, datetime.now().strftime("%H:%M:%S"), trial))
                     hist = model.fit(self.train_x, self.train_y,
                                      batch_size=self.batchsize,
                                      epochs=self.epochs,
@@ -213,7 +214,7 @@ class DistributedGeneralManager(GeneralManager):
                                      callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
                                                                 monitor='val_loss', verbose=self.verbose,
                                                                 save_best_only=True),
-                                                EarlyStopping(monitor='val_loss', patience=5, verbose=self.verbose)],
+                                                EarlyStopping(monitor='val_loss', patience=self.fit_kwargs.pop("earlystop_patience", 10), verbose=self.verbose)],
                                      **self.fit_kwargs
                                      )
 

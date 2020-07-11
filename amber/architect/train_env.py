@@ -536,7 +536,7 @@ class MultiManagerEnvironment(EnasTrainEnv):
                         self.controller.store(prob=probs, action=arc_seq, reward=reward,
                                               description=self.data_descriptive_features[[j]])
                         # write the results of this trial into a file
-                        data = [controller_step, [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
+                        data = ["%i-%i"%(j,controller_step), [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
                                 reward]
                         if self.squeezed_action:
                             data.extend(arc_seq)
@@ -632,7 +632,8 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                     devices = "NoAttribute"
                 sys.stderr.write("PID %i: %i/%i run; devices=%s\n" % (pid, i, len(args), devices))
                 reward, loss_and_metrics = args[i]['manager'].get_rewards(
-                    trial=args[i]['trial'], model_arc=args[i]['model_arc'], nsteps=args[i]['nsteps'])
+                    trial=args[i]['trial'], model_arc=args[i]['model_arc'], nsteps=args[i]['nsteps']
+                    )
             except Exception as e:
                 raise Exception("child pid %i has exception %s" % (pid, e))
             res.append({'reward': reward, 'loss_and_metrics': loss_and_metrics})
@@ -751,7 +752,7 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                         self.controller.store(prob=probs, action=arc_seq, reward=reward,
                                               description=self.data_descriptive_features[[j]])
                         # write the results of this trial into a file
-                        data = [m, t, [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
+                        data = ["%i-%i"%(m,t), [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
                                 reward]
                         if self.squeezed_action:
                             data.extend(arc_seq)
