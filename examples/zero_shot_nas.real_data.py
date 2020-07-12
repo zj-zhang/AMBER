@@ -389,7 +389,7 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
     mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space, gpus=num_gpus)
 
     # TODO: batch_size here is not effective because it's been set at generator init
-    child_batch_size = 500 * num_gpus
+    child_batch_size = 1000*num_gpus
     manager = GeneralManager(
         train_data=train_data,
         validation_data=val_data,
@@ -548,22 +548,15 @@ def train_nas(arg):
                         'reference_sequence': arg.genome_file,
                         'batch_size': 512 if arg.parallel else 512*len(gpus),
                         'seed': cur_seed,
-                        'shuffle': (x == "train"),
+                        'shuffle': x=='train',
                         'n_examples': n,
                         'pad': 400
                     }
-            #if x == "train" and arg.parallel is True:
-            #    configs[k][x] = BatchedBioIntervalSequence
-            #    configs[k]['train_data_kwargs'] = d
-            #    configs[k]['resample'] = True
-            #else:
-            #    configs[k]["resample"] = (x == "train")
-            #    configs[k][x] = BatchedBioIntervalSequence(**d)
             if arg.parallel is True:
-                configs[k][x] = BatchedBioIntervalSequenceGenerator if x == 'train' else BatchedBioIntervalSequence
-                configs[k][x + '_data_kwargs'] = d
+                configs[k][x] = BatchedBioIntervalSequenceGenerator if x=='train' else BatchedBioIntervalSequence
+                configs[k]['%s_data_kwargs'%x] = d
             else:
-                configs[k][x] = BatchedBioIntervalSequenceGenerator(**d) if x == 'train' else BatchedBioIntervalSequence(**d)
+                configs[k][x] = BatchedBioIntervalSequenceGenerator(**d) if x=='train' else BatchedBioIntervalSequence(**d)
 
         # Build covariates and manager.
         configs[k]["dfeatures"] = np.array(
