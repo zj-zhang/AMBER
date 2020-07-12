@@ -64,7 +64,7 @@ fi
 
 # Copy genome to ram disk.
 echo 'Copying genome to ram disk.'
-cp '/mnt/home/ecofer/ceph/genomes/hg19.fasta_encoded/hg19.encoded.h5' '/dev/shm/'"${SLURM_JOB_ID}"'/hg19.encoded.h5'
+cp './data/zero_shot_chipseq/hg19.encoded.h5' '/dev/shm/'"${SLURM_JOB_ID}"'/hg19.encoded.h5'
 if [ $? != 0 ]; then
     echo 'Failed to copy genome to /dev/shm/'"${SLURM_JOB_ID}"'/hg19.encoded.h5'
     exit 1
@@ -78,8 +78,8 @@ nvidia-smi -l 600 >"${SRC_DIR}"'/slurm-'"${SLURM_JOB_ID}"'.nvidia-smi.out' 2>&1 
 # Run train script.
 /usr/bin/time -v python -u "${SRC_DIR}"'/zero_shot_nas.real_data.py' \
     --analysis 'train' \
-    --wd "${SRC_DIR}"'/outputs/zero_shot_chipseq' \
-    --config-file "${SRC_DIR}"'/data/zero_shot_chipseq/train_feats.config_file.8_random_tfs.tsv' \
+    --wd "${SRC_DIR}"'/outputs/zero_shot_8chipseq' \
+    --config-file "${SRC_DIR}"'/data/zero_shot_chipseq/train_feats.config_file.8_random_feats.tsv' \
     --genome-file '/dev/shm/'"${SLURM_JOB_ID}"'/hg19.encoded.h5' \
     --dfeature-name-file "${SRC_DIR}"'/data/zero_shot_chipseq/dfeatures_ordered_list.txt' \
     --n-test 1 \

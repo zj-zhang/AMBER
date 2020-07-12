@@ -546,7 +546,7 @@ def train_nas(arg):
             d = {
                         'example_file': configs[k][x + "_file"],
                         'reference_sequence': arg.genome_file,
-                        'batch_size': 1000 if arg.parallel else 1000*len(gpus),
+                        'batch_size': 512 if arg.parallel else 512*len(gpus),
                         'seed': cur_seed,
                         'shuffle': x=='train',
                         'n_examples': n,

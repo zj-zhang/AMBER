@@ -67,16 +67,13 @@ class ZeroShotController(GeneralController):
         return onehots, probs
 
     # ovewrite
-    def store(self, prob, action, reward, description, *args, **kwargs):
-        self.buffer.store(prob=prob, action=action, reward=reward, description=description)
+    def store(self, prob, action, reward, description, manager_index, *args, **kwargs):
+        self.buffer.store(prob=prob, action=action, reward=reward, description=description, 
+                manager_index=manager_index)
 
     # overwrite
     def train(self, episode, working_dir):
-        try:
-            self.buffer.finish_path(self.model_space, episode, working_dir)
-        except Exception as e:
-            print("cannot finish path in buffer because: %s" % e)
-            sys.exit(1)
+        self.buffer.finish_path(self.model_space, episode, working_dir)
         aloss = 0
         g_t = 0
 

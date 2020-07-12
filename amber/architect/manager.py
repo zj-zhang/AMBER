@@ -146,7 +146,7 @@ class DistributedGeneralManager(GeneralManager):
     def __init__(self, devices, train_data_kwargs, validate_data_kwargs, *args, **kwargs):
         self.devices = devices
         super().__init__(*args, **kwargs)
-        assert len(self.devices) == 1, "Only supports one GPU device currently"
+        assert devices is None or len(self.devices) == 1, "Only supports one GPU device currently"
         # For keeping & closing file connection at multi-processing
         self.train_data_kwargs = train_data_kwargs or {}
         self.validate_data_kwargs = validate_data_kwargs or {}
@@ -177,8 +177,17 @@ class DistributedGeneralManager(GeneralManager):
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         train_sess = tf.Session(graph=train_graph, config=config)
+        if self.devices is None:
+            from ..utils.gpu_query import get_idle_gpus
+            idle_gpus = get_idle_gpus()
+            target_device = idle_gpus[0] 
+            target_device = "/device:GPU:%i"%target_device
+            self.devices = [target_device]
+            sys.stderr.write("[%s] Auto-assign device: %s"% (pid, target_device) )
+        else:
+            target_device = self.devices[0]
         with train_graph.as_default(), train_sess.as_default():
-            with tf.device(self.devices[0]):
+            with tf.device(target_device):
                 try:
                     K.set_session(train_sess)
                 except RuntimeError: # keras 2.3.1 `set_session` not available for tf2.0
@@ -195,7 +204,6 @@ class DistributedGeneralManager(GeneralManager):
                     self.file_connected = True
                 elapse_time = time.time() - start_time
                 sys.stderr.write("  %.3f sec\n"%elapse_time)
-                
                 model_arc_ = tuple(model_arc)
                 if model_arc_ in self.arc_records:
                     this_reward = self.arc_records[model_arc_]['reward'] 

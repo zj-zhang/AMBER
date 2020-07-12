@@ -534,7 +534,8 @@ class MultiManagerEnvironment(EnasTrainEnv):
                             loss_and_metrics_ep[x] += loss_and_metrics[x]
                         # save the arc_seq and reward
                         self.controller.store(prob=probs, action=arc_seq, reward=reward,
-                                              description=self.data_descriptive_features[[j]])
+                                              description=self.data_descriptive_features[[j]],
+                                              manager_index=j)
                         # write the results of this trial into a file
                         data = ["%i-%i"%(j,controller_step), [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
                                 reward]
@@ -739,10 +740,10 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                         res_list = []
                         for x in pool_args:
                             res_list.append(self._reward_getter(x))
-                
+
                 for m, (store_, res_) in enumerate(zip(store_args, res_list)):  # manager level
                     for t, (store, res) in enumerate(zip(store_, res_)):        # trial level
-                        
+
                         reward, loss_and_metrics = res['reward'], res['loss_and_metrics']
                         probs, arc_seq, description = store['prob'], store['action'], store['description']
                         ep_reward += reward
@@ -750,7 +751,8 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                             loss_and_metrics_ep[x] += loss_and_metrics[x]
                         # save the arc_seq and reward
                         self.controller.store(prob=probs, action=arc_seq, reward=reward,
-                                              description=self.data_descriptive_features[[j]])
+                                              description=self.data_descriptive_features[[j]],
+                                              manager_index=m)
                         # write the results of this trial into a file
                         data = ["%i-%i"%(m,t), [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
                                 reward]
