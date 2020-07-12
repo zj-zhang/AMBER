@@ -456,8 +456,8 @@ def train_nas(arg):
                 dfeature_names.append(line)
     wd = arg.wd
     verbose = 1
-    model_space = get_model_space_common()
-    #model_space = get_model_space_with_long_model_and_dilation()
+    #model_space = get_model_space_common()
+    model_space = get_model_space_with_long_model_and_dilation()
     try:
         session = tf.Session()
     except AttributeError:
