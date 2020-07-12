@@ -8,8 +8,19 @@ associated labels.
 #import keras
 import tensorflow as tf
 import numpy
-import threading
+#import threading
 from .sequences import EncodedHDF5Genome
+
+class MockLock:
+    def __enter__(self):
+        return None
+    def __exit__(self, *args):
+        pass
+
+class threading:
+    @classmethod
+    def Lock(cls):
+        return MockLock()
 
 
 class BioIntervalSource(object):
@@ -499,8 +510,6 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
                 self._refresh_index()
         x = list()
         y = list()
-        #for i in range(self.batch_size):
-        #    cur_x, cur_y = self._load_unshuffled(self.index[item + i])
         for i in range(item*self.batch_size, (item+1)*self.batch_size):
             cur_x, cur_y = self._load_unshuffled(self.index[i])
             x.append(cur_x)
@@ -526,7 +535,7 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
 
 
 class BatchedBioIntervalSequenceGenerator(BatchedBioIntervalSequence):
-    """This class modifies on top of BatchedBioIntervalSequence by performing the 
+    """This class modifies on top of BatchedBioIntervalSequence by performing the
     generator loop infinitely
     """
     def __init__(self, *args, **kwargs):
@@ -534,6 +543,11 @@ class BatchedBioIntervalSequenceGenerator(BatchedBioIntervalSequence):
         self.step = 0
 
     def __getitem__(self, item):
+        with self._lock: # Locked checking of initialization. This definitely will slow things.
+            if self._initialized is False: # Have to call so index can be right size.
+                self._lazy_init()
+            if self._index_initialized is False:
+                self._refresh_index()
         x = list()
         y = list()
         self.step += 1

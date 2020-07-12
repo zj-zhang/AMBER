@@ -361,10 +361,10 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
     mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space, gpus=num_gpus)
 
     # TODO: batch_size here is not effective because it's been set at generator init
-    child_batch_size = 500*num_gpus
+    child_batch_size = 500 * num_gpus
     manager = GeneralManager(
         train_data=train_data,
-        validation_data=unpack_data(val_data, unroll_generator=True),
+        validation_data=val_data,
         epochs=10,
         child_batchsize=child_batch_size,
         reward_fn=reward_fn,
@@ -375,7 +375,7 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
         verbose=verbose,
         save_full_model=True,
         model_space=model_space,
-        fit_kwargs={'steps_per_epoch': 15} #, 'workers':8, 'max_queue_size':100, 'use_multiprocessing': True}
+        fit_kwargs={'steps_per_epoch': 15}
     )
     return manager
 
@@ -494,7 +494,6 @@ def train_nas(arg):
     config_keys = list()
     seed_generator = np.random.RandomState(seed=1337)
     for i, k in enumerate(configs.keys()):
-        if i > 1: break
         # Build datasets for train/test/validate splits.
         for x in ["train", "validate"]:
             if arg.lockstep_sampling is False and x == "train":
@@ -513,7 +512,7 @@ def train_nas(arg):
             d = {
                         'example_file': configs[k][x + "_file"],
                         'reference_sequence': arg.genome_file,
-                        'batch_size': 500 if arg.parallel else (500 * len(gpus))
+                        'batch_size': 500 if arg.parallel else (500 * len(gpus)),
                         'seed': cur_seed,
                         'shuffle': (x == "train"),
                         'n_examples': n,
