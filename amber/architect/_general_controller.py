@@ -194,8 +194,9 @@ class GeneralController(BaseController):
                 for layer_id in range(self.num_layers):
                     if self.share_embedding:
                         if layer_id not in self.share_embedding:
-                            self.w_soft["start"].append(tf.get_variable(
-                                "w_start", [self.lstm_size, self.num_choices_per_layer[layer_id]]))
+                            with tf.variable_scope("layer_{}".format(layer_id)):
+                                self.w_soft["start"].append(tf.get_variable(
+                                    "w_start", [self.lstm_size, self.num_choices_per_layer[layer_id]]))
                         else:
                             shared_id = self.share_embedding[layer_id]
                             assert shared_id < layer_id, \

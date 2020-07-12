@@ -286,49 +286,88 @@ class MultiManagerBuffer:
         self.reward_buffer = []
 
         # long_term buffer
-        self.lt_action = []     # action
-        self.lt_prob = []     # prob
-        self.lt_adv = []    # advantage
-        self.lt_reward = []    # lt buffer for non discounted reward
+        self.lt_action = []         # action
+        self.lt_prob = []           # prob
+        self.lt_adv = []            # advantage
+        self.lt_reward = []         # lt buffer for non discounted reward
         self.lt_reward_mean = []    # reward mean buffer
         # unique to this class
         self.description_buffer = []   # short-term descriptive feature buffer
         self.lt_desc_buffer = []       # long-term descriptive feature buffer
+        self.manager_index_buffer = []
+        self.lt_manager_idx_buffer = []
 
-    def store(self, prob, action, reward, description):
+    def store(self, prob, action, reward, description, manager_index):
+        """
+        Parameters
+        ----------
+        prob : list
+            A list of np.array of different sizes corresponding to each layer
+        action : list
+            A list of np.array of one-hot actions
+        reward : float
+            Float number of reward to be maximized
+        description : 1D-array like
+            A vector of data descriptor
+        manager_index: int
+            Integer number showing the index for which the reward is coming from
+        """
         self.prob_buffer.append(prob)
         self.action_buffer.append(action)
         self.reward_buffer.append(reward)
         self.description_buffer.append(description)
+        self.manager_index_buffer.append(manager_index)
 
     def reset_short_term(self):
         self.prob_buffer = []
         self.action_buffer = []
         self.reward_buffer = []
         self.description_buffer = []
+        self.manager_index_buffer = []
 
     def dump_buffer(self, model_space, global_ep, working_dir):
         with open(os.path.join(working_dir, 'buffers.txt'), mode='a+') as f:
-            action_onehot = self.action_buffer[-1]
-            if self.is_squeeze_dim:
-                action_readable_str = ','.join([str(x) for x in parse_action_str_squeezed(action_onehot, model_space)])
-            else:
-                action_readable_str = ','.join([str(x) for x in parse_action_str(action_onehot, model_space)])
-            f.write(
-                "-" * 80 + "\n" +
-                "Episode:%d\tReward:%.4f\tR_bias:%.4f\tAdvantage:%s\n" %
-                (
-                    global_ep,
-                    self.reward_buffer[-1],
-                    self.r_bias,
-                    np.round(self.lt_adv[-1].flatten(), 2),
-                ) +
-                "\tAction:%s\n\tProb:%s\n" % (
-                    action_readable_str,
-                    ' || '.join([str(np.round(x, 2)).replace("\n ", ";") for x in self.prob_buffer[-1]])
+            f.write("-" * 80 + "\n")
+            # write out one example for each manager
+            for j in self.r_bias:
+                this = np.where(np.array(self.manager_index_buffer)==j)[0]
+                max_idx = np.argmax(np.array(self.reward_buffer)[this]).tolist()
+                action_onehot = self.action_buffer[this[max_idx]]
+                if self.is_squeeze_dim:
+                    action_readable_str = ','.join([str(x) for x in parse_action_str_squeezed(action_onehot, model_space)])
+                else:
+                    action_readable_str = ','.join([str(x) for x in parse_action_str(action_onehot, model_space)])
+                f.write(
+                    "Episode:%d\tManager:%i\tReward:%.4f\tR_bias:%.4f\tAdvantage:%s\n" %
+                    (
+                        global_ep,
+                        j,
+                        self.reward_buffer[this[max_idx]],
+                        self.r_bias[j],
+                        np.round(self.lt_adv[-1][this].flatten(), 2),
+                    ) +
+                    "\tAction:%s\n\tProb:%s\n" % (
+                        action_readable_str,
+                        ' || '.join([str(np.round(x, 2)).replace("\n ", ";") for x in self.prob_buffer[this[max_idx]]])
+                    )
                 )
-            )
             print("Saved buffers to file `buffers.txt` !")
+
+    def stratified_reward_mean(self):
+        """
+        Returns
+        ----------
+        dict
+            for each reward (key), the average reward (value) computed in current short-term
+            buffer
+        """
+        stratified_mean = {}
+        # Assumes manager_index is starting from 0
+        for idx in range(0, max(self.manager_index_buffer)+1):
+            this = np.where(np.array(self.manager_index_buffer)==idx)[0]
+            r_mean = np.mean(np.array(self.reward_buffer)[this])
+            stratified_mean[idx] = r_mean
+        return stratified_mean
 
     def finish_path(self, model_space, global_ep, working_dir, *args, **kwargs):
         old_prob = [np.concatenate(p, axis=0) for p in zip(*self.prob_buffer)]
@@ -339,14 +378,21 @@ class MultiManagerBuffer:
 
         reward = np.array(self.reward_buffer)
         if not self.lt_reward_mean:
-            self.r_bias = reward.mean()
+            self.r_bias = self.stratified_reward_mean()
         else:
-            self.r_bias = self.r_bias * self.ewa_beta + (1. - self.ewa_beta) * self.lt_reward_mean[-1]
+            self.r_bias = {
+                    j: self.r_bias[j] * self.ewa_beta +
+                       self.lt_reward_mean[-1][j] * (1 - self.ewa_beta)
+                            for j in self.r_bias
+            }
 
+        # unroll the r_bias to fill in corresponding locations in short-term buffer
+        expanded_r_bias = np.array([ self.r_bias[j] for j in self.manager_index_buffer  ])
+        assert expanded_r_bias.shape == reward.shape
         if self.rescale_advantage_by_reward:
-            ad = (reward - self.r_bias) / np.abs(self.r_bias)
+            ad = (reward - expanded_r_bias) / np.abs(expanded_r_bias)
         else:
-            ad = (reward - self.r_bias)
+            ad = (reward - expanded_r_bias)
 
         if self.clip_advantage:
             ad = np.clip(ad, -np.abs(self.clip_advantage), np.abs(self.clip_advantage))
@@ -355,7 +401,7 @@ class MultiManagerBuffer:
         self.lt_action.append(action_onehot)
         self.lt_adv.append(ad)
         self.lt_reward.append(reward)
-        self.lt_reward_mean.append(reward.mean())
+        self.lt_reward_mean.append(self.stratified_reward_mean())
 
         self.dump_buffer(model_space=model_space, global_ep=global_ep, working_dir=working_dir)
 
@@ -370,8 +416,10 @@ class MultiManagerBuffer:
 
         description = np.concatenate(self.description_buffer, axis=0)
         self.lt_desc_buffer.append(description)
+        self.lt_manager_idx_buffer.append(np.array(self.manager_index_buffer))
         if len(self.lt_desc_buffer) > self.max_size:
             self.lt_desc_buffer = self.lt_desc_buffer[-self.max_size:]
+            self.lt_manager_idx_buffer = self.lt_manager_idx_buffer[-self.max_size:]
         self.reset_short_term()
 
     def get_data(self, bs, shuffle=True):

@@ -444,6 +444,7 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         self.index = None
         self._index_initialized = False
         self.resample = resample
+        self.total_batches = len(self)
 
     def __len__(self):
         """Number of examples available.
@@ -532,9 +533,9 @@ class BatchedBioIntervalSequenceGenerator(BatchedBioIntervalSequence):
         x = list()
         y = list()
         self.step += 1
-        if self.step == len(self) and self.shuffle:
+        if self.step >= self.total_batches and self.shuffle:
+            #print(self.step)
             self._shuffle()
-            print(self.step)
             self.step = 0
         for i in range(self.step*self.batch_size, (self.step+1)*self.batch_size):
             cur_x, cur_y = self._load_unshuffled(self.index[i])
@@ -545,7 +546,7 @@ class BatchedBioIntervalSequenceGenerator(BatchedBioIntervalSequence):
         return x, y
 
     def _shuffle(self):
-        print("Shuffled")
+        #print("Shuffled")
         self.index = self.random_state.choice(len(self.examples),
                                               len(self.examples),
                                               replace=False)
