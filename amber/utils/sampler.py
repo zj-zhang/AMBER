@@ -8,19 +8,7 @@ associated labels.
 #import keras
 import tensorflow as tf
 import numpy
-#import threading
 from .sequences import EncodedHDF5Genome
-
-class MockLock:
-    def __enter__(self):
-        return None
-    def __exit__(self, *args):
-        pass
-
-class threading:
-    @classmethod
-    def Lock(cls):
-        return MockLock()
 
 
 class BioIntervalSource(object):
@@ -82,7 +70,6 @@ class BioIntervalSource(object):
         self._example_file = example_file
         self._initialized = False
         self.set_pad(pad)
-        self._lock = threading.Lock()
 
         # Get number of examples.
         i = 0
@@ -253,9 +240,8 @@ class BioIntervalSource(object):
         -------
         tuple(numpy.ndarray, numpy.ndarray)
         """
-        with self._lock: # Locked check of initialization.
-            if self._initialized is False:
-                self._lazy_init()
+        if self._initialized is False:
+            self._lazy_init()
         chrom, start, end, strand = self.examples[item]
         x = self.reference_sequence.get_sequence_from_coords(chrom, start - self.left_pad, end + self.right_pad, strand)
         y = self.labels[item]
@@ -458,8 +444,6 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         self.index = None
         self._index_initialized = False
         self.resample = resample
-        self._iter_lock = threading.Lock()
-        self._i = 0
 
     def __len__(self):
         """Number of examples available.
@@ -503,11 +487,10 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
             A tuple consisting of the example and the target label.
 
         """
-        with self._lock: # Locked checking of initialization. This definitely will slow things.
-            if self._initialized is False: # Have to call so index can be right size.
-                self._lazy_init()
-            if self._index_initialized is False:
-                self._refresh_index()
+        if self._initialized is False: # Have to call so index can be right size.
+            self._lazy_init()
+        if self._index_initialized is False:
+            self._refresh_index()
         x = list()
         y = list()
         for i in range(item*self.batch_size, (item+1)*self.batch_size):
@@ -522,10 +505,9 @@ class BatchedBioIntervalSequence(BioIntervalSource, tf.keras.utils.Sequence):
         """
         If applicable, shuffle the examples at the end of an epoch.
         """
-        with self._lock:
-            if self.resample is True:
-                super()._lazy_init()
-            self._refresh_index()
+        if self.resample is True:
+            super()._lazy_init()
+        self._refresh_index()
 
     def close(self):
         """
@@ -543,11 +525,10 @@ class BatchedBioIntervalSequenceGenerator(BatchedBioIntervalSequence):
         self.step = 0
 
     def __getitem__(self, item):
-        with self._lock: # Locked checking of initialization. This definitely will slow things.
-            if self._initialized is False: # Have to call so index can be right size.
-                self._lazy_init()
-            if self._index_initialized is False:
-                self._refresh_index()
+        if self._initialized is False: # Have to call so index can be right size.
+            self._lazy_init()
+        if self._index_initialized is False:
+            self._refresh_index()
         x = list()
         y = list()
         self.step += 1
