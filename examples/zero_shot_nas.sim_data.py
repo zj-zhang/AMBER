@@ -33,10 +33,11 @@ from amber.architect.model_space import get_layer_shortname
 
 from amber.bootstrap.mock_manager import MockManager
 
+import keras.backend as K
 from keras.optimizers import SGD, Adam
 
 
-def get_controller(model_space, session, data_description_len=3, is_enas=True):
+def get_controller(model_space, session, layer_embedding_sharing, data_description_len=3, is_enas=True):
     with tf.device("/cpu:0"):
         controller = ZeroShotController(
             data_description_config={
@@ -46,42 +47,47 @@ def get_controller(model_space, session, data_description_len=3, is_enas=True):
                 },
             model_space=model_space,
             session=session,
-            share_embedding={i:0 for i in range(1, len(model_space))} if is_enas else None,
-            with_skip_connection=is_enas,
-            skip_weight=0.8 if is_enas else None,
+            share_embedding=layer_embedding_sharing,
+            with_skip_connection=False,
+            skip_weight=None,
             skip_target=0.2,
             lstm_size=32,
             lstm_num_layers=1,
             kl_threshold=0.05,
             train_pi_iter=100,
             optim_algo='adam',
-            temperature=1.5,
-            tanh_constant=2,
+            temperature=2,
+            tanh_constant=1.5,
             buffer_type="MultiManager",
             buffer_size=1 if is_enas else 5,
-            batch_size=20 if is_enas else 10,
+            batch_size=10,
             use_ppo_loss=True,
             rescale_advantage_by_reward=False
         )
     return controller
 
 
-def get_model_space_enas(out_filters=16, num_layers=3, num_pool=3):
+def get_model_space_enas(out_filters=16, num_layers=4, num_pool=2):
     state_space = ModelSpace()
     expand_layers = [num_layers//num_pool*i-1 for i in range(num_pool)]
-    for i in range(num_layers):
+    assert num_layers%2 == 0
+    layer_embedding_sharing = {}
+    for i in range(0, num_layers, 2):
         state_space.add_layer(i, [
             State('conv1d', filters=out_filters, kernel_size=8, activation='relu'),
             State('conv1d', filters=out_filters, kernel_size=14, activation='relu'),
             State('conv1d', filters=out_filters, kernel_size=20, activation='relu'),
-            # max/avg pool has underlying 1x1 conv
-            State('maxpool1d', filters=out_filters, pool_size=8, strides=1),
-            State('avgpool1d', filters=out_filters, pool_size=8, strides=1),
-            State('identity', filters=out_filters),
-      ])
+        ])
+        state_space.add_layer(i+1, [
+            State('maxpool1d', filters=out_filters, pool_size=8, strides=8),
+            State('avgpool1d', filters=out_filters, pool_size=8, strides=8)
+        ])
         if i in expand_layers:
             out_filters *= 2
-    return state_space
+        if i>0:
+            layer_embedding_sharing[i] = 0
+            layer_embedding_sharing[i+1] = 1
+    return state_space, layer_embedding_sharing
 
 
 def get_model_space_common():
@@ -110,7 +116,7 @@ def get_model_space_common():
         State('Dense', units=10, activation='relu'),
         State('Identity')
     ])
-    return state_space
+    return state_space, None
 
 
 
@@ -145,13 +151,13 @@ def get_manager_enas(train_data, val_data, controller, model_space, wd, data_des
     output_node = State('dense', units=1, activation='sigmoid')
     model_compile_dict = {
         'loss': 'binary_crossentropy',
-        'optimizer': 'adam',
+        'optimizer': SGD(lr=0.01, momentum=0.9, decay=1e-5),
     }
     session = controller.session
 
     reward_fn = LossAucReward(method='auc')
     
-    child_batch_size = 500
+    child_batch_size = 512
     model_fn = EnasCnnModelBuilder(
         dag_func='EnasConv1DwDataDescrption',
         batch_size=child_batch_size,
@@ -165,9 +171,12 @@ def get_manager_enas(train_data, val_data, controller, model_space, wd, data_des
         model_compile_dict=model_compile_dict,
         controller=controller,
         dag_kwargs={
+            'with_skip_connection': False,
+            'add_conv1_under_pool': False,
             'stem_config':{
-                'flatten_op': 'global_avg_pool',
-                'fc_units': 3
+                'has_stem_conv': False,
+                'flatten_op': 'flatten',
+                'fc_units': 30
                 },
             'name': dag_name,
             'data_description': data_description
@@ -336,13 +345,15 @@ def train_nas(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
     logger = setup_logger(wd, verbose_level=logging.INFO)
     verbose = 2
-    model_space = get_model_space_enas(out_filters=3, num_layers=4, num_pool=2) if arg.mode == 'enas' else \
+    model_space, layer_embedding_sharing = get_model_space_enas(out_filters=16, num_layers=4, num_pool=2) if arg.mode == 'enas' else \
             get_model_space_common()
     try:
         session = tf.Session()
     except:
         session = tf.compat.v1.Session()
-    controller = get_controller(model_space=model_space, session=session, data_description_len=2,
+    K.set_session(session)
+    controller = get_controller(model_space=model_space, session=session, layer_embedding_sharing=layer_embedding_sharing,
+            data_description_len=2,
             is_enas=arg.mode=='enas')
 
     dfeatures = np.array([[1,0], [0,1]])  # one-hot encoding
@@ -384,11 +395,12 @@ def train_nas(arg):
         manager=[manager1, manager2],
         logger=logger,
         max_episode=200,
-        max_step_per_ep=100 if arg.mode=='enas' else 15,
+        max_step_per_ep=50 if arg.mode=='enas' else 15,
         working_dir=wd,
         time_budget="8:00:00",
         with_input_blocks=False,
-        with_skip_connection=(arg.mode=="enas"),
+        with_skip_connection=False,
+        child_warm_up_epochs=5 if arg.mode=='enas' else 0
     )
 
     try:

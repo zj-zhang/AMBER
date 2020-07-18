@@ -355,7 +355,7 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         train_data=train_data,
         validate_data_kwargs=validate_data_kwargs,
         validation_data=val_data,
-        epochs=1000,
+        epochs=100,
         child_batchsize=1000,
         reward_fn=reward_fn,
         model_fn=mb,
@@ -368,7 +368,7 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         fit_kwargs={
             'steps_per_epoch': 50,
             'workers': 3, 'max_queue_size': 50,
-            'earlystop_patience': 20}
+            'earlystop_patience': 10}
     )
     return manager
 

@@ -1007,6 +1007,7 @@ class EnasConv1dDAG:
                  output_node,
                  model_compile_dict,
                  session,
+                 with_skip_connection=True,
                  batch_size=128,
                  keep_prob=0.9,
                  l1_reg=0.0,
@@ -1046,6 +1047,7 @@ class EnasConv1dDAG:
         self.session = session
         self.l1_reg = l1_reg
         self.l2_reg = l2_reg
+        self.with_skip_connection = with_skip_connection
         self.controller = None
         if controller is not None:
             self.set_controller(controller)
@@ -1375,14 +1377,18 @@ class EnasConv1dDAG:
             # input = self.input_node
             input = self.input_ph if input_tensor is None else input_tensor
             layers = []
-            with tf.variable_scope("stem_conv"):
-                stem_kernel_size = self.stem_config.pop('stem_kernel_size', 8)
-                stem_filters = out_filters[0]
-                w = create_weight("w", [stem_kernel_size, 4, stem_filters])
-                x = tf.nn.conv1d(input, w, 1, "SAME", data_format=self.data_format)
-                x = batch_norm1d(x, is_training, data_format=self.data_format)
-                layers.append(x)
-                self.layers.append(x)
+            has_stem_conv = self.stem_config['has_stem_conv'] if 'has_stem_conv' in self.stem_config else True
+            if has_stem_conv:
+                with tf.variable_scope("stem_conv"):
+                    stem_kernel_size = self.stem_config.pop('stem_kernel_size', 8)
+                    stem_filters = out_filters[0]
+                    w = create_weight("w", [stem_kernel_size, 4, stem_filters])
+                    x = tf.nn.conv1d(input, w, 1, "SAME", data_format=self.data_format)
+                    x = batch_norm1d(x, is_training, data_format=self.data_format)
+                    layers.append(x)
+                    self.layers.append(x)
+            else:
+                layers = [input]
 
             start_idx = 0
             for layer_id in range(self.num_layers):
@@ -1398,7 +1404,7 @@ class EnasConv1dDAG:
                     else:
                         layers.append(x)
                     self.layers.append(x)
-                    if layer_id in self.pool_layers:
+                    if (self.with_skip_connection is True) and (layer_id in self.pool_layers):
                         with tf.variable_scope("pool_at_{0}".format(layer_id)):
                             pooled_layers = []
                             for i, layer in enumerate(layers):
@@ -1412,7 +1418,7 @@ class EnasConv1dDAG:
                                             layer, out_filters[layer_id + 1], is_training)
                                 pooled_layers.append(x)
                             layers = pooled_layers
-                start_idx += 1 + layer_id
+                start_idx += 1 + layer_id*int(self.with_skip_connection)
 
             flatten_op = self.stem_config['flatten_op'] if 'flatten_op' in self.stem_config else 'flatten'
             if flatten_op == 'global_avg_pool' or flatten_op == 'gap':
@@ -1505,6 +1511,7 @@ class EnasConv1dDAG:
             raise Exception("cannot understand data format: %s" % self.data_format)
         count = arc_seq[start_idx]
         branches = {}
+        strides = []
         for i in range(len(self.model_space[layer_id])):
             if self.train_fixed_arc and i != count:
                 continue
@@ -1521,12 +1528,14 @@ class EnasConv1dDAG:
                                           layer_attr=self.model_space[layer_id][i].Layer_attributes,
                                           is_training=is_training)
                     branches[tf.equal(count, i)] = y
+                    strides.append(self.model_space[layer_id][i].Layer_attributes['strides'])
                 elif self.model_space[layer_id][i].Layer_type == 'avgpool1d':
                     # print('%i, avgpool1d' % layer_id)
                     y = self._pool_branch(inputs, "avg",
                                           layer_attr=self.model_space[layer_id][i].Layer_attributes,
                                           is_training=is_training)
                     branches[tf.equal(count, i)] = y
+                    strides.append(self.model_space[layer_id][i].Layer_attributes['strides'])
                 elif self.model_space[layer_id][i].Layer_type == 'identity':
                     y = self._identity_branch(inputs)
                     branches[tf.equal(count, i)] = y
@@ -1534,6 +1543,9 @@ class EnasConv1dDAG:
                     raise Exception("Unknown layer: %s" % self.model_space[layer_id][i])
 
         self.branches.append(branches)
+        if len(strides) > 0:
+            assert len(set(strides)) == 1, "If you set strides!=1 (i.e. a reduction layer), then all candidate operations must have the same strides to keep the shape identical; got %s" % strides
+            inp_w = int(np.ceil(inp_w / strides[0]))
         if self.train_fixed_arc:
             ks = list(branches.keys())
             assert len(ks) == 1
@@ -1547,7 +1559,7 @@ class EnasConv1dDAG:
             out.set_shape([None, inp_w, out_filters])
         elif self.data_format == "NCW":
             out.set_shape([None, out_filters, inp_w])
-        if layer_id > 0:
+        if self.with_skip_connection is True and layer_id > 0:
             skip_start = start_idx + 1
             skip = arc_seq[skip_start: skip_start + layer_id]
             with tf.variable_scope("skip"):
