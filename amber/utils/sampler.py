@@ -9,6 +9,7 @@ associated labels.
 import tensorflow as tf
 import numpy
 from .sequences import EncodedHDF5Genome
+import h5py
 
 
 class BioIntervalSource(object):
@@ -468,10 +469,9 @@ class BatchedBioIntervalSequenceGenerator(BatchedBioIntervalSequence):
     def __getitem__(self, item):
         x = list()
         y = list()
-        self.step += 1
-        if self.step >= self.total_batches and self.shuffle:
+        if self.step >= self.total_batches:
             #print(self.step)
-            self._shuffle()
+            if self.shuffle: self._shuffle()
             self.step = 0
         for i in range(self.step*self.batch_size, (self.step+1)*self.batch_size):
             cur_x, cur_y = self._load_unshuffled(self.index[i])
@@ -479,6 +479,7 @@ class BatchedBioIntervalSequenceGenerator(BatchedBioIntervalSequence):
             y.append(cur_y)
         x = numpy.stack(x)
         y = numpy.stack(y)
+        self.step += 1
         return x, y
 
     def _shuffle(self):
@@ -489,3 +490,44 @@ class BatchedBioIntervalSequenceGenerator(BatchedBioIntervalSequence):
 
     def on_epoch_end(self):
         pass
+
+
+class BatchedHDF5Generator(tf.keras.utils.Sequence):
+    def __init__(self, hdf5_fp, batch_size, shuffle=True, seed=None, x_selector=None, y_selector=None):
+        super(BatchedHDF5Generator, self).__init__()
+        self.hdf5_store = h5py.File(hdf5_fp, "r")
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.seed = seed
+        self.random_state = numpy.random.RandomState(seed=self.seed)
+        self.x_selector = x_selector
+        self.y_selector = y_selector
+        self.n_total_samp = self.hdf5_store['x'].shape[0]
+        self.n_total_batch = len(self)
+        self.index = numpy.arange(self.n_total_samp)
+        self.step = 0
+
+    def __len__(self):
+        return self.n_total_samp // self.batch_size
+
+    def __getitem__(self, index):
+        if self.step >= self.n_total_batch:
+            if self.shuffle: self._shuffle()
+            self.step = 0
+        samp_idx = list(self.index[numpy.arange(self.step*self.batch_size, (self.step+1)*self.batch_size)])
+        x_batch = self.hdf5_store['x'][samp_idx]
+        y_batch = self.hdf5_store['y'][samp_idx]
+        if self.x_selector is not None:
+            x_batch = x_batch[:, self.x_selector]
+        if self.y_selector is not None:
+            y_batch = y_batch[:, self.y_selector]
+        self.step += 1
+        return x_batch, y_batch
+
+    def _shuffle(self):
+        self.index = self.random_state.choice(self.n_total_samp,
+                                              self.n_total_samp,
+                                              replace=False)
+
+    def close(self):
+        self.hdf5_store.close()

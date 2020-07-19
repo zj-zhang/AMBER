@@ -56,8 +56,8 @@ def get_controller(model_space, session, layer_embedding_sharing, data_descripti
             kl_threshold=0.05,
             train_pi_iter=100,
             optim_algo='adam',
-            temperature=2,
-            tanh_constant=1.5,
+            temperature=1.5,
+            tanh_constant=2,
             buffer_type="MultiManager",
             buffer_size=1 if is_enas else 5,
             batch_size=10,
@@ -311,7 +311,7 @@ def convert_to_dataframe(res, model_space, data_names):
 
 def reload_trained_controller(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
-    model_space = get_model_space_common() if arg.mode!="enas" else \
+    model_space, layer_embedding_sharing = get_model_space_common() if arg.mode!="enas" else \
             get_model_space_enas(out_filters=4, num_layers=3, num_pool=3) 
     try:
         session = tf.Session()
@@ -319,6 +319,7 @@ def reload_trained_controller(arg):
         session = tf.compat.v1.Session()
 
     controller = get_controller(model_space=model_space, session=session, data_description_len=2,
+            layer_embedding_sharing=layer_embedding_sharing,
             is_enas=arg.mode=='enas')
     controller.load_weights(os.path.join(wd, "controller_weights.h5"))
 
@@ -395,12 +396,12 @@ def train_nas(arg):
         manager=[manager1, manager2],
         logger=logger,
         max_episode=200,
-        max_step_per_ep=50 if arg.mode=='enas' else 15,
+        max_step_per_ep=15,
         working_dir=wd,
         time_budget="8:00:00",
         with_input_blocks=False,
         with_skip_connection=False,
-        child_warm_up_epochs=5 if arg.mode=='enas' else 0
+        child_warm_up_epochs=2 if arg.mode=='enas' else 0
     )
 
     try:

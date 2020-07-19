@@ -747,6 +747,7 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                         reward, loss_and_metrics = res['reward'], res['loss_and_metrics']
                         probs, arc_seq, description = store['prob'], store['action'], store['description']
                         ep_reward += reward
+                        trial = pool_args[m][t]['trial']
                         for x in loss_and_metrics.keys():
                             loss_and_metrics_ep[x] += loss_and_metrics[x]
                         # save the arc_seq and reward
@@ -754,7 +755,7 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                                               description=self.data_descriptive_features[[j]],
                                               manager_index=m)
                         # write the results of this trial into a file
-                        data = ["%i-%i"%(m,t), [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
+                        data = ["%i-%i"%(m,trial), [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],
                                 reward]
                         if self.squeezed_action:
                             data.extend(arc_seq)

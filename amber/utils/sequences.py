@@ -495,3 +495,4 @@ class EncodedHDF5Genome(EncodedGenome):
         Close the file connection to HDF5
         """
         self.data.close()
+

@@ -267,14 +267,14 @@ class ReplayBuffer(Buffer):
 
 class MultiManagerBuffer:
     def __init__(self, max_size,
-                 ewa_beta=0.95,
+                 ewa_beta=None,
                  is_squeeze_dim=False,
                  rescale_advantage_by_reward=False,
                  clip_advantage=10.,
                  **kwargs
                  ):
         self.max_size = max_size
-        self.ewa_beta = ewa_beta
+        self.ewa_beta = ewa_beta or float(1/max_size)
         self.is_squeeze_dim = is_squeeze_dim
         self.rescale_advantage_by_reward = rescale_advantage_by_reward
         self.clip_advantage = clip_advantage

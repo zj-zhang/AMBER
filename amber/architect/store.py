@@ -50,7 +50,7 @@ def store_with_model_plot(
                   save_full_model=save_full_model
                   )
     from tensorflow.keras.utils import plot_model
-    plot_model(model, to_file=os.path.join(par_dir, "model_arc.png"))
+    plot_model(model, to_file=os.path.join(par_dir, "model_arc.png"), show_shapes=True, show_layer_names=True)
 
 
 def store_with_hessian(
