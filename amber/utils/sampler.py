@@ -493,28 +493,39 @@ class BatchedBioIntervalSequenceGenerator(BatchedBioIntervalSequence):
 
 
 class BatchedHDF5Generator(tf.keras.utils.Sequence):
-    def __init__(self, hdf5_fp, batch_size, shuffle=True, seed=None, x_selector=None, y_selector=None):
+    def __init__(self, hdf5_fp, batch_size, shuffle=True, in_memory=False, seed=None, x_selector=None, y_selector=None):
         super(BatchedHDF5Generator, self).__init__()
-        self.hdf5_store = h5py.File(hdf5_fp, "r")
+        self.in_memory = in_memory
+        if self.in_memory is True:
+            with h5py.File(hdf5_fp, "r") as f:
+                self.h5py_store = (f['x'][:], f['y'][:])
+        else:
+            self.hdf5_store = h5py.File(hdf5_fp, "r")
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.seed = seed
         self.random_state = numpy.random.RandomState(seed=self.seed)
         self.x_selector = x_selector
         self.y_selector = y_selector
-        self.n_total_samp = self.hdf5_store['x'].shape[0]
+        self.n_total_samp = (self.hdf5_store['x'].shape[0] // self.batch_size)*self.batch_size
+        #self.n_total_samp = self.hdf5_store['x'].shape[0]
         self.n_total_batch = len(self)
-        self.index = numpy.arange(self.n_total_samp)
+        # Method 2: only shuffle batch order, not batch composition, allowing chunk storage in hdf5
+        self.index = numpy.arange(self.n_total_samp).reshape((self.n_total_batch, -1))
+        # Method 1: column-wise shuffle 
+        #self.index = numpy.arange(self.n_total_samp).reshape((-1, self.n_total_batch)).T
+        if self.shuffle is True:
+            self._shuffle()
         self.step = 0
 
     def __len__(self):
-        return self.n_total_samp // self.batch_size
+        return int(numpy.ceil(self.n_total_samp / self.batch_size))
 
     def __getitem__(self, index):
         if self.step >= self.n_total_batch:
             if self.shuffle: self._shuffle()
             self.step = 0
-        samp_idx = list(self.index[numpy.arange(self.step*self.batch_size, (self.step+1)*self.batch_size)])
+        samp_idx = self.index[self.step].tolist()
         x_batch = self.hdf5_store['x'][samp_idx]
         y_batch = self.hdf5_store['y'][samp_idx]
         if self.x_selector is not None:
@@ -525,9 +536,13 @@ class BatchedHDF5Generator(tf.keras.utils.Sequence):
         return x_batch, y_batch
 
     def _shuffle(self):
-        self.index = self.random_state.choice(self.n_total_samp,
-                                              self.n_total_samp,
-                                              replace=False)
+        # for method 1
+        #_ = numpy.apply_along_axis(
+        #        self.random_state.shuffle,
+        #        0,
+        #        self.index)
+        _ = self.random_state.shuffle(self.index)
 
     def close(self):
-        self.hdf5_store.close()
+        if self.in_memory is False:
+            self.hdf5_store.close()

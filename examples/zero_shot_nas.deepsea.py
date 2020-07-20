@@ -307,13 +307,6 @@ def train_nas(arg):
             session=session,
             data_description_len=4,
             layer_embedding_sharing=layer_embedding_sharing)
-    # Re-load previously saved weights, if specified
-    if arg.resume:
-        try:
-            controller.load_weights(os.path.join(wd, "controller_weights.h5"))
-            print("loaded existing weights")
-        except Exception as e:
-            print("cannot load controller weights because of %s"%e)
     # Load in datasets and configurations for them.
     if arg.config_file.endswith("tsv"):
         sep = "\t"
@@ -388,7 +381,8 @@ def train_nas(arg):
                time_budget="150:00:00",
                with_input_blocks=False,
                with_skip_connection=False,
-               save_controller_every=1
+               save_controller_every=1,
+               resume_prev_run=arg.resume
            )
 
     if arg.parallel is True:

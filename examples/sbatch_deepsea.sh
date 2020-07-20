@@ -73,9 +73,6 @@ else
     echo 'Finished copying hdf5.'
 fi
 
-# Run GPU logging.
-nvidia-smi -l 600 >"${SRC_DIR}"'/slurm-'"${SLURM_JOB_ID}"'.nvidia-smi.out' 2>&1  &
-
 # Run train script.
 /usr/bin/time -v python -u "${SRC_DIR}"'/zero_shot_nas.deepsea.py' \
     --analysis 'train' \
@@ -84,7 +81,8 @@ nvidia-smi -l 600 >"${SRC_DIR}"'/slurm-'"${SLURM_JOB_ID}"'.nvidia-smi.out' 2>&1 
     --train-file '/dev/shm/'"${SLURM_JOB_ID}"'/train.h5' \
     --val-file '/dev/shm/'"${SLURM_JOB_ID}"'/val.h5' \
     --dfeature-name-file "${SRC_DIR}"'/data/zero_shot_deepsea/dfeatures_ordered_list.txt' \
-    --parallel 
+    --parallel  \
+    --resume
 echo $?
 
 # Deactivate conda.

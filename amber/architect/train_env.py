@@ -93,10 +93,6 @@ class ControllerTrainEnvironment:
             warnings.warn("DEPRECATED Exception in ControllerTrainEnv: %s" % e, stacklevel=2)
             self.last_actionState_size = 1
 
-        if resume_prev_run:
-            self.restore()
-        else:
-            self.clean()
         self.resume_prev_run = resume_prev_run
         self.logger = logger if logger else setup_logger(working_dir)
         if issubclass(type(manager), BaseNetworkManager):
@@ -105,7 +101,11 @@ class ControllerTrainEnvironment:
         else:
             warnings.warn("ControllerTrainEnvironment: input manager is not a subclass of BaseNetworkManager; "
                           "make sure this is intended", stacklevel=2)
-    
+        if resume_prev_run:
+            self.restore()
+        else:
+            self.clean()
+
     def __str__(self):
         s = 'ControllerTrainEnv for %i max steps, %i child mod. each step' % (self.max_episode, self.max_step_per_ep)
         return s
@@ -797,3 +797,13 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
         self.logger.debug("Total Reward : %s" % self.total_reward)
         f.close()
         return action_probs_record, loss_and_metrics_list
+
+    def restore(self):
+        self.controller.load_weights(os.path.join(self.working_dir, "controller_weights.h5"))
+        self.logger.info("Loaded existing weights")
+        finished_records = 0
+        with open(os.path.join(self.working_dir, "train_history.csv"), "r") as f:
+            for _ in f:
+                finished_records += 1
+        self.start_ep = finished_records // (len(self.manager)*self.max_step_per_ep)
+        self.logger.info("Loaded existing history; starting from ep %i"%self.start_ep)
