@@ -52,13 +52,13 @@ def get_controller(model_space, session, data_description_len=3, layer_embedding
             with_skip_connection=False,
             skip_weight=None,
             skip_target=0.2,
-            lstm_size=64,
-            lstm_num_layers=1,
+            lstm_size=128,
+            lstm_num_layers=2,
             kl_threshold=0.01,
             train_pi_iter=100,
             optim_algo='adam',
-            temperature=2.,
-            tanh_constant=1.5,
+            temperature=1.5,
+            tanh_constant=2,
             buffer_type="MultiManager",
             buffer_size=5,
             batch_size=10,
@@ -259,34 +259,31 @@ def convert_to_dataframe(res, model_space, data_names):
 
 def reload_trained_controller(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
-    model_space = get_model_space_with_long_model_and_dilation()
-    try:
-        session = tf.Session()
-    except AttributeError:
-        session = tf.compat.v1.Session()
-    controller = get_controller(model_space=model_space, session=session, data_description_len=2)
-    controller.load_weights(os.path.join(wd, "controller_weights.h5"))
-
-    dfeatures = np.array([[1,0], [0,1]])  # one-hot encoding
+    configs, config_keys, controller, model_space = read_configs(arg)
+    dfeatures = np.stack([configs[k]["dfeatures"] for k in config_keys])
     res = get_samples_controller(dfeatures, controller, model_space, T=1000)
    
     import seaborn as sns
     import matplotlib.pyplot as plt
-    df = convert_to_dataframe(res, model_space, data_names=['MYC_known10', 'CTCF_known1'])
+    df = convert_to_dataframe(res, model_space, data_names=[configs[k]['feat_name'] for k in config_keys])
 
     for i in range(len(model_space)):
         sub_df = df.loc[ (df.layer==i) ]
         plt.clf()
-        plt.tight_layout()
-        ax = sns.boxplot(x="operation", y="prob",
-            hue="description", palette=["m", "g"],
-            data=sub_df)
+        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(10,5))
+        sns.boxplot(x="operation", y="prob",
+            hue="description",
+            data=sub_df,
+            ax=ax
+            )
         ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+        plt.legend(bbox_to_anchor=(1.05, 1.0), loc='upper left')
+        plt.tight_layout()
         plt.savefig(os.path.join(wd, "layer_%i.png"%i), bbox_inches="tight")
     return res
 
 
-def train_nas(arg):
+def read_configs(arg):
     dfeature_names = list()
     with open(arg.dfeature_name_file, "r") as read_file:
         for line in read_file:
@@ -305,7 +302,7 @@ def train_nas(arg):
     controller = get_controller(
             model_space=model_space,
             session=session,
-            data_description_len=4,
+            data_description_len=len(dfeature_names),
             layer_embedding_sharing=layer_embedding_sharing)
     # Load in datasets and configurations for them.
     if arg.config_file.endswith("tsv"):
@@ -367,9 +364,15 @@ def train_nas(arg):
             **tmp
             )
         config_keys.append(k)
+    return configs, config_keys, controller, model_space
 
+
+
+def train_nas(arg):
+    wd=arg.wd
     logger = setup_logger(wd, verbose_level=logging.INFO)
 
+    configs, config_keys, controller, model_space = read_configs(arg)
     # Setup env kwargs.
     tmp = dict(data_descriptive_features=np.stack([configs[k]["dfeatures"] for k in config_keys]),
                controller=controller,
