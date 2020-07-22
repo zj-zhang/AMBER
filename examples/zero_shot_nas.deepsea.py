@@ -372,6 +372,7 @@ def train_nas(arg):
     wd=arg.wd
     logger = setup_logger(wd, verbose_level=logging.INFO)
 
+    gpus = get_available_gpus()
     configs, config_keys, controller, model_space = read_configs(arg)
     # Setup env kwargs.
     tmp = dict(data_descriptive_features=np.stack([configs[k]["dfeatures"] for k in config_keys]),

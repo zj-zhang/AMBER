@@ -2,7 +2,7 @@
 #SBATCH --time=7-0:00:00
 #SBATCH --gres=gpu:v100-32gb:4
 #SBATCH --partition=gpu
-#SBATCH --mem 160g
+#SBATCH --mem 128g
 #SBATCH -c 32
 
 echo 'Just plain run.'
@@ -81,8 +81,8 @@ fi
     --train-file '/dev/shm/'"${SLURM_JOB_ID}"'/train.h5' \
     --val-file '/dev/shm/'"${SLURM_JOB_ID}"'/val.h5' \
     --dfeature-name-file "${SRC_DIR}"'/data/zero_shot_deepsea/dfeatures_ordered_list.txt' \
-    --parallel  \
-    --resume
+    --parallel  #\
+#    --resume
 echo $?
 
 # Deactivate conda.
