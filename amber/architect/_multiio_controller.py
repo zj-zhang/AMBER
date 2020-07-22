@@ -546,7 +546,8 @@ class MultiIOController(MultiInputController):
     # override
     def _build_sampler(self):
         super()._build_sampler()
-        layer_hs = [self.sample_hidden_states[i][-1] for i in range(1, self.num_layers * 3, 3)]
+        step_size = 1 + int(self.with_input_blocks) + int(self.with_skip_connection)
+        layer_hs = [self.sample_hidden_states[i][-1] for i in range(0, self.num_layers*step_size-1, step_size)]
         layer_hs = tf.concat(layer_hs, axis=0)
         output_probs = []
         output_onehot = []
@@ -587,8 +588,8 @@ class MultiIOController(MultiInputController):
                            for i in range(self.total_arc_len, self.total_arc_len + output_arc_len)]
         self.total_arc_len += output_arc_len
 
-        
-        layer_hs = [self.train_hidden_states[i][-1] for i in range(1, self.num_layers * 3, 3)]
+        step_size = 1 + int(self.with_input_blocks) + int(self.with_skip_connection) 
+        layer_hs = [self.train_hidden_states[i][-1] for i in range(0, self.num_layers*step_size-1, step_size)]
         layer_hs = tf.transpose(tf.stack(layer_hs), [1, 0, 2])  # shape: batch, num_layers, lstm_size
         output_probs = []
         output_log_probs = []

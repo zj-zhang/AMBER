@@ -212,6 +212,8 @@ class EnasAnnModelBuilder(DAGModelBuilder):
         self.dag = self.dag_func(model_space=self.model_space,
                                  input_node=self.inputs_op,
                                  output_node=self.output_op,
+                                 with_input_blocks=self.with_input_blocks,
+                                 with_skip_connection=self.with_skip_connection,
                                  with_output_blocks=self.with_output_blocks,
                                  session=self.session,
                                  model_compile_dict=self.model_compile_dict,

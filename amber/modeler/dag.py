@@ -533,8 +533,8 @@ class EnasAnnDAG:
             with_input_blocks:
             name:
         """
-        assert with_skip_connection == with_input_blocks == True, \
-            "EnasAnnDAG must have with_input_blocks and with_skip_connection"
+        #assert with_skip_connection == with_input_blocks == True, \
+        #    "EnasAnnDAG must have with_input_blocks and with_skip_connection"
         self.model_space = model_space
         if not type(input_node) in (tuple, list):
             self.input_node = [input_node]
@@ -775,16 +775,20 @@ class EnasAnnDAG:
             start_idx += 1
 
             # input masking for with_input_blocks
-            inp_mask = arc_seq[start_idx: start_idx + self.num_input_blocks]
-            inp_mask = tf.boolean_mask(self._input_block_map, tf.squeeze(inp_mask))
-            new_range = tf.range(0, limit=self._feature_max_size, dtype=tf.int32)
-            inp_mask = tf.map_fn(lambda x: tf.cast(tf.logical_and(x[0] <= new_range, new_range < x[1]), dtype=tf.int32),
-                                 inp_mask)
-            inp_mask = tf.reduce_sum(inp_mask, axis=0)
-            start_idx += self.num_input_blocks * self.with_input_blocks
+            if self.with_input_blocks:
+                inp_mask = arc_seq[start_idx: start_idx + self.num_input_blocks]
+                inp_mask = tf.boolean_mask(self._input_block_map, tf.squeeze(inp_mask))
+                new_range = tf.range(0, limit=self._feature_max_size, dtype=tf.int32)
+                inp_mask = tf.map_fn(lambda x: tf.cast(tf.logical_and(x[0] <= new_range, new_range < x[1]), dtype=tf.int32),
+                                     inp_mask)
+                inp_mask = tf.reduce_sum(inp_mask, axis=0)
+                start_idx += self.num_input_blocks * self.with_input_blocks
+            else:
+                inp_mask = tf.ones(shape=(self._feature_max_size), dtype=tf.int32) if self.with_input_blocks else \
+                           tf.zeros(shape=(self._feature_max_size), dtype=tf.int32)
 
             # hidden layer masking for with_skip_connection
-            if layer_id > 0:
+            if layer_id > 0 and self.with_skip_connection:
                 layer_mask = arc_seq[
                              start_idx: start_idx + layer_id]
                 layer_mask = tf.boolean_mask(self._skip_conn_map[layer_id], layer_mask)
@@ -796,8 +800,12 @@ class EnasAnnDAG:
                 row_mask = tf.concat([inp_mask, layer_mask], axis=0)
                 start_idx += layer_id * self.with_skip_connection
             else:
-                row_mask = inp_mask
-
+                if self.with_input_blocks:
+                    row_mask = tf.concat([inp_mask, tf.ones(shape=(self._weight_max_units*layer_id), dtype=tf.int32)], axis=0)
+                else:
+                    #nrow = w.shape[0].value
+                    nrow = self._feature_max_size + self._weight_max_units * layer_id
+                    row_mask = tf.ones(shape=(nrow), dtype=tf.int32)
             w_mask = tf.matmul(tf.expand_dims(row_mask, -1), tf.expand_dims(col_mask, 0))
 
             # get the TF layer
