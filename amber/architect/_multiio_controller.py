@@ -87,7 +87,7 @@ class MultiInputController(GeneralController):
 
     def _create_weight(self):
         super()._create_weight()
-        if self.num_input_blocks > 1 and self.with_input_blocks:
+        if self.with_input_blocks:
             with tf.variable_scope("input", initializer=tf.random_uniform_initializer(minval=-0.1, maxval=0.1)):
                 # input_emb: embedding for input blocks, if present
                 self.input_emb = tf.get_variable("inp_emb", [self.num_input_blocks, self.lstm_size])
@@ -145,7 +145,7 @@ class MultiInputController(GeneralController):
             # END BLOCK 1
 
             # BLOCK 2 [optional]: sample input feature blocks
-            if self.num_input_blocks > 1 and self.with_input_blocks:
+            if self.with_input_blocks:
                 next_c, next_h = stack_lstm(inputs, prev_c, prev_h, self.w_lstm)
                 prev_c, prev_h = next_c, next_h
                 hidden_states.append(prev_h)
@@ -335,7 +335,7 @@ class MultiInputController(GeneralController):
             # inputs = tf.nn.embedding_lookup(self.w_emb["start"][branch_id], start)
             inputs = tf.nn.embedding_lookup(self.w_emb["start"][layer_id], start)
 
-            if self.num_input_blocks > 1 and self.with_input_blocks:
+            if self.with_input_blocks:
 
                 next_c, next_h = stack_lstm(inputs, prev_c, prev_h, self.w_lstm)
                 prev_c, prev_h = next_c, next_h
@@ -427,7 +427,7 @@ class MultiInputController(GeneralController):
                         logit = self.tanh_constant * tf.tanh(logit)
 
                     probs_.append(tf.reshape(tf.nn.softmax(logit), [batch_size, layer_id, 2]))
-                    if self.num_input_blocks > 1:
+                    if self.with_input_blocks:
                         skip = self.input_arc[(arc_pointer + ops_each_layer + self.num_input_blocks): (
                                 arc_pointer + ops_each_layer + self.num_input_blocks + layer_id)]
                     else:
