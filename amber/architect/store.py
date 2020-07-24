@@ -103,7 +103,11 @@ def store_general(
     os.mkdir(par_dir)
     if save_full_model:
         model.save(os.path.join(working_dir, 'weights', 'trial_%s' % trial, 'full_bestmodel.h5'))
-    plot_training_history(hist, par_dir)
+    try:
+        plot_training_history(hist, par_dir)
+    except:
+        # TODO: this still not working for non-keras models, e.g. EnasAnn/Cnn
+        pass
     if os.path.isfile(os.path.join(working_dir, 'temp_network.h5')):
         shutil.move(os.path.join(working_dir, 'temp_network.h5'), os.path.join(par_dir, 'bestmodel.h5'))
     # TODO: REVAMP THIS. if data is a generator/keras.utils.Sequence
@@ -144,7 +148,7 @@ def write_pred_to_disk(fn, y_pred, y_obs, metadata=None, metrics=None):
         if len(np.unique(y_obs)) < 10:  # is categorical
             str_format = "%i"
         else:
-            str_format = "%.3f'"
+            str_format = "%.3f"
 
         f.write('pred\tobs\tmetadata\n')
         for i in range(len(y_pred)):

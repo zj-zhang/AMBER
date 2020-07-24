@@ -784,28 +784,33 @@ class EnasAnnDAG:
                 inp_mask = tf.reduce_sum(inp_mask, axis=0)
                 start_idx += self.num_input_blocks * self.with_input_blocks
             else:
-                inp_mask = tf.ones(shape=(self._feature_max_size), dtype=tf.int32) if self.with_input_blocks else \
+                # get all inputs if layer_id=0, else mask all
+                inp_mask = tf.ones(shape=(self._feature_max_size), dtype=tf.int32) if layer_id == 0 else \
                            tf.zeros(shape=(self._feature_max_size), dtype=tf.int32)
 
             # hidden layer masking for with_skip_connection
-            if layer_id > 0 and self.with_skip_connection:
-                layer_mask = arc_seq[
-                             start_idx: start_idx + layer_id]
-                layer_mask = tf.boolean_mask(self._skip_conn_map[layer_id], layer_mask)
-                new_range2 = tf.range(0, limit=layer_id * self._weight_max_units, delta=1, dtype=tf.int32)
-                layer_mask = tf.map_fn(
-                    lambda t: tf.cast(tf.logical_and(t[0] <= new_range2, new_range2 < t[1]), dtype=tf.int32),
-                    layer_mask)
-                layer_mask = tf.reduce_sum(layer_mask, axis=0)
-                row_mask = tf.concat([inp_mask, layer_mask], axis=0)
-                start_idx += layer_id * self.with_skip_connection
-            else:
-                if self.with_input_blocks:
-                    row_mask = tf.concat([inp_mask, tf.ones(shape=(self._weight_max_units*layer_id), dtype=tf.int32)], axis=0)
+            if self.with_skip_connection:
+                if layer_id > 0:
+                    layer_mask = arc_seq[
+                                 start_idx: start_idx + layer_id]
+                    layer_mask = tf.boolean_mask(self._skip_conn_map[layer_id], layer_mask)
+                    new_range2 = tf.range(0, limit=layer_id * self._weight_max_units, delta=1, dtype=tf.int32)
+                    layer_mask = tf.map_fn(
+                        lambda t: tf.cast(tf.logical_and(t[0] <= new_range2, new_range2 < t[1]), dtype=tf.int32),
+                        layer_mask)
+                    layer_mask = tf.reduce_sum(layer_mask, axis=0)
+                    start_idx += layer_id * self.with_skip_connection
                 else:
-                    #nrow = w.shape[0].value
-                    nrow = self._feature_max_size + self._weight_max_units * layer_id
-                    row_mask = tf.ones(shape=(nrow), dtype=tf.int32)
+                    layer_mask = []
+                row_mask = tf.concat([inp_mask, layer_mask], axis=0)
+            else:
+                if layer_id > 0:
+                    # keep last/closest layer, mask all others
+                    layer_masks = [tf.zeros(shape=(self._weight_max_units*(layer_id-1)), dtype=tf.int32), tf.ones(shape=(self._weight_max_units), dtype=tf.int32)]
+                else:
+                    layer_masks = []
+
+                row_mask = tf.concat([inp_mask] + layer_masks, axis=0)
             w_mask = tf.matmul(tf.expand_dims(row_mask, -1), tf.expand_dims(col_mask, 0))
 
             # get the TF layer
