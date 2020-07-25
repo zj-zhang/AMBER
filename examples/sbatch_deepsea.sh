@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-#SBATCH --time=7-0:00:00
+#SBATCH --time=3-13:00:00
 #SBATCH --gres=gpu:v100-32gb:4
 #SBATCH --partition=gpu
-#SBATCH --mem 128g
+#SBATCH --mem 96g
 #SBATCH -c 32
 
 echo 'Just plain run.'
@@ -22,7 +22,7 @@ if [ $? != 0 ]; then
 fi
 
 # Start up anaconda.
-conda activate 'amber'
+conda activate 'amber-zh'
 if [ $? != 0 ]; then
     echo 'Failed to activate conda environment.'
     exit 1

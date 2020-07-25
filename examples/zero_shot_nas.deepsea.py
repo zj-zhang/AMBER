@@ -77,21 +77,21 @@ def get_model_space_common():
     param_list = [
             # Block 1:
             [
-                {"filters": 64, "kernel_size": 8},
-                {"filters": 64, "kernel_size": 14},
-                {"filters": 64, "kernel_size": 20}
+                {"filters": 64, "kernel_size": 8, "activation": "relu"},
+                {"filters": 64, "kernel_size": 14, "activation": "relu"},
+                {"filters": 64, "kernel_size": 20, "activation": "relu"}
             ],
             # Block 2:
             [
-                {"filters": 128, "kernel_size": 8},
-                {"filters": 128, "kernel_size": 14},
-                {"filters": 128, "kernel_size": 20}
+                {"filters": 128, "kernel_size": 8, "activation": "relu"},
+                {"filters": 128, "kernel_size": 14, "activation": "relu"},
+                {"filters": 128, "kernel_size": 20, "activation": "relu"}
             ],
             # Block 3:
             [
-                {"filters": 256, "kernel_size": 8},
-                {"filters": 256, "kernel_size": 14},
-                {"filters": 256, "kernel_size": 20}
+                {"filters": 256, "kernel_size": 8, "activation": "relu"},
+                {"filters": 256, "kernel_size": 14, "activation": "relu"},
+                {"filters": 256, "kernel_size": 20, "activation": "relu"}
             ],
         ]
 
