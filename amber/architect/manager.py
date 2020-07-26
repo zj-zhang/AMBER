@@ -209,7 +209,7 @@ class DistributedGeneralManager(GeneralManager):
                     this_reward = self.arc_records[model_arc_]['reward'] 
                     old_trial = self.arc_records[model_arc_]['trial'] 
                     loss_and_metrics = self.arc_records[model_arc_]['loss_and_metrics'] 
-                    sys.stderr.write("[%s][%s] Trial %i: Re-sampled from history %i\n" % (pid, datetime.now().strftime("%H:%M:%S"), old_trial))
+                    sys.stderr.write("[%s][%s] Trial %i: Re-sampled from history %i\n" % (pid, datetime.now().strftime("%H:%M:%S"), trial, old_trial))
                 else:
                     # train the model using Keras methods
                     start_time = time.time()
