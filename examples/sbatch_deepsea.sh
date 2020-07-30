@@ -81,8 +81,8 @@ fi
     --train-file '/dev/shm/'"${SLURM_JOB_ID}"'/train.h5' \
     --val-file '/dev/shm/'"${SLURM_JOB_ID}"'/val.h5' \
     --dfeature-name-file "${SRC_DIR}"'/data/zero_shot_deepsea/dfeatures_ordered_list.txt' \
-    --parallel  #\
-#    --resume
+    --parallel  \
+    --resume
 echo $?
 
 # Deactivate conda.

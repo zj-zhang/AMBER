@@ -271,10 +271,13 @@ class DistributedGeneralManager(GeneralManager):
         # clean up resources and GPU memory
         start_time = time.time()
         sys.stderr.write("[%s] Cleaning up.."%pid)
-        del model
-        del hist
-        del train_sess
-        del train_graph
+        try:
+            del train_sess
+            del train_graph
+            del model
+            del hist
+        except UnboundLocalError:
+            pass
         gc.collect()
         elapse_time = time.time() - start_time
         sys.stderr.write("  %.3f sec\n"%elapse_time)
