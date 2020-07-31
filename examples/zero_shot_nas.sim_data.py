@@ -53,7 +53,6 @@ def get_controller(model_space, session, layer_embedding_sharing, data_descripti
             share_embedding=layer_embedding_sharing,
             with_skip_connection=False,
             skip_weight=None,
-            skip_target=0.2,
             lstm_size=config_dict.pop("lstm_size", 32),
             lstm_num_layers=config_dict.pop("lstm_num_layers", 1),
             kl_threshold=config_dict.pop("kl_threshold", 0.05),
@@ -65,7 +64,8 @@ def get_controller(model_space, session, layer_embedding_sharing, data_descripti
             buffer_size=1 if is_enas else 5,
             batch_size=config_dict.pop("batch_size", 20),
             use_ppo_loss=config_dict.pop("use_ppo_loss", True),
-            rescale_advantage_by_reward=False
+            rescale_advantage_by_reward=False,
+            verbose=False
         )
     return controller
 
@@ -364,8 +364,9 @@ def reload(arg, controller=None):
     return probs, actions
 
 
-def train(arg, controller_config_dict=None, session=None, logger=None):
+def train(arg, config_dict=None, session=None, logger=None):
     wd = arg.wd
+    config_dict = config_dict or {}
     is_enas = arg.mode == "enas"
     if logger is None:
         logger = setup_logger(wd, verbose_level=logging.INFO)
@@ -386,7 +387,7 @@ def train(arg, controller_config_dict=None, session=None, logger=None):
     controller = get_controller(model_space=model_space, session=session, layer_embedding_sharing=layer_embedding_sharing,
             data_description_len=dfeatures.shape[0],
             is_enas=is_enas,
-            config_dict=controller_config_dict or {})
+            config_dict=config_dict)
 
     if arg.mode == 'enas':
         dataset1, dataset2 = read_data()
@@ -425,8 +426,8 @@ def train(arg, controller_config_dict=None, session=None, logger=None):
         controller=controller,
         manager=[manager1, manager2]*manager_replica,
         logger=logger,
-        max_episode=200,
-        max_step_per_ep=15,
+        max_episode=config_dict.pop("max_episode", 200),
+        max_step_per_ep=config_dict.pop("max_step_per_ep", 15),
         working_dir=wd,
         time_budget="8:00:00",
         with_input_blocks=False,
@@ -444,58 +445,65 @@ def train(arg, controller_config_dict=None, session=None, logger=None):
 
 
 def train_and_reload(arg):
-    B = 5
+    B = 20
     par_wd = arg.wd
-    logger = setup_logger(par_wd, verbose_level=logging.INFO)
-    controller_config ={}  # TODO: fill in different configs
+    logger = setup_logger(par_wd, verbose_level=logging.CRITICAL)
+    from zs_controller_configs import configs_all
     gs1, gs2, arch2id = get_bootstrap_gold_standard()
     gs_list = [gs1, gs2]
     model_space, _ = get_model_space_common()
     # performance summary dataframe
-    sum_df = pd.DataFrame(columns=['b', 'manager_index', 'target_mean', 'other_mean', 'target_median', 'other_median', 'target_sd', 'other_sd', 'target_rank_mean', 'other_rank_mean','target_rank_sd', 'other_rank_sd'])
+    sum_df = pd.DataFrame(columns=['c', 'config_str', 'b', 'manager_index', 'target_mean', 'other_mean', 'target_median', 'other_median', 'target_sd', 'other_sd', 'target_rank_mean', 'other_rank_mean','target_rank_sd', 'other_rank_sd'])
+    for c in range(len(configs_all)):
+        configs = dict(configs_all[c])
+        print(configs)
+        for b in range(B):
+            print('-'*20 + str(b) + '-'*20)
+            arg.wd = os.path.join(par_wd, "config_%i"%c, "run_%i"%b)
+            os.makedirs(arg.wd, exist_ok=True)
+            graph = tf.Graph()
+            session = tf.Session(graph=graph)
+            with graph.as_default(), session.as_default():
+                session, controller, manager_list = train(arg,
+                        config_dict=configs,
+                        session=session,
+                        logger=logger)
+                print("-"*20 + "finish training" + "-"*20)
+                probs, actions = reload(arg, controller=controller)
+                print("-"*20 + "finish reloading" + "-"*20)
 
-    for b in range(B):
-        print('-'*20 + str(b) + '-'*20)
-        arg.wd = os.path.join(par_wd, "run_%i"%b)
-        os.makedirs(arg.wd, exist_ok=True)
-        graph = tf.Graph()
-        session = tf.Session(graph=graph)
-        with graph.as_default(), session.as_default():
-            session, controller, manager_list = train(arg, session=session, logger=logger)
-            print("-"*20 + "finish training" + "-"*20)
-            probs, actions = reload(arg, controller=controller)
-            print("-"*20 + "finish reloading" + "-"*20)
+            # get rewards for each manager
+            for i in range(len(manager_list)):
+                reward_arr = np.zeros((len(actions[i]), len(manager_list)))
+                rank_arr = np.zeros((len(actions[i]), len(manager_list)))
+                for j, a in enumerate(actions[i]):
+                    for k, manager in enumerate(manager_list):
+                        reward, loss_and_metrics = manager.get_rewards(-1, a)
+                        reward_arr[j,k] = reward
+                        this_arc = tuple([get_layer_shortname(model_space[l][a[l]]) for l in range(len(a))])
+                        rank_arr[j,k] = gs_list[k].loc[gs_list[k].ID==arch2id[this_arc], 'loss_rank'].values[0]
 
-        # get rewards for each manager
-        for i in range(len(manager_list)):
-            reward_arr = np.zeros((len(actions[i]), len(manager_list)))
-            rank_arr = np.zeros((len(actions[i]), len(manager_list)))
-            for j, a in enumerate(actions[i]):
-                for k, manager in enumerate(manager_list):
-                    reward, loss_and_metrics = manager.get_rewards(-1, a)
-                    reward_arr[j,k] = reward
-                    this_arc = tuple([get_layer_shortname(model_space[l][a[l]]) for l in range(len(a))])
-                    rank_arr[j,k] = gs_list[k].loc[gs_list[k].ID==arch2id[this_arc], 'loss_rank'].values[0]
-
-            sum_df = sum_df.append(
-                    {
-                        'b': int(b),
-                        'manager_index': int(i),
-                        'target_mean': np.mean(reward_arr[:,i], keepdims=False),
-                        'target_median': np.median(reward_arr[:,i], keepdims=False),
-                        'target_sd': np.std(reward_arr[:,i], keepdims=False),
-                        'other_mean': np.mean(reward_arr[:, [x for x in range(reward_arr.shape[1]) if x!=i]], keepdims=False),
-                        'other_median': np.median(reward_arr[:, [x for x in range(reward_arr.shape[1]) if x!=i]], keepdims=False),
-                        'other_sd': np.std(reward_arr[:, [x for x in range(reward_arr.shape[1]) if x!=i]], keepdims=False),
-                        'target_rank_mean': np.mean(rank_arr[:,i], keepdims=False),
-                        'target_rank_sd': np.std(rank_arr[:,i], keepdims=False),
-                        'other_rank_mean': np.mean(rank_arr[:,[x for x in range(reward_arr.shape[1]) if x!=i]], keepdims=False),
-                        'other_rank_sd': np.std(rank_arr[:,[x for x in range(reward_arr.shape[1]) if x!=i]], keepdims=False),
-                    },
-                    ignore_index=True)
+                sum_df = sum_df.append(
+                        {
+                            'c': int(c),
+                            'config_str': str(configs_all[c]),
+                            'b': int(b),
+                            'manager_index': int(i),
+                            'target_mean': np.mean(reward_arr[:,i], keepdims=False),
+                            'target_median': np.median(reward_arr[:,i], keepdims=False),
+                            'target_sd': np.std(reward_arr[:,i], keepdims=False),
+                            'other_mean': np.mean(reward_arr[:, [x for x in range(reward_arr.shape[1]) if x!=i]], keepdims=False),
+                            'other_median': np.median(reward_arr[:, [x for x in range(reward_arr.shape[1]) if x!=i]], keepdims=False),
+                            'other_sd': np.std(reward_arr[:, [x for x in range(reward_arr.shape[1]) if x!=i]], keepdims=False),
+                            'target_rank_mean': np.mean(rank_arr[:,i], keepdims=False),
+                            'target_rank_sd': np.std(rank_arr[:,i], keepdims=False),
+                            'other_rank_mean': np.mean(rank_arr[:,[x for x in range(reward_arr.shape[1]) if x!=i]], keepdims=False),
+                            'other_rank_sd': np.std(rank_arr[:,[x for x in range(reward_arr.shape[1]) if x!=i]], keepdims=False),
+                        },
+                        ignore_index=True)
 
 
-    sum_df.to_csv(os.path.join(par_wd, "sum_df.tsv"), sep="\t", index=False)
+    sum_df.to_csv(os.path.join(par_wd, "sum_df.tsv"), sep="\t", index=False, float_format="%.3f")
 
 
 

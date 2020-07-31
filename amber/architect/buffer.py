@@ -162,7 +162,7 @@ class Buffer(object):
                     ' || '.join([str(np.round(x, 2)).replace("\n ", ";") for x in self.prob_buffer[-1]])
                 )
             )
-            print("Saved buffers to file `buffers.txt` !")
+            #print("Saved buffers to file `buffers.txt` !")
 
         if len(self.lt_pbuffer) > self.max_size:
             self.lt_sbuffer = self.lt_sbuffer[-self.max_size:]
@@ -351,7 +351,6 @@ class MultiManagerBuffer:
                         ' || '.join([str(np.round(x, 2)).replace("\n ", ";") for x in self.prob_buffer[this[max_idx]]])
                     )
                 )
-            print("Saved buffers to file `buffers.txt` !")
 
     def stratified_reward_mean(self):
         """
