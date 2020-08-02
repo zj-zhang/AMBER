@@ -43,8 +43,8 @@ def get_controller(model_space, session, data_description_len=3, layer_embedding
         controller = ZeroShotController(
             data_description_config={
                 "length": data_description_len,
-                "hidden_layer": {"units":8, "activation": "relu"},
-                "regularizer": {"l1":1e-8 }
+                #"hidden_layer": {"units":8, "activation": "relu"},
+                #"regularizer": {"l1":1e-8}
                 },
             share_embedding=layer_embedding_sharing,
             model_space=model_space,
@@ -53,7 +53,7 @@ def get_controller(model_space, session, data_description_len=3, layer_embedding
             skip_weight=None,
             skip_target=0.2,
             lstm_size=128,
-            lstm_num_layers=2,
+            lstm_num_layers=1,
             kl_threshold=0.1,
             train_pi_iter=100,
             optim_algo='adam',
@@ -76,22 +76,22 @@ def get_model_space_common():
                       "activation": "relu"}
     param_list = [
             # Block 1:
-            [
-                {"filters": 64, "kernel_size": 8, "activation": "relu"},
-                {"filters": 64, "kernel_size": 14, "activation": "relu"},
-                {"filters": 64, "kernel_size": 20, "activation": "relu"}
-            ],
+            #[
+            #    {"filters": 64, "kernel_size": 8},
+            #    {"filters": 64, "kernel_size": 14},
+            #    {"filters": 64, "kernel_size": 20}
+            #],
             # Block 2:
-            [
-                {"filters": 128, "kernel_size": 8, "activation": "relu"},
-                {"filters": 128, "kernel_size": 14, "activation": "relu"},
-                {"filters": 128, "kernel_size": 20, "activation": "relu"}
-            ],
+            #[
+            #    {"filters": 128, "kernel_size": 8},
+            #    {"filters": 128, "kernel_size": 14},
+            #    {"filters": 128, "kernel_size": 20}
+            #],
             # Block 3:
             [
-                {"filters": 256, "kernel_size": 8, "activation": "relu"},
-                {"filters": 256, "kernel_size": 14, "activation": "relu"},
-                {"filters": 256, "kernel_size": 20, "activation": "relu"}
+                {"filters": 256, "kernel_size": 8},
+                {"filters": 256, "kernel_size": 14},
+                {"filters": 256, "kernel_size": 20}
             ],
         ]
 
@@ -163,7 +163,7 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         train_data=train_data,
         validate_data_kwargs=validate_data_kwargs,
         validation_data=val_data,
-        epochs=1000,
+        epochs=50,
         child_batchsize=1000,
         reward_fn=reward_fn,
         model_fn=mb,
@@ -174,9 +174,9 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         save_full_model=True,
         model_space=model_space,
         fit_kwargs={
-            'steps_per_epoch': 50,
+            'steps_per_epoch': 100,
             'workers': 3, 'max_queue_size': 50,
-            'earlystop_patience': 10}
+            'earlystop_patience': 5}
     )
     return manager
 
@@ -317,6 +317,8 @@ def read_configs(arg):
     configs = configs.to_dict(orient='index')
     # Get available gpus for parsing to DistributedManager
     gpus = get_available_gpus()
+    if len(gpus) == 0:
+        gpus = [None]
     gpus_ = gpus * len(configs)
 
     manager_getter = get_manager_distributed if arg.parallel else get_manager_common
@@ -332,7 +334,7 @@ def read_configs(arg):
             d = {
                         'hdf5_fp':  arg.train_file if x=='train' else arg.val_file,
                         'y_selector': configs[k]['ds_col'],
-                        'batch_size': 512 if arg.parallel else 512*len(gpus),
+                        'batch_size': 1024 if arg.parallel else 1024*len(gpus),
                         'shuffle': x=='train',
                 }
             if arg.parallel is True:
@@ -380,9 +382,9 @@ def train_nas(arg):
                manager=[configs[k]["manager"] for k in config_keys],
                logger=logger,
                max_episode=200,
-               max_step_per_ep=10,
+               max_step_per_ep=5,
                working_dir=wd,
-               time_budget="150:00:00",
+               time_budget="72:00:00",
                with_input_blocks=False,
                with_skip_connection=False,
                save_controller_every=1,

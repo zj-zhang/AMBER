@@ -445,10 +445,11 @@ def train(arg, config_dict=None, session=None, logger=None):
 
 
 def train_and_reload(arg):
-    B = 20
+    B = 10
     par_wd = arg.wd
     logger = setup_logger(par_wd, verbose_level=logging.CRITICAL)
-    from zs_controller_configs import configs_all
+    from zs_controller_configs import get_zs_controller_configs
+    configs_all = get_zs_controller_configs()
     gs1, gs2, arch2id = get_bootstrap_gold_standard()
     gs_list = [gs1, gs2]
     model_space, _ = get_model_space_common()
@@ -503,7 +504,7 @@ def train_and_reload(arg):
                         ignore_index=True)
 
 
-    sum_df.to_csv(os.path.join(par_wd, "sum_df.tsv"), sep="\t", index=False, float_format="%.3f")
+    sum_df.to_csv(os.path.join(par_wd, "sum_df.tsv"), sep="\t", index=False, float_format="%.4f")
 
 
 

@@ -143,7 +143,7 @@ class GeneralManager(BaseNetworkManager):
 
 
 class DistributedGeneralManager(GeneralManager):
-    def __init__(self, devices, train_data_kwargs, validate_data_kwargs, *args, **kwargs):
+    def __init__(self, devices, train_data_kwargs, validate_data_kwargs, do_resample=False, *args, **kwargs):
         self.devices = devices
         super().__init__(*args, **kwargs)
         assert devices is None or len(self.devices) == 1, "Only supports one GPU device currently"
@@ -155,6 +155,7 @@ class DistributedGeneralManager(GeneralManager):
         self.file_connected = False
         # For resampling; TODO: how to implement a Bayesian version of this?
         self.arc_records = defaultdict(dict)
+        self.do_resample = do_resample
 
     def close_handler(self):
         if self.file_connected:
@@ -205,7 +206,7 @@ class DistributedGeneralManager(GeneralManager):
                 elapse_time = time.time() - start_time
                 sys.stderr.write("  %.3f sec\n"%elapse_time)
                 model_arc_ = tuple(model_arc)
-                if model_arc_ in self.arc_records:
+                if model_arc_ in self.arc_records and self.do_resample is True:
                     this_reward = self.arc_records[model_arc_]['reward'] 
                     old_trial = self.arc_records[model_arc_]['trial'] 
                     loss_and_metrics = self.arc_records[model_arc_]['loss_and_metrics'] 
