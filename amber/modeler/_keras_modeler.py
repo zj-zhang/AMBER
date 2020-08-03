@@ -83,11 +83,11 @@ class KerasMultiIOModelBuilder(ModelBuilder):
         with_input_blocks = self.with_input_blocks
         # missing output connection
         if any(out_rowsum==0):
-            print("not viable model: unconnected output")
+            print("invalid model: unconnected output")
             return None
         # missing output with skip connection
-        if self.num_inputs>0 and any( (skp_rowsum==0)&(out_colsum!=0) ):
-            print("not viable model: output connected to layer with no input")
+        if self.with_input_blocks is False and any( (skp_rowsum==0)&(out_colsum!=0) ):
+            print("invalid model: output connected to layer with no input")
             return None
 
         # Build the model until outputs
@@ -125,13 +125,15 @@ class KerasMultiIOModelBuilder(ModelBuilder):
         # Build the outputs
         outputs_inputs = []
         for m, o in enumerate(out):
-            idx = np.where(o)[0]
+            idx = [i for i in np.where(o)[0] if prev_layers[i] is not None]
             if len(idx) > 1:
                 outputs_inputs.append( Concatenate()([prev_layers[i] for i in idx])  )
             elif len(idx) == 1:
                 outputs_inputs.append(prev_layers[idx[0]] )
             else:
-                raise Exception("Unconnected output %i"%m)
+                #raise Exception("Unconnected output %i"%m)
+                print("Secondary unconnected output %i"%m)
+                return None
         outputs = [get_layer(x=outputs_inputs[i], state=self.outputs[i]) for i in range(self.num_outputs)  ]
         model = Model(inputs=inputs, outputs=outputs)
         return model
