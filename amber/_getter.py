@@ -149,8 +149,8 @@ def get_manager(manager_type, model_fn, reward_fn, data_dict, session, *args, **
 
 # model_fn
 def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
+    from .architect.model_space import State
     if model_fn_type == 'DAG' or model_fn_type == 'DAGModelBuilder':
-        from .architect.model_space import State
         from .modeler import DAGModelBuilder
         assert 'inputs_op' in kwargs and 'outputs_op' in kwargs
         inp_op_list = kwargs.pop("inputs_op")
@@ -165,7 +165,6 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
             session=session,
             *args, **kwargs)
     elif model_fn_type == 'Enas' or model_fn_type == 'EnasAnnModelBuilder':
-        from .architect.model_space import State
         from .modeler import EnasAnnModelBuilder
         inp_op_list = kwargs.pop("inputs_op")
         inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
@@ -179,7 +178,6 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
             session=session,
             *args, **kwargs)
     elif model_fn_type == 'EnasCnnModelBuilder':
-        from .architect.model_space import State
         from .modeler import EnasCnnModelBuilder
         inp_op_list = kwargs.pop("inputs_op")
         inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
@@ -194,6 +192,19 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
             session=session,
             controller=controller,
             *args, **kwargs)
+    elif model_fn_type == 'KerasMultiIOModelBuilder':
+        from .modeler import KerasMultiIOModelBuilder
+        inp_op_list = kwargs.pop("inputs_op")
+        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        out_op_list = kwargs.pop("outputs_op")
+        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
+        model_fn = KerasMultiIOModelBuilder(
+            model_space=model_space,
+            inputs_op=inputs_op,
+            output_op=output_op,
+            session=session,
+            *args, **kwargs)
+ 
     else:
         raise Exception('cannot understand model_builder type: %s' % model_fn_type)
     print("modeler = %s" % model_fn_type)

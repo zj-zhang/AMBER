@@ -112,7 +112,7 @@ class GeneralController(BaseController):
 
         buffer_fn = get_buffer(buffer_type)
         self.buffer = buffer_fn(max_size=buffer_size,
-                                ewa_beta=max(1 - 1. / buffer_size, 0.9),
+                                #ewa_beta=max(1 - 1. / buffer_size, 0.9),
                                 discount_factor=0.,
                                 is_squeeze_dim=True,
                                 rescale_advantage_by_reward=rescale_advantage_by_reward)
@@ -511,6 +511,8 @@ class GeneralController(BaseController):
         self.input_arc_onehot = self.convert_arc_to_onehot(self)
         self.old_probs = [tf.placeholder(shape=self.onehot_probs[i].shape, dtype=tf.float32, name="old_prob_%i" % i) for
                           i in range(len(self.onehot_probs))]
+        if self.skip_weight is not None:
+            self.loss += self.skip_weight * self.onehot_skip_penaltys
         if self.use_ppo_loss:
             self.loss += proximal_policy_optimization_loss(
                 curr_prediction=self.onehot_probs,
@@ -522,8 +524,6 @@ class GeneralController(BaseController):
                 clip_val=0.2)
         else:
             self.loss += tf.reshape(tf.tensordot(self.onehot_log_prob, self.advantage, axes=1), [])
-            if self.skip_weight is not None:
-                self.loss += self.skip_weight * self.onehot_skip_penaltys
 
         self.kl_div, self.ent = get_kl_divergence_n_entropy(curr_prediction=self.onehot_probs,
                                                             old_prediction=self.old_probs,

@@ -14,6 +14,7 @@ def child_model_params(num_features, num_layers, max_units):
 
 
 def controller_search_space(input_blocks, output_blocks, num_layers, num_choices_per_layer):
-    s = np.log10(num_choices_per_layer) * num_layers + np.log10(np.prod(np.arange(1, num_layers + 1)))
+    s = np.log10(num_choices_per_layer) * num_layers
+    s += np.log10(2) * (num_layers-1)*num_layers/2
     s += np.log10(input_blocks) * num_layers + np.log10(output_blocks) * num_layers
     return s

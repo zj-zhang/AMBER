@@ -6,6 +6,7 @@ Nov. 18, 2018
 '''
 
 import numpy as np
+import copy
 from .common_ops import unpack_data
 from ..utils.io import read_history
 
@@ -128,6 +129,17 @@ class LossAucReward(Reward):
         reward = L + self.Lambda * K
         loss_and_metrics = [L]
         reward_metrics = {'knowledge': K}
+        return reward, loss_and_metrics, reward_metrics
+    
+    def min(self, data):
+        """For dealing with non-valid model"""
+        X, y = unpack_data(data, unroll_generator_y=True)
+        if type(y) is not list: y = [y]
+        pred = copy.deepcopy(y)
+        _ = [np.random.shuffle(p) for p in pred]
+        self.pred = pred
+        reward, loss_and_metrics, reward_metrics = self.__call__(None, (X,y))
+        self.pred = None  # release self.pred after use
         return reward, loss_and_metrics, reward_metrics
 
 

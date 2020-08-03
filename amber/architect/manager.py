@@ -87,53 +87,64 @@ class GeneralManager(BaseNetworkManager):
             except RuntimeError: # keras 2.3.1 `set_session` not available for tf2.0
                 pass
             model = self.model_fn(model_arc)  # a compiled keras Model
+            if model is None:
+                assert hasattr(self.reward_fn, "min"), "model_fn of type %s returned a non-valid model, but the given reward_fn of type %s does not have .min() method" % (type(self.model_fn), type(self.reward_fn))
+                hist = None
+                this_reward, loss_and_metrics, reward_metrics = self.reward_fn.min(data=self.validation_data)
+                loss = loss_and_metrics.pop(0)
+                loss_and_metrics = {str(self.model_compile_dict['metrics'][i]): loss_and_metrics[i] for i in
+                                    range(len(loss_and_metrics))}
+                loss_and_metrics['loss'] = loss
+                if reward_metrics:
+                    loss_and_metrics.update(reward_metrics)
 
-            # train the model using Keras methods
-            print(" Trial %i: Start training model..." % trial)
-            train_x, train_y = unpack_data(self.train_data)
-            hist = model.fit(x=train_x,
-                             y=train_y,
-                             batch_size=self.batchsize if train_y else None,
-                             epochs=self.epochs,
-                             verbose=self.verbose,
-                             #shuffle=True,
-                             validation_data=self.validation_data,
-                             callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
-                                                        monitor='val_loss', verbose=self.verbose,
-                                                        save_best_only=True),
-                                        EarlyStopping(monitor='val_loss', patience=self.fit_kwargs.pop("earlystop_patience", 5), verbose=self.verbose)],
-                             **self.fit_kwargs
-                             )
-            # load best performance epoch in this training session
-            model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
+            else:
+                # train the model using Keras methods
+                print(" Trial %i: Start training model..." % trial)
+                train_x, train_y = unpack_data(self.train_data)
+                hist = model.fit(x=train_x,
+                                 y=train_y,
+                                 batch_size=self.batchsize if train_y else None,
+                                 epochs=self.epochs,
+                                 verbose=self.verbose,
+                                 #shuffle=True,
+                                 validation_data=self.validation_data,
+                                 callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
+                                                            monitor='val_loss', verbose=self.verbose,
+                                                            save_best_only=True),
+                                            EarlyStopping(monitor='val_loss', patience=self.fit_kwargs.pop("earlystop_patience", 5), verbose=self.verbose)],
+                                 **self.fit_kwargs
+                                 )
+                # load best performance epoch in this training session
+                model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
 
-            # evaluate the model by `reward_fn`
-            this_reward, loss_and_metrics, reward_metrics = \
-                self.reward_fn(model, (self.validation_data),
-                               session=train_sess,
-                               graph=train_graph)
-            loss = loss_and_metrics.pop(0)
-            loss_and_metrics = {str(self.model_compile_dict['metrics'][i]): loss_and_metrics[i] for i in
-                                range(len(loss_and_metrics))}
-            loss_and_metrics['loss'] = loss
-            if reward_metrics:
-                loss_and_metrics.update(reward_metrics)
+                # evaluate the model by `reward_fn`
+                this_reward, loss_and_metrics, reward_metrics = \
+                    self.reward_fn(model, (self.validation_data),
+                                   session=train_sess,
+                                   graph=train_graph)
+                loss = loss_and_metrics.pop(0)
+                loss_and_metrics = {str(self.model_compile_dict['metrics'][i]): loss_and_metrics[i] for i in
+                                    range(len(loss_and_metrics))}
+                loss_and_metrics['loss'] = loss
+                if reward_metrics:
+                    loss_and_metrics.update(reward_metrics)
 
-            # do any post processing,
-            # e.g. save child net, plot training history, plot scattered prediction.
-            if self.store_fn:
-                val_pred = model.predict(self.validation_data) # TODO: Actually need to debug this still.
-                self.store_fn(
-                    trial=trial,
-                    model=model,
-                    hist=hist,
-                    data=self.validation_data,
-                    pred=val_pred,
-                    loss_and_metrics=loss_and_metrics,
-                    working_dir=self.working_dir,
-                    save_full_model=self.save_full_model,
-                    knowledge_func=self.reward_fn.knowledge_function
-                )
+                # do any post processing,
+                # e.g. save child net, plot training history, plot scattered prediction.
+                if self.store_fn:
+                    val_pred = model.predict(self.validation_data) 
+                    self.store_fn(
+                        trial=trial,
+                        model=model,
+                        hist=hist,
+                        data=self.validation_data,
+                        pred=val_pred,
+                        loss_and_metrics=loss_and_metrics,
+                        working_dir=self.working_dir,
+                        save_full_model=self.save_full_model,
+                        knowledge_func=self.reward_fn.knowledge_function
+                    )
 
         # clean up resources and GPU memory
         del model

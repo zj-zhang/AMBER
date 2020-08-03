@@ -26,7 +26,7 @@ from keras import backend as K
 from tensorflow.keras.layers import GlobalAveragePooling1D, GlobalMaxPooling1D, GaussianNoise
 from tensorflow.keras.layers import Dense, Dropout, Flatten
 from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
-from tensorflow.keras.layers import Input, Lambda, Permute
+from tensorflow.keras.layers import Input, Lambda, Permute, BatchNormalization, Activation
 from tensorflow.keras.layers import LSTM
 from ..modeler.operators import Layer_deNovo, SeparableFC, sparsek_vec
 from ..architect.model_space import get_layer_shortname
@@ -54,9 +54,16 @@ def get_dag(arg):
         raise ValueError("Could not understand the DAG func:", arg)
 
 
-def get_layer(x, state):
+def get_layer(x, state, with_bn=False):
     if state.Layer_type == 'dense':
-        return Dense(**state.Layer_attributes)(x)
+        if with_bn is True:
+            actv_fn = state.Layer_attributes.pop('activation', 'linear')
+            x = Dense(**state.Layer_attributes)(x)
+            x = BatchNormalization()(x)
+            x = Activation(actv_fn)(x)
+            return x
+        else:
+            return Dense(**state.Layer_attributes)(x)
 
     elif state.Layer_type == 'sfc':
         return SeparableFC(**state.Layer_attributes)(x)
@@ -65,7 +72,14 @@ def get_layer(x, state):
         return Input(**state.Layer_attributes)
 
     elif state.Layer_type == 'conv1d':
-        return Conv1D(**state.Layer_attributes)(x)
+        if with_bn is True:
+            actv_fn = state.Layer_attributes.pop('activation', 'linear')
+            x = Conv1D(**state.Layer_attributes)(x)
+            x = BatchNormalization()(x)
+            x = Activation(actv_fn)(x)
+            return x
+        else:
+            return Conv1D(**state.Layer_attributes)(x)
 
     elif state.Layer_type == 'denovo':
         x = Lambda(lambda t: K.expand_dims(t))(x)

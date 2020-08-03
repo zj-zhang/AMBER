@@ -34,7 +34,7 @@ def parse_action_str_squeezed(action_onehot, state_space):
 class Buffer(object):
     def __init__(self, max_size,
                  discount_factor=0.,
-                 ewa_beta=0.95,
+                 ewa_beta=None,
                  is_squeeze_dim=False,
                  rescale_advantage_by_reward=False,
                  clip_advantage=10.):
@@ -43,7 +43,7 @@ class Buffer(object):
         is_squeeze_dim: if True, controller samples a sequence of tokens, instead of one-hot arrays
         """
         self.max_size = max_size
-        self.ewa_beta = ewa_beta
+        self.ewa_beta = ewa_beta or float(1 - 1./self.max_size)
         self.discount_factor = discount_factor
         self.is_squeeze_dim = is_squeeze_dim
         self.rescale_advantage_by_reward = rescale_advantage_by_reward
@@ -274,7 +274,7 @@ class MultiManagerBuffer:
                  **kwargs
                  ):
         self.max_size = max_size
-        self.ewa_beta = ewa_beta or float(1/max_size)
+        self.ewa_beta = ewa_beta or float(1 - 1./max_size)
         self.is_squeeze_dim = is_squeeze_dim
         self.rescale_advantage_by_reward = rescale_advantage_by_reward
         self.clip_advantage = clip_advantage
