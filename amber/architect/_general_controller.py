@@ -448,8 +448,9 @@ class GeneralController(BaseController):
                     skip = tf.to_int32(skip)
 
                     skip_prob = tf.sigmoid(logit)
-                    kl = skip_prob * tf.log(skip_prob / skip_targets)
-                    kl = tf.reduce_sum(kl)
+                    kl = skip_prob * tf.log(skip_prob / skip_targets)  # (batch_size*layer_id, 2)
+                    kl = tf.reduce_sum(kl, axis=1)    # (batch_size*layer_id,)
+                    kl = tf.reshape(kl, [batch_size, -1])  # (batch_size, layer_id)
                     skip_penaltys.append(kl)
 
                     log_prob3 = tf.nn.sparse_softmax_cross_entropy_with_logits(
@@ -495,8 +496,8 @@ class GeneralController(BaseController):
         self.onehot_log_prob = tf.reduce_sum(log_probs, axis=0)
         skip_count = tf.stack(skip_count)
         self.onehot_skip_count = tf.reduce_sum(skip_count, axis=0)
-        skip_penaltys = tf.stack(skip_penaltys)
-        self.onehot_skip_penaltys = tf.reduce_mean(skip_penaltys, axis=0)
+        skip_penaltys_flat = [tf.reduce_mean(x, axis=1) for x in skip_penaltys] # from (num_layer-1, batch_size, layer_id) to (num_layer-1, batch_size); layer_id makes each tensor of varying lengths in the list
+        self.onehot_skip_penaltys = tf.reduce_mean(skip_penaltys_flat, axis=0)  # (batch_size,)
 
     def _build_train_op(self):
         """build train_op
@@ -512,7 +513,7 @@ class GeneralController(BaseController):
         self.old_probs = [tf.placeholder(shape=self.onehot_probs[i].shape, dtype=tf.float32, name="old_prob_%i" % i) for
                           i in range(len(self.onehot_probs))]
         if self.skip_weight is not None:
-            self.loss += self.skip_weight * self.onehot_skip_penaltys
+            self.loss += self.skip_weight * tf.reduce_mean(self.onehot_skip_penaltys)
         if self.use_ppo_loss:
             self.loss += proximal_policy_optimization_loss(
                 curr_prediction=self.onehot_probs,
