@@ -485,10 +485,8 @@ class MultiInputController(GeneralController):
         skip_count = tf.stack(skip_count)
         self.onehot_skip_count = tf.reduce_sum(skip_count, axis=0)
         #skip_penaltys = tf.reduce_mean(tf.transpose(tf.stack(skip_penaltys), [1,0]), axis=1)
-        skip_penaltys_flat = [tf.reduce_mean(x, axis=1) for x in skip_penaltys] # reduce_mean of layer_id dim; each entry's shape is  (batch_size,)
-        print("skip flat", skip_penaltys_flat)
-        self.onehot_skip_penaltys = tf.reduce_mean(skip_penaltys_flat, axis=0)  # from [7, batch_size] to [batch_size,]
-        print("skip skip_penaltys", self.onehot_skip_penaltys)
+        skip_penaltys_flat = [tf.reduce_mean(x, axis=1) for x in skip_penaltys] # reduce_mean of layer_id dim; each entry's shape is  (batch_size,); in total list len=num_layers-1
+        self.onehot_skip_penaltys = tf.reduce_mean(skip_penaltys_flat, axis=0)  # from [num_layers-1, batch_size] to [batch_size,]
         #self.onehot_skip_penaltys = tf.reduce_mean(skip_penaltys, axis=0)
 
 
@@ -639,10 +637,7 @@ class MultiIOController(MultiInputController):
         output_log_probs = tf.squeeze(tf.transpose(tf.stack(output_log_probs), [1, 0, 2]), axis=-1)
         self.onehot_log_prob += tf.reduce_sum(output_log_probs, axis=1)
         if self.output_block_diversity_weight is not None:
-            output_probs = tf.transpose(tf.stack(output_probs), [1, 0, 2])
-            print(output_probs)
-            print(self.onehot_skip_penaltys)
-            diversity = tf.math.reduce_std(output_probs, axis=2)
-            diversity = tf.reduce_mean(diversity, axis=1)
-            print(diversity)
-            self.onehot_skip_penaltys -= diversity * self.output_block_diversity_weight
+            output_probs = tf.transpose(tf.stack(output_probs), [1, 0, 2]) # shape: (batch, num_out_blocks, num_layers)
+            diversity_penaltys = tf.math.reduce_std(output_probs, axis=1)  # std of probs. of out_blocks on each layer; connecting every out_block to one layer will be penalized
+            diversity_penaltys = tf.reduce_mean(diversity_penaltys, axis=1)
+            self.onehot_skip_penaltys -= diversity_penaltys * self.output_block_diversity_weight
