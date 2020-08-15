@@ -192,7 +192,7 @@ def get_keras_train_ops(loss, tf_variables, optim_algo, **kwargs):
     for g, v in zip(grads, tf_variables):
         if g is None:
             # get sub-scope name; if is optimizer-related, ignore
-            if v.name.split('/')[1] == 'compile':
+            if 'compile' in v.name.split('/'):
                 continue
             no_grad_var.append(v)
         else:
