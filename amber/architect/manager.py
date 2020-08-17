@@ -1,4 +1,11 @@
 # -*- coding: UTF-8 -*-
+"""Manager class for streamlining downstream build and evaluation given an architecture.
+
+Manager is the class that takes in architecture designs from an architecture search/optimization algorithm, then
+interacts with ``amber.modeler`` to build and train the model according to architecture, and finally calls
+``amber.architect.rewards`` to evaluate the trained model rewards to feedback the architecture designer.
+
+"""
 
 import gc
 import os
@@ -22,9 +29,78 @@ class BaseNetworkManager:
 
 
 class GeneralManager(BaseNetworkManager):
-    """
-    Manager creates subnetworks, training them on a dataset, and retrieving
-    rewards.
+    """Manager creates child networks, train them on a dataset, and retrieve rewards.
+
+    Parameters
+    ----------
+    train_data : tuple, string or generator
+        Training data to be fed to ``keras.models.Model.fit``.
+
+    validation_data : tuple, string, or generator
+        Validation data. The data format is understood similarly to train_data.
+
+    model_fn : amber.modeler
+        A callable function to build and implement child models given an architecture sequence.
+
+    reward_fn : amber.architect.rewards
+        A callable function to evaluate the rewards on a trained model and the validation dataset.
+
+    store_fn : amber.architect.store
+        A callable function to store necessary information (such as predictions, model architectures, and a variety of
+        plots etc.) for the given child model.
+
+    working_dir : str
+        File path for working directory.
+
+    save_full_model : bool
+        If true, save the full model beside the model weights. Default is False.
+
+    epochs : int
+        The total number of epochs to train the child model.
+
+    child_batchsize : int
+        The batch size for training the child model.
+
+    verbose : bool or int
+        Verbose level. 0=non-verbose, 1=verbose, 2=less verbose.
+
+    kwargs : dict
+        Other keyword arguments parsed.
+
+
+    Attributes
+    ----------
+    train_data : tuple or generator
+        The unpacked training data
+
+    validation_data : tuple or generator
+        The unpacked validation data
+
+    model_fn : amber.modeler
+        Reference to the callable function to build and implement child models given an architecture sequence.
+
+    reward_fn : amber.architect.rewards
+        Reference to the callable function to evaluate the rewards on a trained model and the validation dataset.
+
+    store_fn : amber.architect.store
+        Reference to the callable function to store necessary information (such as predictions, model architectures, and a variety of
+        plots etc.) for the given child model.
+
+    working_dir : str
+        File path to working directory
+
+    verbose : bool or int
+        Verbose level
+
+    TODO
+    ------
+    - Refactor the rest of attributes as private.
+    - Update the description of ``train_data``  and ``validation_data`` to more flexible unpacking, once it's added::
+
+        If it's tuple, expects it to be a tuple of numpy.array of
+        (x,y); if it's string, expects it to be the file path to a compiled training data; if it's a generator, expects
+        it yield a batch of training features and samples.
+
     """
 
     def __init__(self,
@@ -57,6 +133,24 @@ class GeneralManager(BaseNetworkManager):
         self.store_fn = get_store_fn(store_fn)
 
     def get_rewards(self, trial, model_arc):
+        """The reward getter for a given model architecture
+
+        Parameters
+        ----------
+        trial : int
+            An integer number indicating the trial for this architecture
+
+        model_arc : list
+            The list of architecture sequence
+
+        Returns
+        -------
+        this_reward : float
+            The reward signal as determined by ``reward_fn(model, val_data)``
+
+        loss_and_metrics : dict
+            A dictionary of auxillary information for this model, such as loss, and other metrics (as in ``tf.keras.metrics``)
+        """
         # print('-'*80, model_arc, '-'*80)
         train_graph = tf.Graph()
         train_sess = tf.Session(graph=train_graph)
@@ -118,6 +212,75 @@ class GeneralManager(BaseNetworkManager):
 
 
 class EnasManager(GeneralManager):
+    """A specialized manager for Efficient Neural Architecture Search (ENAS).
+
+    Because
+
+    Parameters
+    ----------
+    session : tensorflow.Session or None
+        The tensorflow session that the manager will be parsed to modelers. By default it's None, which will then get the
+        Session from the modeler.
+
+    train_data : tuple, string or generator
+        Training data to be fed to ``keras.models.Model.fit``.
+
+    validation_data : tuple, string, or generator
+        Validation data. The data format is understood similarly to train_data.
+
+    model_fn : amber.modeler
+        A callable function to build and implement child models given an architecture sequence. Must be a model_fn that
+        is compatible with ENAS parameter sharing.
+
+    reward_fn : amber.architect.rewards
+        A callable function to evaluate the rewards on a trained model and the validation dataset.
+
+    store_fn : amber.architect.store
+        A callable function to store necessary information (such as predictions, model architectures, and a variety of
+        plots etc.) for the given child model.
+
+    working_dir : str
+        File path for working directory.
+
+    Attributes
+    ----------
+    model : amber.modeler.child
+        The child DAG that is connected to ``controller.sample_arc`` as the input architecture sequence, which
+        will activate a randomly sampled subgraph within child DAG. Because it's hard-wired to the sampled architecture
+        in controller, using this model to train and predict will also have the inherent stochastic behaviour that is
+        linked to controller.
+
+        See Also
+        --------
+        amber.modeler.child : AMBER wrapped-up version of child models that is intended to have similar interface and
+            methods as the ``keras.models.Model`` API.
+
+    train_data : tuple or generator
+        The unpacked training data
+
+    validation_data : tuple or generator
+        The unpacked validation data
+
+    model_fn : amber.modeler
+        Reference to the callable function to build and implement child models given an architecture sequence.
+
+    reward_fn : amber.architect.rewards
+        Reference to the callable function to evaluate the rewards on a trained model and the validation dataset.
+
+    store_fn : amber.architect.store
+        Reference to the callable function to store necessary information (such as predictions, model architectures, and a variety of
+        plots etc.) for the given child model.
+
+    disable_controller : bool
+        If true, will randomly return a reward by uniformly sampling in the interval [0,1]. Default is False.
+
+    working_dir : str
+        File path to working directory
+
+    verbose : bool or int
+        Verbose level
+
+    """
     def __init__(self, session=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if session is None:
@@ -128,29 +291,38 @@ class EnasManager(GeneralManager):
         self.disable_controller = kwargs.pop("disable_controller", False)
 
     def get_rewards(self, trial, model_arc=None, nsteps=None):
-        """
+        """The reward getter for a given model architecture.
+
         Because Enas will train child model by random sampling an architecture to activate for each mini-batch,
         there will not be any rewards evaluation in the Manager anymore.
         However, we can still use `get_rewards` as a proxy to train child models
-        Args:
-            trial:
-            model_arc:
-            nsteps: optional, if specified, train model nsteps of batches instead of a whole epoch
-        Returns:
+
+        Parameters
+        ----------
+        trial : int
+            An integer number indicating the trial for this architecture
+
+        model_arc : list or None
+            The list of architecture sequence. If is None (as by default), will return the child DAG with architecture
+            connected directly to ``controller.sample_arc`` tensors.
+
+
+        nsteps: int
+            Optional, if specified, train model nsteps of batches instead of a whole epoch
+
+        Returns
+        -------
+        this_reward : float
+            The reward signal as determined by ``reward_fn(model, val_data)``
+
+        loss_and_metrics : dict
+            A dictionary of auxillary information for this model, such as loss, and other metrics (as in ``tf.keras.metrics``)
+
 
         """
         if self.model is None:
             self.model = self.model_fn()
 
-        # just playing around for evaluating VC dimensions by fitting random noise- remember to remove these lines
-        # ZZ 2020.2.4
-        # if self.disable_controller:
-        #    this_reward = np.random.uniform(0,1)
-        #    #if model_arc is not None and model_arc[0] == 0:
-        #    #    this_reward = np.random.uniform(0.9,1)
-        #    loss_and_metrics = {'loss': this_reward}
-        #    return this_reward, loss_and_metrics
-        # end
         if model_arc is None:
             # unpack the dataset
             X_val, y_val = self.validation_data[0:2]
@@ -204,7 +376,7 @@ class EnasManager(GeneralManager):
 class NetworkManager(BaseNetworkManager):
     """
     DEPRECATION WARNING: will be deprecated in the future; please `GeneralManager`
-    Helper class to manage the generation of subnetwork training given a dataset
+    Helper class to manage the generation of subnetwork training given a dataset.
 
     Manager creates subnetworks, training them on a dataset, and retrieving
     rewards in the term of accuracy, which is passed to the controller RNN.
@@ -213,20 +385,28 @@ class NetworkManager(BaseNetworkManager):
     ----------
     input_state: tuple
         specify the input shape to `model_fn`
+
     output_state: str
         parsed to `get_layer` for a fixed output layer
+
     model_fn: callable
         a function for creating Keras.Model; takes model_states, input_state, output_state, model_compile_dict
+
     reward_fn: callable
         a function for computing Reward; takes two arguments, model and data
+
     store_fn: callable
         a function for processing/plotting trained child model
+
     epochs: int
         number of epochs to train the subnetworks
+
     child_batchsize: int
         batchsize of training the subnetworks
+
     acc_beta: float
         exponential weight for the accuracy
+
     clip_rewards: float
         to clip rewards in [-range, range] to prevent large weight updates. Use when training is highly unstable.
     """
@@ -279,23 +459,30 @@ class NetworkManager(BaseNetworkManager):
         Creates a subnetwork given the model_states predicted by the controller RNN,
         trains it on the provided dataset, and then returns a reward.
 
-        Args:
-            model_states: a list of parsed model_states obtained via an inverse mapping
-                from the StateSpace. It is in a specific order as given below:
+        Parameters
+        ----------
+        model_states : list
+            a list of parsed model_states obtained via an inverse mapping
+            from the StateSpace. It is in a specific order as given below.
 
-                Consider 4 states were added to the StateSpace via the `add_state`
-                method. Then the `model_states` array will be of length 4, with the
-                values of those states in the order that they were added.
+            Consider 4 states were added to the StateSpace via the `add_state`
+            method. Then the `model_states` array will be of length 4, with the
+            values of those states in the order that they were added.
 
-                If number of layers is greater than one, then the `model_states` array
-                will be of length `4 * number of layers` (in the above scenario).
-                The index from [0:4] will be for layer 0, from [4:8] for layer 1,
-                etc for the number of layers.
+            If number of layers is greater than one, then the `model_states` array
+            will be of length `4 * number of layers` (in the above scenario).
+            The index from [0:4] will be for layer 0, from [4:8] for layer 1,
+            etc for the number of layers.
 
-                These action values are for direct use in the construction of models.
+            These action values are for direct use in the construction of models.
 
-        Returns:
-            a reward for training a model with the given model_states
+        Returns
+        -------
+        this_reward : float
+            The reward signal as determined by ``reward_fn(model, val_data)``
+
+        loss_and_metrics : dict
+            A dictionary of auxillary information for this model, such as loss, and other metrics (as in ``tf.keras.metrics``)
         """
         train_graph = tf.Graph()
         train_sess = tf.Session(graph=train_graph)

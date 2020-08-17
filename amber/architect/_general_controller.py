@@ -1,6 +1,9 @@
-"""a modified version of enas:
-https://github.com/melodyguan/enas
 """
+General controller for searching computational operation per layer, and residual connection
+"""
+
+# Author       : ZZJ
+# Last Update  : Aug. 16, 2020
 
 import os
 import sys
@@ -53,40 +56,98 @@ class GeneralController(BaseController):
         - computational operations for each layer
         - skip connections for each layer from all previous layers [optional]
 
+    It is a modified version of enas: https://github.com/melodyguan/enas . Notable modifications include: dissection of
+    sampling and training processes to enable better understanding of controller behaviors, buffering and logging;
+    loss function can be optimized by either REINFORCE or PPO.
+
+    TODO
+    ----------
+    Refactor the rest of the attributes to private.
+
+
     Parameters
     ----------
-    model_space:
-    with_skip_connection:
-    with_input_blocks:
-    share_embedding: dict
-        a Dictionary defining which child-net layers will share the softmax and
-        embedding weights during Controller training and sampling
-    use_ppo_loss:
-    kl_threshold:
-    num_input_blocks:
-    input_block_unique_connection:
-    buffer_size:
-    batch_size:
-    session:
-    train_pi_iter:
-    lstm_size:
-    lstm_num_layers:
-    lstm_keep_prob:
-    tanh_constant:
-    temperature:
-    optim_algo:
-    skip_target: float
-        the expected proportion of skip connections, i.e. the proportion of 1's in the skip/extra
+    model_space : amber.architect.ModelSpace
+        A ModelSpace object constructed to perform architecture search for.
+
+    with_skip_connection : bool
+        If false, will not search residual connections and only search for computation operations per layer. Default is
+        True.
+
+    share_embedding : dict
+        a Dictionary defining which child-net layers will share the softmax and embedding weights during Controller
+        training and sampling. For example, ``{1:0, 2:0}`` means layer 1 and 2 will share the embedding with layer 0.
+
+    use_ppo_loss : bool
+        If true, use PPO loss for optimization instead of REINFORCE. Default is False.
+
+    kl_threshold : float
+        If KL-divergence between the sampling probabilities of updated controller parameters and that of original
+        parameters exceeds kl_threshold within a single controller training step, triggers early-stopping to halt the
+        controller training. Default is 0.05.
+
+    buffer_size : int
+        amber.architect.Buffer stores only the sampled architectures from the last ``buffer_size`` number of from previous
+        controller steps, where each step has a number of sampled architectures as specified in ``amber.architect.ControllerTrainEnv``.
+
+    batch_size : int
+        How many architectures in a batch to train the controller
+
+    session : tf.Session
+        The session where the controller tensors is placed
+
+    train_pi_iter : int
+        The number of epochs/iterations to train controller policy in one controller step.
+
+    lstm_size : int
+        The size of hidden units for stacked LSTM, i.e. controller RNN.
+
+    lstm_num_layers : int
+        The number of stacked layers for stacked LSTM, i.e. controller RNN.
+
+    lstm_keep_prob : float
+        keep_prob = 1 - dropout probability for stacked LSTM.
+
+    tanh_constant : float
+        If not None, the logits for each multivariate classification will be transformed by ``tf.tanh`` then multiplied by
+        tanh_constant. This can avoid over-confident controllers asserting probability=1 or 0 caused by logit going to +/- inf.
+        Default is None.
+
+    temperature : float
+        The temperature is a scale factor to logits. Higher temperature will flatten the probabilities among different
+        classes, while lower temperature will freeze them. Default is None, i.e. 1.
+
+    optim_algo : str
+        Optimizer for controller RNN. Can choose from ["adam", "sgd", "rmsprop"]. Default is "adam".
+
+    skip_target : float
+        The expected proportion of skip connections, i.e. the proportion of 1's in the skip/extra
         connections in the output `arc_seq`
-    skip_weight: float
-        the weight for skip connection kl-divergence from the expected `skip_target`
-    name:
+
+    skip_weight : float
+        The weight for skip connection kl-divergence from the expected `skip_target`
+
+    name : str
+        The name for this Controller instance; all ``tf.Tensors`` will be placed under this VariableScope. This name
+        determines which tensors will be initialized when a new Controller instance is created.
+
 
     Attributes
     ----------
-    g_emb: tf.Tensor
-        initial controller hidden state tensor; to be learned
-    Placeholder
+    weights : list of tf.Variable
+        The list of all trainable ``tf.Variable`` in this controller
+
+    model_space : amber.architect.ModelSpace
+        The model space which the controller will be searching from.
+
+    buffer : amber.architect.Buffer
+        The Buffer object stores the history architectures, computes the rewards, and gets feed dict for training.
+
+    session : tf.Session
+        The reference to the session that hosts this controller instance.
+
+
+
     """
 
     def __init__(self, model_space, buffer_type='ordinal', with_skip_connection=True, share_embedding=None,
@@ -148,6 +209,7 @@ class GeneralController(BaseController):
         return s
 
     def _create_weight(self):
+        """Private method for creating tensors; called at initialization"""
         initializer = tf.random_uniform_initializer(minval=-0.1, maxval=0.1)
         with tf.variable_scope("create_weights", initializer=initializer):
             with tf.variable_scope("lstm", reuse=False):
@@ -213,7 +275,11 @@ class GeneralController(BaseController):
                 self.v_attn = None
 
     def _build_sampler(self):
-        """Build the sampler ops and the log_prob ops."""
+        """Build the sampler ops and the log_prob ops.
+
+        For sampler, the architecture sequence is randomly sampled, and only sample one architecture at each call to
+        fill in self.sample_arc
+        """
         anchors = []
         anchors_w_1 = []
 
@@ -343,6 +409,11 @@ class GeneralController(BaseController):
         self.sample_probs = probs_
 
     def _build_trainer(self):
+        """"Build the trainer ops and the log_prob ops.
+
+        For trainer, the input architectures are ``tf.placeholder`` to receive previous architectures from buffer.
+        It also supports batch computation.
+        """
         anchors = []
         anchors_w_1 = []
         probs_ = []
@@ -488,8 +559,7 @@ class GeneralController(BaseController):
         self.onehot_skip_penaltys = tf.reduce_mean(skip_penaltys, axis=0)
 
     def _build_train_op(self):
-        """build train_op
-        Returns:
+        """build train_op based on either REINFORCE or PPO
         """
         self.advantage = tf.placeholder(shape=(None, 1), dtype=tf.float32, name="advantage")
         self.reward = tf.placeholder(shape=(None, 1), dtype=tf.float32, name="reward")
@@ -530,10 +600,54 @@ class GeneralController(BaseController):
         )
 
     def get_action(self, **kwargs):
+        """Get a sampled architecture/action and its corresponding probabilities give current controller policy parameters.
+
+        The generated architecture is the out-going information from controller to manager. which in turn will feedback
+        the reward signal for storage and training by the controller.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        ----------
+        onehots : list
+            The sampled architecture sequence. In particular, the architecture sequence is ordered as::
+
+                [categorical_operation_0,
+                categorical_operation_1, binary_skip_0,
+                categorical_operation_2, binary_skip_0, binary_skip_1,
+                ...]
+
+
+        probs : list of ndarray
+            The probabilities associated with each sampled operation and residual connection. Shapes will vary depending
+            on each layer's specification in ModelSpace for operation, and the layer number for residual connections.
+        """
         probs, onehots = self.session.run([self.sample_probs, self.sample_arc])
         return onehots, probs
 
     def train(self, episode, working_dir):
+        """Train the controller policy parameters for one step.
+
+        Parameters
+        ----------
+        episode : int
+            Total number of epochs to train the controller. Each epoch will iterate over all architectures stored in buffer.
+
+        working_dir : str
+            Filepath to working directory to store (possible) intermediate results
+
+        Returns
+        -------
+        aloss : float
+            Average controller loss for this train step
+
+        Notes
+        -----
+        Consider renaming this method to ``train_step()`` to better reflect its function, and avoid confusion with the
+        training function in environment ``ControllerTrainEnv.train()``
+        """
         try:
             self.buffer.finish_path(self.model_space, episode, working_dir)
         except Exception as e:
@@ -578,22 +692,88 @@ class GeneralController(BaseController):
         return aloss / g_t
 
     def store(self, state, prob, action, reward):
+        """Store all necessary information and rewards for a given architecture
+
+        This is the receiving method for controller to interact with manager by storing the rewards for a given architecture.
+        The architecture and its probabilities can be generated by ``get_action()`` method.
+
+        Parameters
+        ----------
+        state : list
+            The state for which the action and probabilities are drawn.
+
+        prob : list of ndarray
+            A list of probabilities for each operation and skip connections.
+
+        action : list
+            A list of architecture tokens ordered as::
+
+                [categorical_operation_0,
+                categorical_operation_1, binary_skip_0,
+                categorical_operation_2, binary_skip_0, binary_skip_1,
+                ...]
+
+        reward : float
+            Reward for this architecture, as evaluated by ``amber.architect.manager``
+
+        Returns
+        -------
+        None
+
+        """
         self.buffer.store(state, prob, action, reward)
         return
 
-    def remove_files(self, files, working_dir='.'):
+    @staticmethod
+    def remove_files(files, working_dir='.'):
+        """Static method for removing files
+
+        Parameters
+        ----------
+        files : list of str
+            files to be removed
+
+        working_dir : str
+            filepath to working directory
+
+        Returns
+        -------
+        None
+        """
         for file in files:
             file = os.path.join(working_dir, file)
             if os.path.exists(file):
                 os.remove(file)
 
     def save_weights(self, filepath, **kwargs):
+        """Save current controller weights to a hdf5 file
+
+        Parameters
+        ----------
+        filepath : str
+            file path to save the weights
+
+        Returns
+        -------
+        None
+        """
         weights = self.get_weights()
         with h5py.File(filepath, "w") as hf:
             for i, d in enumerate(weights):
                 hf.create_dataset(name=self.weights[i].name, data=d)
 
     def load_weights(self, filepath, **kwargs):
+        """Load the controller weights from a hdf5 file
+
+        Parameters
+        ----------
+        filepath : str
+            file path to saved weights
+
+        Returns
+        -------
+        None
+        """
         weights = []
         with h5py.File(filepath, 'r') as hf:
             for i in range(len(self.weights)):
@@ -602,10 +782,32 @@ class GeneralController(BaseController):
         self.set_weights(weights)
 
     def get_weights(self, **kwargs):
+        """Get the current controller weights in a numpy array
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        weights : list
+            A list of numpy array for each weights in controller
+        """
         weights = self.session.run(self.weights)
         return weights
 
     def set_weights(self, weights, **kwargs):
+        """Set the current controller weights
+
+        Parameters
+        ----------
+        weights : list of numpy.ndarray
+            A list of numpy array for each weights in controller
+
+        Returns
+        -------
+        None
+        """
         assign_ops = []
         for i in range(len(self.weights)):
             assign_ops.append(tf.assign(self.weights[i], weights[i]))
@@ -613,6 +815,18 @@ class GeneralController(BaseController):
 
     @staticmethod
     def convert_arc_to_onehot(controller):
+        """Convert a categorical architecture sequence to a one-hot encoded architecture sequence
+
+        Parameters
+        ----------
+        controller : amber.architect.controller
+            An instance of controller
+
+        Returns
+        -------
+        onehot_list : list
+            a one-hot encoded architecture sequence
+        """
         with_skip_connection = controller.with_skip_connection
         if hasattr(controller, 'with_input_blocks'):
             with_input_blocks = controller.with_input_blocks
