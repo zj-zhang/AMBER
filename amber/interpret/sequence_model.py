@@ -1,10 +1,13 @@
 # -*- coding: UTF-8 -*-
 
-"""Utils for interpret and explain the
-genomic sequence-based models
+"""Functions for interpret and explain the variant effects of the genomic sequence-based models
+
+Currently this module heavily relies on Selene.
 
 """
+
 # selene-related imports of V0.4.4; 2020.1.17 ZZ
+
 import os
 import sys
 import time
@@ -18,6 +21,7 @@ try:
     import pyfaidx
 except ImportError:
     print("amber.interpret.sequence_model: cannot load pyfaidx")
+    pyfaidx = None
 
 from keras.models import load_model
 try:
@@ -28,6 +32,9 @@ try:
     from selene_sdk.sequences import Genome as Genome
 except ImportError:
     print("amber.interpret.sequence_model: cannot load selene")
+    AnalyzeSequences = object
+    Genome = None
+
 from sklearn import metrics
 
 from ..plots import motif as motif_fn
@@ -118,7 +125,7 @@ class AnalyzeSequencesNAS(AnalyzeSequences):
     write_mem_limit : int, optional
         Default is 5000. Specify, in MB, the amount of memory you want to
         allocate to storing model predictions/scores. When running one of
-        _in silico_ mutagenesis, variant effect prediction, or prediction,
+        in silico mutagenesis, variant effect prediction, or prediction,
         prediction/score handlers will accumulate data in memory and only
         write this data to files periodically. By default, Selene will write
         to files when the total amount of data (across all handlers) takes up
@@ -284,10 +291,10 @@ class AnalyzeSequencesNAS(AnalyzeSequences):
                                         start_position=0,
                                         end_position=None):
         """
-        Apply *in silico* mutagenesis to all sequences in a FASTA file.
+        Apply in silico mutagenesis to all sequences in a FASTA file.
 
         Please note that we have not parallelized this function yet, so runtime
-        increases exponentially when you increase `mutate_n_bases`.
+        increases exponentially when you increase mutate_n_bases.
 
         Parameters
         ----------
@@ -328,9 +335,9 @@ class AnalyzeSequencesNAS(AnalyzeSequences):
         Returns
         -------
         None
-            Outputs data files from *in silico* mutagenesis to `output_dir`.
+            Outputs data files from *in silico* mutagenesis to output_dir.
             For HDF5 output and 'predictions' in `save_data`, an additional
-            file named `*_ref_predictions.h5` will be outputted with the
+            file named `ref_predictions.h5` will be outputted with the
             model prediction for the original input sequence.
 
         Raises
@@ -701,8 +708,9 @@ def scan_motif(seq, motif):
     """ match_score = sum of individual site likelihood * site weight
     site weight = 1 / site entropy
 
-    TODO:
-        add weights for each sites, down-weigh un-informative sites
+    TODO
+    ----
+    add weights for each sites, down-weigh un-informative sites
     """
     motif_len = motif.shape[0]
     seq_len = seq.shape[0]
@@ -826,8 +834,9 @@ def evaluate_permute_acc_aggregate(model_idx, model_performance_dict, data_idx_l
     by aggregating all input sequences, i.e. genome-wide prioritization of
     perturbed DNAs
 
-    Note:
-        for reduce sites, need to reverse the sign when computing AUROC/AUPR
+    Note
+    ----
+    for reduce sites, need to reverse the sign when computing AUROC/AUPR
     """
     disrupt = []
     nochange = []
@@ -875,14 +884,17 @@ def models_sensitivity_motif(model_dict, x_seq, motif_change_dict, auc_scorer=me
                              lambda_pred=lambda x: x.flatten(), **kwargs):
     """evaluate the sensitivity for a set of models based on input x and motif-change as
     gold-standard.
+
     Sensitivity defined as responsiveness and robustness of models for perturbations in input
     features.
 
-    Returns:
-        defaultdict(dict) : model index -> {eval_attr: eval_val}
+    Returns
+    -------
+    defaultdict(dict) : model index -> {eval_attr: eval_val}
 
-    Note:
-        for reduce sites, need to reverse the sign for auc_scorer
+    Note
+    -----
+    for reduce sites, need to reverse the sign for auc_scorer
     """
     agg_auc_scorer = lambda a, b: auc_scorer(
         y_true=np.concatenate([np.ones(len(a)), np.zeros(len(b))]),
@@ -944,8 +956,10 @@ def models_sensitivity_motif(model_dict, x_seq, motif_change_dict, auc_scorer=me
 
 def rescore_sensitivity_motif(model_performance_dict, auc_scorer=metrics.roc_auc_score):
     """re-score
-    Note:
-        for reduce sites, need to reverse the sign for auc_scorer
+
+    Note
+    -----
+    for reduce sites, need to reverse the sign for auc_scorer
     """
     agg_auc_scorer = lambda a, b: auc_scorer(
         y_true=np.concatenate([np.ones(len(a)), np.zeros(len(b))]),

@@ -4,7 +4,7 @@ from keras.models import Model
 def build_sequential_model(model_states, input_state, output_state, model_compile_dict):
     """
     Args:
-        model_states: a list of operators sampled from operator space
+        model_states: a list of _operators sampled from operator space
         input_state:
         output_state: specifies the output tensor, e.g. Dense(1, activation='sigmoid')
         model_compile_dict: a dict of `loss`, `optimizer` and `metrics`

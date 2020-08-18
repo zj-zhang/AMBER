@@ -67,7 +67,7 @@ class State(object):
     Layer_type : str
         The string for the operation type; supports most commonly used ``tf.keras.layers`` types
 
-    kwargs : dict
+    kwargs :
         Operation/layer specifications are parsed through keyword arguments
 
     Attributes

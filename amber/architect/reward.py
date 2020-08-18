@@ -1,9 +1,13 @@
 # -*- coding: UTF-8 -*-
 
-'''Reward function for weighted sum of Loss and Knowledge
-ZZJ
-Nov. 18, 2018
-'''
+"""Reward function for processing a train child model
+
+Reward function takes in trained model and validation data as input, returns reward
+"""
+
+# Author: ZZJ
+# Initial date : Nov. 18, 2018
+# Last update : Aug. 17, 2020
 
 import numpy as np
 
@@ -19,6 +23,16 @@ class Reward:
 
 
 class KnowledgeReward(Reward):
+    """DOCSTRING: To be added after it's thoroughly tested
+
+    Parameters
+    ----------
+    knowledge_function
+    Lambda
+    loss_c
+    knowledge_c
+    """
+
     def __init__(self, knowledge_function, Lambda, loss_c=None, knowledge_c=None):
         self.knowledge_function = knowledge_function
         self.Lambda = Lambda
@@ -49,6 +63,9 @@ class KnowledgeReward(Reward):
 
 
 class LossReward(Reward):
+    """The most basic reward function; returns negative loss as rewards
+    """
+
     def __init__(self, *args, **kwargs):
         self.knowledge_function = None
         self.c = 1.
@@ -67,6 +84,48 @@ class LossReward(Reward):
 
 
 class LossAucReward(Reward):
+    """Reward function for evaluating AUC as reward
+
+    This reward function employs a scorer to evaluate a trained model's prediction. Scorers can be parsed as strings for
+    AUROC and AUPR; or a callable function that takes ``y_true`` and ``y_score`` as input arguments.
+
+    In the case of multi-tasking, the average scorer outputs across all tasks will be returned as the reward.
+
+    Parameters
+    ----------
+    method : str or callable
+        The method to use to implement scorer. If is string, expects either "auc"/"auroc" or "aupr"/"auprc". Otherwise
+        must be callable (see details in Example). Default is "auc".
+
+    knowledge_function : amber.objective
+        The augmented rewards for considering additional biological knowledge and how consistent the trained model is.
+        Default is None.
+
+    Lambda : float
+        The weight of augmented knowledge reward, compared to regular validation data-based loss as 1.
+
+    loss_c : float or None
+        If is None, return the negative loss as is. A constant to scale loss reward, if specified. Default is None.
+
+    knowledge_c : float or None
+        If is None, return the knowledge reward as is. A constant to scale knowledge reward, if specified. Default is None.
+
+
+    Examples
+    --------
+    Constructing the reward function for AUPR on the basis of validation data::
+
+        >>> from amber.architect.reward import LossAucReard
+        >>> reward_fn = LossAucReward(method="aupr")
+        >>> reward_fn(model, val_data)
+
+    Alternatively, use the spearman correlation instead of AUPR for regression tasks::
+
+        >>> from amber.architect.reward import LossAucReard
+        >>> import scipy.stats as ss
+        >>> reward_fn = LossAucReward(method=lambda y_true, y_score: ss.spearmanr(y_true, y_score).correlation)
+        >>> reward_fn(model, val_data)
+    """
     def __init__(self, method='auc', knowledge_function=None, Lambda=1, loss_c=None, knowledge_c=None, *args, **kwargs):
         if method == 'auc' or method == 'auroc':
             from sklearn.metrics import roc_auc_score
@@ -123,6 +182,40 @@ class LossAucReward(Reward):
 
 
 def MockReward(train_history_list, metric, stringify_states, metric_name_dict, Lambda=1.):
+    """MockReward is a resampler from a train history
+
+    MockReward returns a callable reward function that works similarly to a real one : takes in an architecture sequence,
+    and return its reward signals. However, the rewards are all pre-computed in the train history files instead of training
+    from scratch, which is useful for fast benchmarking of architecture searching algorithms
+
+    Parameters
+    ----------
+    train_history_list : list of strings
+        A list of file paths to train history files
+
+    metric : list or set
+        A specified subset of metrices to return
+
+    stringify_states : bool
+        If true, will expect the architecture sequence to be categorically encoded and use it to stringify according to
+        the given model space.
+
+    metric_name_dict : dict
+        A dictionary mapping metric name (keys) to their indices (values)
+
+    Lambda : float
+        The weight for augmented reward, compared to the loss-derived reward on the basis of validation data has a weight
+        of 1.
+
+    Returns
+    -------
+    reward_fn : callable
+        A callable reward function
+
+    See Also
+    ---------
+    amber.architect.reward.LossReward : A regular loss-based reward function
+    """
     train_history_df = read_history(train_history_list, metric_name_dict=metric_name_dict)
 
     def get_mock_reward(model_states, train_history_df, metric, stringify_states=False):

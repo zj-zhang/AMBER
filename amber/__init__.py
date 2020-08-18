@@ -9,14 +9,10 @@ except Exception as e:
     tf.logging.set_verbosity(tf.logging.ERROR)
 
 from ._wrapper import Amber
+from . import architect, modeler
 
 __all__ = [
     'Amber',
     'architect',
-    'bootstrap',
-    'interpret',
     'modeler',
-    'objective',
-    'plots',
-    'utils'
 ]

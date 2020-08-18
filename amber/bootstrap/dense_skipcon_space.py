@@ -1,4 +1,10 @@
 # -*- coding: UTF-8 -*-
+"""
+This module's documentation is Work-In-Progress.
+
+This module might be deprecated in the future.
+"""
+
 
 import numpy as np
 

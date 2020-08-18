@@ -67,7 +67,6 @@ specs = {
             'kl_threshold': 0.01,
             'train_pi_iter': 10,
             'optim_algo': 'adam',
-            'rescale_rewar'
             'temperature': 2.,
             'lr_init': 0.001,
             'tanh_constant': 1.5,

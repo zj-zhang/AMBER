@@ -7,6 +7,7 @@ The :mod:`architect` module provides neural architecture search implementations 
 from .controller import GeneralController, MultiInputController, MultiIOController, OperationController
 from .model_space import State, ModelSpace
 from .manager import GeneralManager, NetworkManager
+from .train_env import ControllerTrainEnvironment, EnasTrainEnv
 
 # alias
 Operation = State
@@ -18,6 +19,8 @@ __all__ = [
     'State',
     'ModelSpace',
     'GeneralManager',
+    'ControllerTrainEnvironment',
+    'EnasTrainEnv',
     # For legacy use
     'OperationController',
     'NetworkManager'

@@ -20,14 +20,6 @@ amber.architect.common\_ops module
    :undoc-members:
    :show-inheritance:
 
-amber.architect.complexity\_calculator module
----------------------------------------------
-
-.. automodule:: amber.architect.complexity_calculator
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 amber.architect.controller module
 ---------------------------------
 

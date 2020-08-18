@@ -15,8 +15,8 @@ def read_vep(vep_dir, check_sanity=False):
     _label_fn = [x for x in os.listdir(vep_dir) if x.endswith("_row_labels.txt")]
     _data_fn = [x for x in os.listdir(vep_dir) if x.endswith("_abs_diffs.h5")]
     assert len(_label_fn) == len(
-        _data_fn) == 1, "Each folder must have exact one row_labels and one abs_diffs file; found %i row_labels and %i abs_diffs" % (
-    len(_label_fn), len(_data_fn))
+        _data_fn) == 1, "Each folder must have exact one row_labels and one abs_diffs file; found %i row_labels and " \
+                        "%i abs_diffs" % (len(_label_fn), len(_data_fn))
     label_fn = os.path.join(vep_dir, _label_fn[0])
     data_fn = os.path.join(vep_dir, _data_fn[0])
     vep_df = pd.read_csv(label_fn, sep='\t')
@@ -45,8 +45,8 @@ def read_vep_logfc(vep_dir):
         vep_data = np.load(os.path.join(vep_dir, _data_fn[0]))['arr_0']
     else:
         assert len(_label_fn) == len(_data_fn1) == len(
-            _data_fn2) == 1, "Each folder must have exact one row_labels and one abs_diffs file; found %i row_labels and %i, %i abs_diffs" % (
-        len(_label_fn), len(_data_fn1), len(_data_fn2))
+            _data_fn2) == 1, "Each folder must have exact one row_labels and one abs_diffs file; found %i row_labels " \
+                             "and %i, %i abs_diffs" % ( len(_label_fn), len(_data_fn1), len(_data_fn2))
         data_fn1 = os.path.join(vep_dir, _data_fn1[0])
         data_fn2 = os.path.join(vep_dir, _data_fn2[0])
         data_fh1 = h5py.File(data_fn1, 'r')

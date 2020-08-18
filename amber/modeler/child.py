@@ -3,8 +3,11 @@
 """
 Child model classes wrapped above Keras.Model API for more complex child
 network manipulations
-ZZ, 10.1.2019
 """
+
+# Author: ZZJ
+# Initial date: 10.1.2019
+
 
 import datetime
 import warnings

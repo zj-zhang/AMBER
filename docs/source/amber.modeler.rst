@@ -1,15 +1,6 @@
 amber.modeler package
 =====================
 
-Subpackages
------------
-
-.. toctree::
-   :maxdepth: 4
-
-   amber.modeler.operators
-   amber.modeler.preprocess
-
 Submodules
 ----------
 

@@ -1,5 +1,11 @@
 # -*- coding: UTF-8 -*-
 
+"""
+Training environment provides interactions between several components within architect and outside.
+
+"""
+
+
 import csv
 import datetime
 import logging
@@ -16,6 +22,20 @@ from ..plots import plot_stats2, plot_environment_entropy, plot_controller_perfo
 
 
 def setup_logger(working_dir='.', verbose_level=logging.INFO):
+    """The logging used by throughout the training envrionment
+
+    Parameters
+    ----------
+    working_dir : str
+        File path to working directory. Logging will be stored in working directory.
+
+    verbose_level : int
+        Verbosity level; can be specified as in ``logging``
+
+    Returns
+    -------
+    logger : the logging object
+    """
     # setup logger
     logger = logging.getLogger('AMBER')
     logger.setLevel(verbose_level)
@@ -65,8 +85,68 @@ def compute_entropy(prob_states):
 
 
 class ControllerTrainEnvironment:
-    """ControllerNetEnvironment: employs `controller` model and `manager` to mange data and reward,
+    """The training evnrionment employs ``controller`` model and ``manager`` to mange data and reward,
     creates a reinforcement learning environment
+
+    Parameters
+    ----------
+    controller : amber.architect.BaseController
+        The controller to search architectures in this environment.
+
+    manager : amber.architect.BaseManager
+        The manager to interact with modelers in this environment.
+
+    max_episode : int
+        Maximum number of controller steps. Each controller step will sample ``max_step_per_ep`` child model
+        architectures.
+
+    max_step_per_ep : int
+        The number of child model architectures to sample in each controller step (aka ``max_episode``).
+
+    logger : logging.Logger or None
+        The logger to use in environment
+
+    resume_prev_run : bool
+        If true, try to reload existing controller and history in the given working directory. Default is False.
+
+    should_plot : bool
+        If false, turn off the plots at the end of training. Default is False.
+
+    initial_buffering_queue : int
+
+
+    working_dir : str
+        File path to working directory
+
+    squeezed_action : bool
+        If false, will expect each entry in architecture sequence to be strictly one-hot encoded; if true, some entries
+        will be categorically encoded. Categorical encoding is consistent with current settings in
+        ``amber.architect.GeneralController``, thus is recommended ``squeezed_action=True``. Default is True.
+
+    with_input_blocks : bool
+        Whether the controller will search for input blocks. Default is False.
+
+    with_skip_connection : bool
+        Whether the controller will search for residual/skip connections. Default is True.
+
+    save_controller : bool
+        Whether to save the final controller parameters in working directory after training (i.e. reaching the max
+        controller steps). Default is True.
+
+    verbose : bool or int
+        Verbosity level
+
+    Attributes
+    ----------
+
+    Notes
+    -----
+    Note if either `with_input_blocks` or `with_skip_connection`, a list of integers will be used to represent the
+        sequential model architecture and wiring, instead of a list of amber.architect.Operation
+
+    TODO
+    ----
+    Refactor the rest of attributes to be private.
     """
 
     def __init__(self,
@@ -80,15 +160,12 @@ class ControllerTrainEnvironment:
                  initial_buffering_queue=15,
                  working_dir='.', entropy_converge_epsilon=0.01,
                  squeezed_action=True,
-                 with_input_blocks=True,
+                 with_input_blocks=False,
                  with_skip_connection=True,
-                 save_controller=False,
+                 save_controller=True,
                  continuous_run=False,
                  verbose=0,
                  **kwargs):
-        """ Note if either `with_input_blocks` or `with_skip_connection`, a list of integers will be used to represent the
-            sequential model architecture and wiring, instead of a list of BioNAS.Controller.States
-        """
         self.controller = controller
         self.manager = manager
         self.max_episode = max_episode

@@ -11,13 +11,16 @@ def get_state_space():
     """State_space is the place we define all possible operations (called `States`) on each layer to stack a neural net.
     The state_space is defined in a layer-by-layer manner, i.e. first define the first layer (layer 0), then layer 1,
     so on and so forth. See below for how to define all possible choices for a given layer.
-    Note:
-        Use key-word arguments to define layer-specific attributes.
-        Adding `Identity` state to a layer is basically omitting a layer by performing no operations.
-    Args:
-        None
-    Returns:
-        a pre-defined state_space object
+
+    Returns
+    -------
+    a pre-defined state_space object
+
+    Notes
+    ------
+    Use key-word arguments to define layer-specific attributes.
+
+    Adding `Identity` state to a layer is basically omitting a layer by performing no operations.
     """
     state_space = ModelSpace()
     state_space.add_layer(0, [
@@ -59,10 +62,9 @@ def get_data():
     """Test function for reading data from a set of FASTA sequences. Read Positive and Negative FASTA files, and
     convert to 4 x N matrices.
     """
-    pos_file = resource_filename('BioNAS.resources',
+    pos_file = resource_filename('amber.resources',
                                  'simdata/DensityEmbedding_motifs-MYC_known1_min-1_max-1_mean-1_zeroProb-0p0_seqLength-200_numSeqs-10000.fa.gz')
-    # neg_file = './BioNAS/resources/simdata/EmptyBackground_seqLength-200_numSeqs-10000.fa.gz'
-    neg_file = resource_filename('BioNAS.resources', 'simdata/EmptyBackground_seqLength-200_numSeqs-10000.fa.gz')
+    neg_file = resource_filename('amber.resources', 'simdata/EmptyBackground_seqLength-200_numSeqs-10000.fa.gz')
     X, y = data_parser.get_data_from_fasta_sequence(pos_file, neg_file)
 
     X_train, y_train, X_test, y_test = X[:18000], y[:18000], X[18000:], y[18000:]

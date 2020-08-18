@@ -1,13 +1,16 @@
 """represent neural network computation graph
 as a directed-acyclic graph from a list of 
 architecture selections
-Note:
-    this is an upgrade of the `NetworkManager` class in v0.2.0
-Author:
-    ZZJ
-Date:
-    6.12.2019
+
+Notes
+-----
+this is an upgrade of the `NetworkManager` class
 """
+
+# Author: ZZJ
+# Initial Date: June 12, 2019
+# Last update:  Aug. 18, 2020
+
 import numpy as np
 import tensorflow as tf
 from keras.layers import Concatenate
@@ -26,11 +29,27 @@ from keras.layers.core import Dense, Dropout, Flatten
 from keras.layers.convolutional import Conv1D, MaxPooling1D, AveragePooling1D
 from keras.layers import Input, Lambda, Permute
 from keras.layers.recurrent import LSTM
-from ..modeler.operators import Layer_deNovo, SeparableFC, sparsek_vec
+from ..modeler._operators import Layer_deNovo, SeparableFC, sparsek_vec
 from ..architect.model_space import get_layer_shortname
 
 
 def get_dag(arg):
+    """Getter method for getting a DAG class from a string
+
+    DAG refers to the underlying tensor computation graphs for child models. Whenever possible, we prefer to use Keras
+    Model API to get the job done. For ENAS, the parameter-sharing scheme is implemented by tensorflow.
+
+    Parameters
+    ----------
+    arg : str or callable
+        return the DAG constructor corresponding to that identifier; if is callable, assume it's a DAG constructor
+        already, do nothing and return it
+
+    Returns
+    -------
+    callable
+        A DAG constructor
+    """
     if arg is None:
         return None
     elif type(arg) is str:
@@ -51,6 +70,22 @@ def get_dag(arg):
 
 
 def get_layer(x, state):
+    """Getter method for a Keras layer, including native Keras implementation and custom layers that are not included in
+    Keras.
+
+    Parameters
+    ----------
+    x : tf.keras.layers
+        The input Keras layer
+
+    state : amber.architect.Operation
+        The target layer to be built
+
+    Returns
+    -------
+    x : tf.keras.layers
+        The built target layer connected to input x
+    """
     if state.Layer_type == 'dense':
         return Dense(**state.Layer_attributes)(x)
 
@@ -106,8 +141,8 @@ def get_layer(x, state):
 
 
 class ComputationNode:
-    def __init__(self, operation, node_name, merge_op=Concatenate):  # TODO: need to change `State` to Operation overall
-        assert type(operation) is State, "Expect operation is BioNAS.Controller.model_space.State, got %s" % type(
+    def __init__(self, operation, node_name, merge_op=Concatenate):
+        assert type(operation) is State, "Expect operation is of type amber.architect.State, got %s" % type(
             operation)
         self.operation = operation
         self.node_name = node_name
@@ -117,10 +152,12 @@ class ComputationNode:
         self.operation_layer = None
         self.merge_layer = None
         self.is_built = False
-        return
 
     def build(self):
-        """
+        """Build the keras layer with merge operations if applicable
+
+        Notes
+        -----
         when building a node, its parents must all be built already
         """
         if self.parent:

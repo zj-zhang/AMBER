@@ -51,6 +51,13 @@ napoleon_use_param = False
 napoleon_use_ivar = True
 
 
+# The suffix(es) of source filenames.
+# You can specify multiple suffix as a list of string:
+#
+#source_parsers = {
+#        '.md' : 'recommonmark.parser.CommonMarkParser'
+#        }
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 

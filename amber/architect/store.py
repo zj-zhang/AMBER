@@ -1,5 +1,9 @@
 # -*- coding: UTF-8 -*-
 
+"""
+Store functions will take care of storage and post-processing related matters after a child model is trained.
+"""
+
 import shutil
 import os
 import numpy as np
@@ -8,6 +12,21 @@ from ..plots import plot_hessian, plot_training_history
 
 
 def get_store_fn(arg):
+    """The getter function that returns a callable store function from a string
+
+    Parameters
+    ----------
+    arg : str
+        The string identifier for a particular store function. Current choices are:
+        - general
+        - model_plot
+        - minimal
+
+    Returns
+    -------
+    amber.architect.store
+        A callable store function
+    """
     if callable(arg) is True:
         return arg
     elif arg is None:

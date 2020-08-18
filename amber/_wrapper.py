@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Overall wrapper class for DeepAmbre
+Overall wrapper class for AMBER
 """
 
 from tensorflow import Session
