@@ -6,7 +6,7 @@ August, 2020
 
 
 Documentation is still *Work-In-Progress*. More comprehensive docs to follow. Latest docs can be found at:
-https://readthedocs.org/projects/amber-dl/
+https://amber-dl.readthedocs.io/en/latest/
 
 
 ### Installation
