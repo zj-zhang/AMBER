@@ -11,6 +11,7 @@ import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 import numpy as np
 import os
+import sys
 import copy
 import logging
 import pickle
@@ -408,19 +409,27 @@ def train_nas(arg):
     controller.save_weights(os.path.join(wd, "controller_weights.h5"))
 
 
-if __name__ == "__main__":
-    if not run_from_ipython():
-        parser = argparse.ArgumentParser(description="experimental zero-shot nas")
-        parser.add_argument("--analysis", type=str, choices=['train', 'reload'], required=True, help="analysis type")
-        parser.add_argument("--wd", type=str, default="./outputs/zero_shot/", help="working dir")
-        parser.add_argument("--parallel", default=False, action="store_true", help="Use parallel")
-        parser.add_argument("--resume", default=False, action="store_true", help="resume previous run")
-        parser.add_argument("--config-file", type=str, required=True, help="Path to the config file to use.")
-        parser.add_argument("--dfeature-name-file", type=str, required=True, help="Path to file with dataset feature names listed one per line.")
-        parser.add_argument("--train-file", type=str, required=True, help="Path to the hdf5 file of training data.")
-        parser.add_argument("--val-file", type=str, required=True, help="Path to the hdf5 file of validation data.")
-        parser.add_argument("--lockstep-sampling", default=False, action="store_true", help="Ensure same training samples used for all models.")
+def get_parser():
+    parser = argparse.ArgumentParser(description="experimental zero-shot nas")
+    parser.add_argument("--analysis", type=str, choices=['train', 'reload'], required=True, help="analysis type")
+    parser.add_argument("--wd", type=str, default="./outputs/zero_shot/", help="working dir")
+    parser.add_argument("--parallel", default=False, action="store_true", help="Use parallel")
+    parser.add_argument("--resume", default=False, action="store_true", help="resume previous run")
+    parser.add_argument("--config-file", type=str, required=True, help="Path to the config file to use.")
+    parser.add_argument("--dfeature-name-file", type=str, required=True, help="Path to file with dataset feature names listed one per line.")
+    parser.add_argument("--train-file", type=str, required=True, help="Path to the hdf5 file of training data.")
+    parser.add_argument("--val-file", type=str, required=True, help="Path to the hdf5 file of validation data.")
+    parser.add_argument("--lockstep-sampling", default=False, action="store_true", help="Ensure same training samples used for all models.")
+    return parser
 
+
+if __name__ == "__main__":
+    if run_from_ipython():
+        arg_str = """--analysis reload     --wd  ./outputs/zero_shot_deepsea/     --config-file ./data/zero_shot_deepsea/debug_feats.config.2_cats.tsv     --train-file ./data/zero_shot_deepsea/train.h5     --val-file ./data/zero_shot_deepsea/val.h5     --dfeature-name-file ./data/zero_shot_deepsea/dfeatures_ordered_list.txt     --parallel"""
+        arg_list = arg_str.split()
+        sys.argv = ['foo'] + arg_list
+    else:
+        arg = get_parser()
         arg = parser.parse_args()
 
         if arg.analysis == "train":
