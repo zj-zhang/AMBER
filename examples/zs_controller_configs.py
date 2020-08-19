@@ -19,8 +19,8 @@ def get_zs_controller_configs():
             'temperature': [0.5, 1, 2],
             #'descriptor_l1': [1e-1, 1e-8],
             'use_ppo_loss': [True, False],
-            'kl_threshold': [0.05, 0.1],
-            'max_episodes': [200, 400],
+            #'kl_threshold': [0.05, 0.1],
+            #'max_episodes': [200, 400],
             #'max_step_per_ep': [15, 30],
             #'batch_size': [5, 15]
     })
@@ -64,5 +64,6 @@ def analyze(wd):
     data_dict.update({config_keys[i]:configs[i] for i in range(len(config_keys))})
     eval_df = pd.DataFrame(data_dict, columns=['config_index'] + config_keys + ['efficiency', 'specificity'])
     eval_df.groupby("config_index").mean().sort_values(by="efficiency", ascending=False).to_csv(os.path.join(wd, "eval_df.tsv"), sep="\t", index=False, float_format="%.4f")
+    eval_df.sort_values(by="efficiency", ascending=False).to_csv(os.path.join(wd, "eval_df.ungrouped.tsv"), sep="\t", index=False, float_format="%.4f")
 
 

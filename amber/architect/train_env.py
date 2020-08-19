@@ -752,7 +752,7 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                             loss_and_metrics_ep[x] += loss_and_metrics[x]
                         # save the arc_seq and reward
                         self.controller.store(prob=probs, action=arc_seq, reward=reward,
-                                              description=self.data_descriptive_features[[j]],
+                                              description=self.data_descriptive_features[[m]],
                                               manager_index=m)
                         # write the results of this trial into a file
                         data = ["%i-%i"%(m,trial), [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],

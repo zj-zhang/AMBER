@@ -445,7 +445,7 @@ def train(arg, config_dict=None, session=None, logger=None):
 
 
 def train_and_reload(arg):
-    B = 10
+    B = 50
     par_wd = arg.wd
     logger = setup_logger(par_wd, verbose_level=logging.CRITICAL)
     from zs_controller_configs import get_zs_controller_configs

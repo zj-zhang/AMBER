@@ -52,17 +52,17 @@ def get_controller(model_space, session, data_description_len=3, layer_embedding
             with_skip_connection=False,
             skip_weight=None,
             skip_target=0.2,
-            lstm_size=128,
+            lstm_size=64,
             lstm_num_layers=1,
             kl_threshold=0.1,
             train_pi_iter=100,
             optim_algo='adam',
-            temperature=1.5,
+            temperature=0.5,
             tanh_constant=2,
             buffer_type="MultiManager",
             buffer_size=5,
             batch_size=20,
-            use_ppo_loss=True,
+            use_ppo_loss=False,
             rescale_advantage_by_reward=False
         )
     return controller
@@ -171,7 +171,7 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         model_compile_dict=model_compile_dict,
         working_dir=wd,
         verbose=verbose,
-        save_full_model=True,
+        save_full_model=False,
         model_space=model_space,
         fit_kwargs={
             'steps_per_epoch': 100,
@@ -260,6 +260,7 @@ def convert_to_dataframe(res, model_space, data_names):
 def reload_trained_controller(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
     configs, config_keys, controller, model_space = read_configs(arg)
+    controller.load_weights(os.path.join(wd, "controller_weights.h5"))
     dfeatures = np.stack([configs[k]["dfeatures"] for k in config_keys])
     res = get_samples_controller(dfeatures, controller, model_space, T=1000)
    
@@ -280,6 +281,7 @@ def reload_trained_controller(arg):
         plt.legend(bbox_to_anchor=(1.05, 1.0), loc='upper left')
         plt.tight_layout()
         plt.savefig(os.path.join(wd, "layer_%i.png"%i), bbox_inches="tight")
+    df.to_csv(os.path.join(wd, "sampled_controller_arcs.tsv"), sep="\t")
     return res
 
 
