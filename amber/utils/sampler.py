@@ -495,19 +495,19 @@ class BatchedBioIntervalSequenceGenerator(BatchedBioIntervalSequence):
 class BatchedHDF5Generator(tf.keras.utils.Sequence):
     def __init__(self, hdf5_fp, batch_size, shuffle=True, in_memory=False, seed=None, x_selector=None, y_selector=None):
         super(BatchedHDF5Generator, self).__init__()
+        self.x_selector = x_selector or 'x'
+        self.y_selector = y_selector or 'y'
         self.in_memory = in_memory
         if self.in_memory is True:
             with h5py.File(hdf5_fp, "r") as f:
-                self.h5py_store = (f['x'][:], f['y'][:])
+                self.h5py_store = (f[self.x_selector][:], f[self.y_selector][:])
         else:
             self.hdf5_store = h5py.File(hdf5_fp, "r")
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.seed = seed
         self.random_state = numpy.random.RandomState(seed=self.seed)
-        self.x_selector = x_selector
-        self.y_selector = y_selector
-        self.n_total_samp = (self.hdf5_store['x'].shape[0] // self.batch_size)*self.batch_size
+        self.n_total_samp = (self.hdf5_store[self.x_selector].shape[0] // self.batch_size)*self.batch_size
         #self.n_total_samp = self.hdf5_store['x'].shape[0]
         self.n_total_batch = len(self)
         # Method 2: only shuffle batch order, not batch composition, allowing chunk storage in hdf5
@@ -526,12 +526,8 @@ class BatchedHDF5Generator(tf.keras.utils.Sequence):
             if self.shuffle: self._shuffle()
             self.step = 0
         samp_idx = self.index[self.step].tolist()
-        x_batch = self.hdf5_store['x'][samp_idx]
-        y_batch = self.hdf5_store['y'][samp_idx]
-        if self.x_selector is not None:
-            x_batch = x_batch[:, self.x_selector]
-        if self.y_selector is not None:
-            y_batch = y_batch[:, self.y_selector]
+        x_batch = self.hdf5_store[self.x_selector][samp_idx]
+        y_batch = self.hdf5_store[self.y_selector][samp_idx]
         self.step += 1
         return x_batch, y_batch
 

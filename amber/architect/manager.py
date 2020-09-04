@@ -166,7 +166,7 @@ class DistributedGeneralManager(GeneralManager):
             self.train_y = None
             self.file_connected = False
 
-    def get_rewards(self, trial, model_arc, **kwargs):
+    def get_rewards(self, trial, model_arc, remap_device=None, **kwargs):
         # TODO: use tensorflow distributed strategy
         #strategy = tf2.distribute.MirroredStrategy(devices=self.devices)
         #print('Number of devices: {} - {}'.format(strategy.num_replicas_in_sync, self.devices))
@@ -178,10 +178,13 @@ class DistributedGeneralManager(GeneralManager):
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         train_sess = tf.Session(graph=train_graph, config=config)
-        if self.devices is None:
+        # remap device will overwrite the manager device
+        if remap_device is not None:
+            target_device = remap_device
+        elif self.devices is None:
             from ..utils.gpu_query import get_idle_gpus
             idle_gpus = get_idle_gpus()
-            target_device = idle_gpus[0] 
+            target_device = idle_gpus[0]
             target_device = "/device:GPU:%i"%target_device
             self.devices = [target_device]
             sys.stderr.write("[%s] Auto-assign device: %s"% (pid, target_device) )

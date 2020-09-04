@@ -278,7 +278,7 @@ class MultiManagerBuffer:
         self.is_squeeze_dim = is_squeeze_dim
         self.rescale_advantage_by_reward = rescale_advantage_by_reward
         self.clip_advantage = clip_advantage
-        self.r_bias = None
+        self.r_bias = {}
 
         # short term buffer storing single trajectory
         self.action_buffer = []
@@ -331,6 +331,7 @@ class MultiManagerBuffer:
             # write out one example for each manager
             for j in self.r_bias:
                 this = np.where(np.array(self.manager_index_buffer)==j)[0]
+                if len(this) == 0: continue
                 max_idx = np.argmax(np.array(self.reward_buffer)[this]).tolist()
                 action_onehot = self.action_buffer[this[max_idx]]
                 if self.is_squeeze_dim:
@@ -361,10 +362,20 @@ class MultiManagerBuffer:
             buffer
         """
         stratified_mean = {}
-        # Assumes manager_index is starting from 0
-        for idx in range(0, max(self.manager_index_buffer)+1):
+        # Assumes manager_index is starting from 0 and is continuous
+        max_manager_index = max(self.manager_index_buffer) + 1
+        if len(self.lt_reward_mean) > 0:
+            max_manager_index = max(max_manager_index, max(self.lt_reward_mean[-1])+1)
+        for idx in range(0, max_manager_index):
             this = np.where(np.array(self.manager_index_buffer)==idx)[0]
-            r_mean = np.mean(np.array(self.reward_buffer)[this])
+            if len(this)>0:
+                r_mean = np.mean(np.array(self.reward_buffer)[this])
+            # account for manager sampling - find the last occurence of idx
+            else:
+                if len(self.lt_reward_mean)>0 and (idx in self.lt_reward_mean[-1]):
+                    r_mean = self.lt_reward_mean[-1][idx]
+                else:
+                    r_mean = np.nan
             stratified_mean[idx] = r_mean
         return stratified_mean
 
@@ -376,14 +387,13 @@ class MultiManagerBuffer:
             action_onehot = [np.concatenate(onehot, axis=0) for onehot in zip(*self.action_buffer)]
 
         reward = np.array(self.reward_buffer)
-        if not self.lt_reward_mean:
-            self.r_bias = self.stratified_reward_mean()
-        else:
-            self.r_bias = {
-                    j: self.r_bias[j] * self.ewa_beta +
-                       self.lt_reward_mean[-1][j] * (1 - self.ewa_beta)
-                            for j in self.r_bias
-            }
+        # need to account for manager sampling. zz 2020.9.2
+        for j in set(self.manager_index_buffer):
+            if not j in self.r_bias:
+                self.r_bias[j] = self.stratified_reward_mean()[j]
+            else:
+                self.r_bias[j] = self.r_bias[j] * self.ewa_beta + \
+                           self.lt_reward_mean[-1][j] * (1 - self.ewa_beta)
 
         # unroll the r_bias to fill in corresponding locations in short-term buffer
         expanded_r_bias = np.array([ self.r_bias[j] for j in self.manager_index_buffer  ])
