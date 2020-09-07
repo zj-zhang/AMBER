@@ -83,6 +83,9 @@ def get_controller(controller_type, model_space, session, **kwargs):
     elif controller_type == 'MultiIO' or controller_type == 'MultiIOController':
         from .architect import MultiIOController
         controller = MultiIOController(model_space=model_space, session=session, **kwargs)
+    elif controller_type == 'ZeroShot' or controller_type == 'ZeroShotController':
+        from .architect import ZeroShotController
+        controller = ZeroShotController(model_space=model_space, session=session, **kwargs)
     else:
         raise Exception('cannot understand controller type: %s' % controller_type)
     print("controller = %s" % controller_type)
@@ -141,6 +144,23 @@ def get_manager(manager_type, model_fn, reward_fn, data_dict, session, *args, **
             *args,
             **kwargs
         )
+    elif manager_type == 'Distributed' or manager_type == 'DistributedManager':
+        from .architect.manager import DistributedGeneralManager
+        train_data_kwargs = kwargs.pop("train_data_kwargs", None)
+        validate_data_kwargs = kwargs.pop("validate_data_kwargs", None)
+        devices = kwargs.pop("devices", None)
+        manager = DistributedGeneralManager(
+                                 devices=devices,
+                                 train_data_kwargs=train_data_kwargs,
+                                 validate_data_kwargs=validate_data_kwargs,
+                                 model_fn=model_fn,
+                                 reward_fn=reward_fn,
+                                 train_data=data_dict['train_data'],
+                                 validation_data=data_dict['validation_data'],
+                                 *args,
+                                 **kwargs
+                                 )
+
     else:
         raise Exception("cannot understand manager type: %s" % manager_type)
     print("manager = %s" % manager_type)
@@ -149,8 +169,8 @@ def get_manager(manager_type, model_fn, reward_fn, data_dict, session, *args, **
 
 # model_fn
 def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
+    from .architect.model_space import State
     if model_fn_type == 'DAG' or model_fn_type == 'DAGModelBuilder':
-        from .architect.model_space import State
         from .modeler import DAGModelBuilder
         assert 'inputs_op' in kwargs and 'outputs_op' in kwargs
         inp_op_list = kwargs.pop("inputs_op")
@@ -165,7 +185,6 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
             session=session,
             *args, **kwargs)
     elif model_fn_type == 'Enas' or model_fn_type == 'EnasAnnModelBuilder':
-        from .architect.model_space import State
         from .modeler import EnasAnnModelBuilder
         inp_op_list = kwargs.pop("inputs_op")
         inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
@@ -179,7 +198,6 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
             session=session,
             *args, **kwargs)
     elif model_fn_type == 'EnasCnnModelBuilder':
-        from .architect.model_space import State
         from .modeler import EnasCnnModelBuilder
         inp_op_list = kwargs.pop("inputs_op")
         inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
@@ -194,6 +212,19 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
             session=session,
             controller=controller,
             *args, **kwargs)
+    elif model_fn_type == "KerasModelBuilder":
+        from .modeler import KerasModelBuilder
+        inp_op_list = kwargs.pop("inputs_op")
+        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        assert len(inputs_op)==1, "KerasModelBuilder only accepts one input; try KerasMultiIOModelBuilder for multiple inputs"
+        out_op_list = kwargs.pop("outputs_op")
+        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
+        assert len(output_op)==1, "KerasModelBuilder only accepts one output; try KerasMultiIOModelBuilder for multiple outputs"
+        model_fn = KerasModelBuilder(
+                inputs=inputs_op[0],
+                outputs=output_op[0],
+                model_space=model_space,
+                *args, **kwargs)
     else:
         raise Exception('cannot understand model_builder type: %s' % model_fn_type)
     print("modeler = %s" % model_fn_type)

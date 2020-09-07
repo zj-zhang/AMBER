@@ -31,6 +31,8 @@ from amber.modeler import KerasModelBuilder
 
 from amber.utils.sampler import BatchedHDF5Generator
 
+# put model space in zs_config.py
+from zs_config import get_model_space_common
 
 def get_controller(model_space, session, data_description_len=3, layer_embedding_sharing=None):
     with tf.device("/cpu:0"):
@@ -59,84 +61,6 @@ def get_controller(model_space, session, data_description_len=3, layer_embedding
             rescale_advantage_by_reward=False
         )
     return controller
-
-
-def get_model_space_common():
-
-    # Setup and params.
-    state_space = ModelSpace()
-    default_params = {"kernel_initializer": "glorot_uniform",
-                      "activation": "relu"}
-    param_list = [
-            # Block 1:
-            [
-                {"filters": 16, "kernel_size": 8},
-                {"filters": 16, "kernel_size": 14},
-                {"filters": 16, "kernel_size": 20}
-            ],
-            # Block 2:
-            [
-                {"filters": 32, "kernel_size": 8},
-                {"filters": 32, "kernel_size": 14},
-                {"filters": 32, "kernel_size": 20}
-            ],
-            # Block 3:
-            [
-                {"filters": 64, "kernel_size": 8},
-                {"filters": 64, "kernel_size": 14},
-                {"filters": 64, "kernel_size": 20}
-            ],
-        ]
-
-    # Build state space.
-    layer_embedding_sharing = {}
-    conv_seen = 0
-    for i in range(len(param_list)):
-        # Build conv states for this layer.
-        conv_states = [State("Identity")]
-        for j in range(len(param_list[i])):
-            d = copy.deepcopy(default_params)
-            for k, v in param_list[i][j].items():
-                d[k] = v
-            conv_states.append(State('conv1d', name="conv{}".format(conv_seen), **d))
-        state_space.add_layer(conv_seen*3, conv_states)
-        if i > 0:
-            layer_embedding_sharing[conv_seen*3] = 0
-        conv_seen += 1
-
-        # Add pooling states.
-        if i < len(param_list) - 1:
-            pool_states = [State('Identity'),
-                           State('maxpool1d', pool_size=4, strides=4),
-                           State('avgpool1d', pool_size=4, strides=4)]
-            if i > 0:
-                layer_embedding_sharing[conv_seen*3-2] = 1
-        else:
-            pool_states = [
-                    State('Flatten'),
-                    State('GlobalMaxPool1D'),
-                    State('GlobalAvgPool1D')
-                ]
-        state_space.add_layer(conv_seen*3-2, pool_states)
-
-
-        # Add dropout
-        state_space.add_layer(conv_seen*3-1, [
-            State('Identity'),
-            State('Dropout', rate=0.1),
-            State('Dropout', rate=0.3),
-            State('Dropout', rate=0.5)
-            ])
-        if i > 0:
-            layer_embedding_sharing[conv_seen*3-1] = 2
-
-    # Add final classifier layer.
-    state_space.add_layer(conv_seen*3, [
-            State('Dense', units=30, activation='relu'),
-            State('Dense', units=100, activation='relu'),
-            State('Identity')
-        ])
-    return state_space, layer_embedding_sharing
 
 
 def get_manager_distributed(train_data, val_data, controller, model_space, wd, data_description, verbose=0,
@@ -314,7 +238,7 @@ def train_nas(arg):
                with_input_blocks=False,
                with_skip_connection=False,
                save_controller_every=1,
-               enable_manager_sampling=True
+               enable_manager_sampling=False
            )
 
     env = ParallelMultiManagerEnvironment(
