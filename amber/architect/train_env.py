@@ -760,6 +760,7 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                             res_list.append(self._reward_getter(x))
                 
                 assert len(res_list) == len(this_manager_index)
+                self.logger.info("storing..")
                 for m_, (store_, res_) in enumerate(zip(store_args, res_list)):  # manager level
                     m = this_manager_index[m_]
                     for t, (store, res) in enumerate(zip(store_, res_)):        # trial level

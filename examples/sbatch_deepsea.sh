@@ -7,6 +7,10 @@
 
 echo 'Just plain run.'
 
+if [ "$SLURM_JOB_ID" == "" ]; then
+	SLURM_JOB_ID="test-amber"
+fi
+
 # Load bash config.
 source "${HOME}"'/.bashrc'
 if [ $? != 0 ]; then
@@ -74,15 +78,12 @@ else
 fi
 
 # Run train script.
-/usr/bin/time -v python -u "${SRC_DIR}"'/zero_shot_nas.deepsea.py' \
-    --analysis 'train' \
-    --wd "${SRC_DIR}"'/outputs/zero_shot_deepsea' \
-    --config-file "${SRC_DIR}"'/data/zero_shot_deepsea/debug_feats.config.4_cats.tsv' \
+/usr/bin/time -v python -u "${SRC_DIR}"'/zero_shot_nas.real_deepsea.py' \
+    --wd "${SRC_DIR}"'/outputs/zs_deepsea' \
+    --config-file "${SRC_DIR}"'/data/zero_shot_deepsea/train_feats.config_file.tsv' \
     --train-file '/dev/shm/'"${SLURM_JOB_ID}"'/train.h5' \
     --val-file '/dev/shm/'"${SLURM_JOB_ID}"'/val.h5' \
-    --dfeature-name-file "${SRC_DIR}"'/data/zero_shot_deepsea/dfeatures_ordered_list.txt' \
-    --parallel  #\
-#    --resume
+    --dfeature-name-file "${SRC_DIR}"'/data/zero_shot/dfeatures_ordered_list.txt'
 echo $?
 
 # Deactivate conda.

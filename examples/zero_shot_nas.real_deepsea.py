@@ -47,9 +47,9 @@ def get_controller(model_space, session, data_description_len=3, layer_embedding
             session=session,
             with_skip_connection=False,
             skip_weight=None,
-            lstm_size=64,
+            lstm_size=128,
             lstm_num_layers=1,
-            kl_threshold=0.01,
+            kl_threshold=0.1,
             train_pi_iter=100,
             optim_algo='adam',
             temperature=1.,
@@ -80,7 +80,7 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         train_data=train_data,
         validate_data_kwargs=validate_data_kwargs,
         validation_data=val_data,
-        epochs=30,
+        epochs=100,
         child_batchsize=1000,
         reward_fn=reward_fn,
         model_fn=mb,
@@ -137,6 +137,7 @@ def get_manager_common(train_data, val_data, controller, model_space, wd, data_d
 
 
 def read_configs(arg):
+    meta = read_metadata()
     dfeature_names = list()
     with open(arg.dfeature_name_file, "r") as read_file:
         for line in read_file:
@@ -186,7 +187,7 @@ def read_configs(arg):
             d = {
                         'hdf5_fp':  arg.train_file if x=='train' else arg.val_file,
                         'x_selector': Selector(label='x'),
-                        'y_selector': Selector(label='labels/%s'%configs[k]["feat_name"]),
+                        'y_selector': Selector(label='y', index=meta.loc[configs[k]["feat_name"]].col_idx),
                         'batch_size': 1024,
                         'shuffle': x=='train',
                 }
@@ -243,6 +244,7 @@ def train_nas(arg):
 
     env = ParallelMultiManagerEnvironment(
                 processes=len(gpus) if len(gpus)>1 else 1,
+                #processes=1,
                 **tmp)
 
     try:
@@ -251,6 +253,29 @@ def train_nas(arg):
         print("user interrupted training")
         pass
     controller.save_weights(os.path.join(wd, "controller_weights.h5"))
+
+
+def read_metadata():
+    meta = pd.read_table("./data/zero_shot/full_metadata.tsv")
+    meta = meta.loc[meta['molecule']=='DNA']
+    indexer = pd.read_table("./data/zero_shot_deepsea/label_index_with_category_annot.tsv")
+    indexer['labels'] = ["_".join(x.split("--")).replace("\xa0","") for x in indexer['labels']]
+    from collections import Counter
+    counter = Counter()
+    new_label = []
+    for label in indexer['labels']:
+        if counter[label] > 0:
+            new_label.append("%s_%i"%(label, counter[label]))
+        else:
+            new_label.append(label)
+        counter[label] += 1
+    indexer.index = new_label
+    meta['new_name'] = [x.replace("+", "_") for x in meta['new_name']]
+    meta['col_idx'] = [indexer.loc[x, "index"] if x in indexer.index else np.nan for x in meta['new_name']]
+    meta = meta.dropna()
+    meta['col_idx'] = meta['col_idx'].astype('int')
+    meta.index = meta['feat_name']
+    return meta
 
 
 if __name__ == "__main__":

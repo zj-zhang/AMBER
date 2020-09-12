@@ -163,6 +163,7 @@ class DistributedGeneralManager(GeneralManager):
             self.train_x.close()
             if self.train_y:
                 self.train_y.close()
+            self._validation_data_gen.close()
             self.train_x = None
             self.train_y = None
             self.file_connected = False
@@ -204,8 +205,8 @@ class DistributedGeneralManager(GeneralManager):
                     X_train, y_train = unpack_data(self.train_data, callable_kwargs=self.train_data_kwargs)
                     self.train_x = X_train
                     self.train_y = y_train
-                    assert callable(self.validation_data)
-                    self.validation_data = self.validation_data(**self.validate_data_kwargs)
+                    assert callable(self.validation_data), "Expect validation_data to be callable, got %s" % type(self.validation_data)
+                    self._validation_data_gen = self.validation_data(**self.validate_data_kwargs)
                     self.file_connected = True
                 elapse_time = time.time() - start_time
                 sys.stderr.write("  %.3f sec\n"%elapse_time)
@@ -223,7 +224,7 @@ class DistributedGeneralManager(GeneralManager):
                                      batch_size=self.batchsize,
                                      epochs=self.epochs,
                                      verbose=self.verbose,
-                                     validation_data=self.validation_data,
+                                     validation_data=self._validation_data_gen,
                                      callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
                                                                 monitor='val_loss', verbose=self.verbose,
                                                                 save_best_only=True),
@@ -240,7 +241,7 @@ class DistributedGeneralManager(GeneralManager):
                     sys.stderr.write("[%s] Postprocessing.."% pid )
                     # evaluate the model by `reward_fn`
                     this_reward, loss_and_metrics, reward_metrics = \
-                        self.reward_fn(model, self.validation_data,
+                        self.reward_fn(model, self._validation_data_gen,
                                        session=train_sess,
                                        )
                     loss = loss_and_metrics.pop(0)
@@ -253,12 +254,12 @@ class DistributedGeneralManager(GeneralManager):
                     # do any post processing,
                     # e.g. save child net, plot training history, plot scattered prediction.
                     if self.store_fn:
-                        val_pred = model.predict(self.validation_data)
+                        val_pred = model.predict(self._validation_data_gen)
                         self.store_fn(
                             trial=trial,
                             model=model,
                             hist=hist,
-                            data=self.validation_data,
+                            data=self._validation_data_gen,
                             pred=val_pred,
                             loss_and_metrics=loss_and_metrics,
                             working_dir=self.working_dir,

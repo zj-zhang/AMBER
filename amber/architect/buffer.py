@@ -270,7 +270,7 @@ class MultiManagerBuffer:
                  ewa_beta=None,
                  is_squeeze_dim=False,
                  rescale_advantage_by_reward=False,
-                 clip_advantage=10.,
+                 clip_advantage=3.,
                  **kwargs
                  ):
         self.max_size = max_size
@@ -398,8 +398,13 @@ class MultiManagerBuffer:
         # unroll the r_bias to fill in corresponding locations in short-term buffer
         expanded_r_bias = np.array([ self.r_bias[j] for j in self.manager_index_buffer  ])
         assert expanded_r_bias.shape == reward.shape
+        # For multi-manager buffer, scale each manager's reward to have the unit variance too
         if self.rescale_advantage_by_reward:
             ad = (reward - expanded_r_bias) / np.abs(expanded_r_bias)
+            index_buffer = np.array(self.manager_index_buffer)
+            manager_to_index = {j:np.where(index_buffer==j)[0] for j in set(index_buffer)}
+            for j in manager_to_index:
+                ad[manager_to_index[j]] /= (ad[manager_to_index[j]].std() + 1e-2)
         else:
             ad = (reward - expanded_r_bias)
 
