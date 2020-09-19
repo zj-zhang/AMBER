@@ -225,9 +225,9 @@ def get_reward_fn(reward_fn_type, knowledge_fn, *args, **kwargs):
         reward_fn = MockReward(*args, **kwargs)
     elif reward_fn_type == 'LossAucReward':
         from .architect.reward import LossAucReward
-        assert knowledge_fn is None, \
-            "Incompatability: LossAucReward must have knownledge_fn=None; got %s" % knowledge_fn
-        reward_fn = LossAucReward(*args, **kwargs)
+        #assert knowledge_fn is None, \
+        #    "Incompatability: LossAucReward must have knownledge_fn=None; got %s" % knowledge_fn
+        reward_fn = LossAucReward(knowledge_function=knowledge_fn, *args, **kwargs)
     else:
         raise Exception("cannot understand reward_fn type: %s" % reward_fn_type)
     print("reward = %s" % reward_fn_type)
@@ -247,12 +247,16 @@ def get_knowledge_fn(knowledge_fn_type, knowledge_data_dict, *args, **kwargs):
     elif knowledge_fn_type == 'Motif':
         from .objective import MotifKLDivergence
         k_fn = MotifKLDivergence(*args, **kwargs)
+    elif knowledge_fn_type == 'AuxilaryAcc':
+        from .objective import AuxilaryAcc
+        k_fn = AuxilaryAcc(*args, **kwargs)
     elif knowledge_fn_type == 'None' or knowledge_fn_type == 'zero':
         k_fn = None
     else:
         raise Exception("cannot understand knowledge_fn type: %s" % knowledge_fn_type)
     if k_fn is not None:
-        k_fn.knowledge_encoder(**knowledge_data_dict)
+        if hasattr(k_fn, "knowledge_encoder"):
+            k_fn.knowledge_encoder(**knowledge_data_dict)
     print("knowledge = %s" % knowledge_fn_type)
     return k_fn
 
