@@ -645,7 +645,7 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                     remap_device=args[i]['remap_device']
                     )
             except Exception as e:
-                raise Exception("child pid %i has exception %s" % (pid, e))
+                raise Exception("child pid %i when processing %s, has exception %s" % (pid, args[i]['model_arc'], e))
             res.append({'reward': reward, 'loss_and_metrics': loss_and_metrics})
         # close all handlers opened in this thread
         for i in range(len(args)):
