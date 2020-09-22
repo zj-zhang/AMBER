@@ -8,6 +8,7 @@ import os
 from collections import OrderedDict
 import itertools
 import pandas as pd
+import numpy as np
 import json
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -237,6 +238,29 @@ def get_model_space_long_and_dilation():
             State('Identity')
         ])
     return state_space, layer_embedding_sharing
+
+
+def read_metadata():
+    meta = pd.read_table("./data/zero_shot/full_metadata.tsv")
+    meta = meta.loc[meta['molecule']=='DNA']
+    indexer = pd.read_table("./data/zero_shot_deepsea/label_index_with_category_annot.tsv")
+    indexer['labels'] = ["_".join(x.split("--")).replace("\xa0","") for x in indexer['labels']]
+    from collections import Counter
+    counter = Counter()
+    new_label = []
+    for label in indexer['labels']:
+        if counter[label] > 0:
+            new_label.append("%s_%i"%(label, counter[label]))
+        else:
+            new_label.append(label)
+        counter[label] += 1
+    indexer.index = new_label
+    meta['new_name'] = [x.replace("+", "_") for x in meta['new_name']]
+    meta['col_idx'] = [indexer.loc[x, "index"] if x in indexer.index else np.nan for x in meta['new_name']]
+    meta = meta.dropna()
+    meta['col_idx'] = meta['col_idx'].astype('int')
+    meta.index = meta['feat_name']
+    return meta
 
 
 def get_zs_controller_configs():

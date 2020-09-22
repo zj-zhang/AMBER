@@ -7,7 +7,7 @@ FZZ, June 19, 2020
 """
 
 from amber import Amber
-from amber.utils.sampler import BatchedHDF5Generator
+from amber.utils.sampler import BatchedHDF5Generator, Selector
 from amber.utils import run_from_ipython, get_available_gpus
 from amber.architect import ModelSpace, Operation
 import sys
@@ -18,10 +18,11 @@ import scipy.stats as ss
 #from tensorflow.keras.optimizers import SGD, Adam
 from keras.optimizers import SGD, Adam
 import argparse
-from zs_config import get_model_space_common as get_model_space
+from zs_config import get_model_space_long_and_dilation as get_model_space
+from zs_config import read_metadata
 
 
-def get_data_config(fp, feat_name, batch_size, shuffle):
+def get_data_config_amber_encoded(fp, feat_name, batch_size, shuffle):
     """Prepare the kwargs for BatchedHDF5Generator
 
     Note
@@ -30,8 +31,22 @@ def get_data_config(fp, feat_name, batch_size, shuffle):
     """
     d = {
             'hdf5_fp': fp,
-            'x_selector': 'x',
-            'y_selector': 'labels/%s'%feat_name,
+            'x_selector': Selector('x'),
+            'y_selector': Selector('labels/%s'%feat_name),
+            'batch_size': batch_size,
+            'shuffle': shuffle
+        }
+    return d
+
+
+def get_data_config_deepsea_compiled(fp, feat_name, batch_size, shuffle):
+    """Equivalent for amber encoded but for deepsea 919 compiled hdf5
+    """
+    meta = read_metadata()
+    d = {
+            'hdf5_fp': fp,
+            'x_selector': Selector(label='x'),
+            'y_selector': Selector(label='y', index=meta.loc[feat_name].col_idx),
             'batch_size': batch_size,
             'shuffle': shuffle
         }
@@ -53,14 +68,16 @@ def amber_app(wd, feat_name, run=False):
 
 
     # Next, define the specifics
-    train_data_kwargs = get_data_config(
-            fp="./data/zero_shot/amber_encoded.train_feats.train.h5",
+    train_data_kwargs = get_data_config_deepsea_compiled(
+            #fp="./data/zero_shot/amber_encoded.train_feats.train.h5",
+            fp="./data/zero_shot_deepsea/train.h5",
             feat_name=feat_name,
             batch_size=1024,
             shuffle=True
             )
-    validate_data_kwargs = get_data_config(
-            fp="./data/zero_shot/amber_encoded.train_feats.validate.h5",
+    validate_data_kwargs = get_data_config_deepsea_compiled(
+            #fp="./data/zero_shot/amber_encoded.train_feats.validate.h5",
+            fp="./data/zero_shot_deepsea/val.h5",
             feat_name=feat_name,
             batch_size=1024,
             shuffle=False
@@ -93,16 +110,16 @@ def amber_app(wd, feat_name, run=False):
                 'share_embedding': layer_embedding_sharing,
                 'with_skip_connection': False,
                 'skip_weight': None,
-                'lstm_size': 64,
+                'lstm_size': 128,
                 'lstm_num_layers': 1,
-                'kl_threshold': 0.05,
+                'kl_threshold': 0.1,
                 'train_pi_iter': 100,
                 'optim_algo': 'adam',
                 'rescale_advantage_by_reward': False,
                 'temperature': 1.0,
                 'tanh_constant': 1.5,
-                'buffer_size': 5,  # FOR RL-NAS
-                'batch_size': 3,
+                'buffer_size': 10,  # FOR RL-NAS
+                'batch_size': 5,
                 'use_ppo_loss': use_ppo
         },
 
@@ -129,7 +146,7 @@ def amber_app(wd, feat_name, run=False):
                 'epochs': 100,
                 'fit_kwargs': {
                     'earlystop_patience': 10,
-                    'steps_per_epoch': 50,
+                    'steps_per_epoch': 100,
                     'max_queue_size': 50,
                     'workers': 3
                     },

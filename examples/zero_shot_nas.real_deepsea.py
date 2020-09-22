@@ -34,6 +34,8 @@ from amber.utils.sampler import BatchedHDF5Generator, Selector
 
 # put model space in zs_config.py
 from zs_config import get_model_space_simple, get_model_space_long, get_model_space_long_and_dilation
+from zs_config import read_metadata
+
 
 def get_controller(model_space, session, data_description_len=3, layer_embedding_sharing=None, use_ppo_loss=False):
     with tf.device("/cpu:0"):
@@ -226,28 +228,6 @@ def train_nas(arg):
         pass
     controller.save_weights(os.path.join(wd, "controller_weights.h5"))
 
-
-def read_metadata():
-    meta = pd.read_table("./data/zero_shot/full_metadata.tsv")
-    meta = meta.loc[meta['molecule']=='DNA']
-    indexer = pd.read_table("./data/zero_shot_deepsea/label_index_with_category_annot.tsv")
-    indexer['labels'] = ["_".join(x.split("--")).replace("\xa0","") for x in indexer['labels']]
-    from collections import Counter
-    counter = Counter()
-    new_label = []
-    for label in indexer['labels']:
-        if counter[label] > 0:
-            new_label.append("%s_%i"%(label, counter[label]))
-        else:
-            new_label.append(label)
-        counter[label] += 1
-    indexer.index = new_label
-    meta['new_name'] = [x.replace("+", "_") for x in meta['new_name']]
-    meta['col_idx'] = [indexer.loc[x, "index"] if x in indexer.index else np.nan for x in meta['new_name']]
-    meta = meta.dropna()
-    meta['col_idx'] = meta['col_idx'].astype('int')
-    meta.index = meta['feat_name']
-    return meta
 
 
 if __name__ == "__main__":
