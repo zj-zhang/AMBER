@@ -59,6 +59,7 @@ class GeneralManager(BaseNetworkManager):
         self.validation_data = validation_data
         self.working_dir = working_dir
         self.fit_kwargs = fit_kwargs or {}
+        self._earlystop_patience = self.fit_kwargs.pop("earlystop_patience",5)
         if not os.path.exists(self.working_dir):
             os.makedirs(self.working_dir)
         self.model_compile_dict = kwargs.pop("model_compile_dict", None)
@@ -102,7 +103,7 @@ class GeneralManager(BaseNetworkManager):
                              callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
                                                         monitor='val_loss', verbose=self.verbose,
                                                         save_best_only=True),
-                                        EarlyStopping(monitor='val_loss', patience=self.fit_kwargs.pop("earlystop_patience", 5), verbose=self.verbose)],
+                                        EarlyStopping(monitor='val_loss', patience=self._earlystop_patience, verbose=self.verbose)],
                              **self.fit_kwargs
                              )
             # load best performance epoch in this training session
@@ -212,9 +213,9 @@ class DistributedGeneralManager(GeneralManager):
                 sys.stderr.write("  %.3f sec\n"%elapse_time)
                 model_arc_ = tuple(model_arc)
                 if model_arc_ in self.arc_records and self.do_resample is True:
-                    this_reward = self.arc_records[model_arc_]['reward'] 
-                    old_trial = self.arc_records[model_arc_]['trial'] 
-                    loss_and_metrics = self.arc_records[model_arc_]['loss_and_metrics'] 
+                    this_reward = self.arc_records[model_arc_]['reward']
+                    old_trial = self.arc_records[model_arc_]['trial']
+                    loss_and_metrics = self.arc_records[model_arc_]['loss_and_metrics']
                     sys.stderr.write("[%s][%s] Trial %i: Re-sampled from history %i\n" % (pid, datetime.now().strftime("%H:%M:%S"), trial, old_trial))
                 else:
                     # train the model using Keras methods
@@ -228,7 +229,7 @@ class DistributedGeneralManager(GeneralManager):
                                      callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
                                                                 monitor='val_loss', verbose=self.verbose,
                                                                 save_best_only=True),
-                                                EarlyStopping(monitor='val_loss', patience=self.fit_kwargs.pop("earlystop_patience", 10), verbose=self.verbose)],
+                                                EarlyStopping(monitor='val_loss', patience=self._earlystop_patience, verbose=self.verbose)],
                                      **self.fit_kwargs
                                      )
 

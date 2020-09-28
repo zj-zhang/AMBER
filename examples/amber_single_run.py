@@ -145,7 +145,7 @@ def amber_app(wd, feat_name, run=False):
                 'devices': ['/device:GPU:0'],
                 'epochs': 100,
                 'fit_kwargs': {
-                    'earlystop_patience': 10,
+                    'earlystop_patience': 40,
                     'steps_per_epoch': 100,
                     'max_queue_size': 50,
                     'workers': 3
@@ -158,11 +158,12 @@ def amber_app(wd, feat_name, run=False):
         },
 
         'train_env': {
-            'max_episode': 200,
-            'max_step_per_ep': 3,
+            'max_episode': 100,
+            'max_step_per_ep': 5,
             'working_dir': wd,
             'time_budget': "24:00:00",
             'with_skip_connection': False,
+            'save_controller_every': 1
         }
     }
 

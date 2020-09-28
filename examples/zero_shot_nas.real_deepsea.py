@@ -37,7 +37,7 @@ from zs_config import get_model_space_simple, get_model_space_long, get_model_sp
 from zs_config import read_metadata
 
 
-def get_controller(model_space, session, data_description_len=3, layer_embedding_sharing=None, use_ppo_loss=False):
+def get_controller(model_space, session, data_description_len=3, layer_embedding_sharing=None, use_ppo_loss=False, is_training=True):
     with tf.device("/cpu:0"):
         controller = ZeroShotController(
             data_description_config={
@@ -55,8 +55,8 @@ def get_controller(model_space, session, data_description_len=3, layer_embedding
             kl_threshold=0.1,
             train_pi_iter=100 if use_ppo_loss is True else 20,
             optim_algo='adam',
-            temperature=1.,
-            tanh_constant=1.5,
+            temperature=1. if is_training is True else 0.5,
+            tanh_constant=1.5 if is_training is True else None,
             buffer_type="MultiManager",
             buffer_size=10,
             batch_size=10,
@@ -101,7 +101,7 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
     return manager
 
 
-def read_configs(arg):
+def read_configs(arg, is_training=True):
     meta = read_metadata()
     dfeature_names = list()
     with open(arg.dfeature_name_file, "r") as read_file:
@@ -129,7 +129,8 @@ def read_configs(arg):
             session=session,
             data_description_len=len(dfeature_names),
             layer_embedding_sharing=layer_embedding_sharing,
-            use_ppo_loss=arg.ppo
+            use_ppo_loss=arg.ppo,
+            is_training=is_training
             )
     # Load in datasets and configurations for them.
     if arg.config_file.endswith("tsv"):
