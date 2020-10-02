@@ -158,7 +158,7 @@ def amber_app(wd, feat_name, run=False):
         },
 
         'train_env': {
-            'max_episode': 100,
+            'max_episode': 75,
             'max_step_per_ep': 5,
             'working_dir': wd,
             'time_budget': "24:00:00",
