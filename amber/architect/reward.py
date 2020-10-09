@@ -10,7 +10,8 @@ Reward function takes in trained model and validation data as input, returns rew
 # Last update : Aug. 17, 2020
 
 import numpy as np
-
+import copy
+from .common_ops import unpack_data
 from ..utils.io import read_history
 
 
@@ -71,14 +72,19 @@ class LossReward(Reward):
         self.c = 1.
 
     def __call__(self, model, data, *args, **kwargs):
-        X, y = data
+        X, y = unpack_data(data)
         loss_and_metrics = model.evaluate(X, y)
         # Loss function values will always be the first value
         if type(loss_and_metrics) is list:
             L = loss_and_metrics[0]
-        else:
+        elif type(loss_and_metrics) is dict:
+            L = loss_and_metrics['val_loss']
+            loss_and_metrics = [L]
+        elif isinstance(loss_and_metrics, float):
             L = loss_and_metrics
             loss_and_metrics = [loss_and_metrics]
+        else:
+            raise Exception("Cannot understand return type of model.evaluate; got %s" % type(loss_and_metrics))
         return -L, loss_and_metrics, None
     # return self.c/L, loss_and_metrics, None
 
@@ -133,6 +139,8 @@ class LossAucReward(Reward):
         elif method == 'aupr' or method == 'auprc':
             from sklearn.metrics import average_precision_score
             self.scorer = average_precision_score
+        elif callable(method):
+            self.scorer = method
         else:
             raise Exception("cannot understand scorer method: %s" % method)
         self.knowledge_function = knowledge_function
@@ -142,7 +150,7 @@ class LossAucReward(Reward):
         self.pred = kwargs.pop('pred', None)
 
     def __call__(self, model, data, *args, **kwargs):
-        X, y = data
+        X, y = unpack_data(data, unroll_generator_y=True)
         if self.pred is None:
             pred = model.predict(X)
         else:
@@ -154,6 +162,8 @@ class LossAucReward(Reward):
             pred = [pred]
         for i in range(len(y)):
             tmp = []
+            if len(y[i].shape) == 1: y[i] = np.expand_dims(y[i], axis=-1)
+            if len(pred[i].shape) == 1: pred[i] = np.expand_dims(pred[i], axis=-1)
             for j in range(y[i].shape[1]):
                 try:
                     score = self.scorer(y_true=y[i][:, j], y_score=pred[i][:, j])
@@ -178,6 +188,17 @@ class LossAucReward(Reward):
         reward = L + self.Lambda * K
         loss_and_metrics = [L]
         reward_metrics = {'knowledge': K}
+        return reward, loss_and_metrics, reward_metrics
+    
+    def min(self, data):
+        """For dealing with non-valid model"""
+        X, y = unpack_data(data, unroll_generator_y=True)
+        if type(y) is not list: y = [y]
+        pred = copy.deepcopy(y)
+        _ = [np.random.shuffle(p) for p in pred]
+        self.pred = pred
+        reward, loss_and_metrics, reward_metrics = self.__call__(None, (X,y))
+        self.pred = None  # release self.pred after use
         return reward, loss_and_metrics, reward_metrics
 
 

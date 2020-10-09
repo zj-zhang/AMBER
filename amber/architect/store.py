@@ -9,6 +9,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from ..plots import plot_hessian, plot_training_history
+from .common_ops import unpack_data
 
 
 def get_store_fn(arg):
@@ -57,6 +58,7 @@ def store_with_model_plot(
         *args, **kwargs
 ):
     par_dir = os.path.join(working_dir, 'weights', 'trial_%s' % trial)
+    os.makedirs(par_dir, exist_ok=True)
     store_general(trial=trial,
                   model=model,
                   hist=hist,
@@ -66,8 +68,8 @@ def store_with_model_plot(
                   working_dir=working_dir,
                   save_full_model=save_full_model
                   )
-    from keras.utils import plot_model
-    plot_model(model, to_file=os.path.join(par_dir, "model_arc.png"))
+    from tensorflow.keras.utils import plot_model
+    plot_model(model, to_file=os.path.join(par_dir, "model_arc.png"), show_shapes=True, show_layer_names=True)
 
 
 def store_with_hessian(
@@ -120,9 +122,15 @@ def store_general(
     os.mkdir(par_dir)
     if save_full_model:
         model.save(os.path.join(working_dir, 'weights', 'trial_%s' % trial, 'full_bestmodel.h5'))
-    plot_training_history(hist, par_dir)
+    try:
+        plot_training_history(hist, par_dir)
+    except:
+        # TODO: this still not working for non-keras models, e.g. EnasAnn/Cnn
+        pass
     if os.path.isfile(os.path.join(working_dir, 'temp_network.h5')):
         shutil.move(os.path.join(working_dir, 'temp_network.h5'), os.path.join(par_dir, 'bestmodel.h5'))
+    # TODO: REVAMP THIS. if data is a generator/keras.utils.Sequence
+    data = unpack_data(data, unroll_generator_y=True)
     metadata = data[2] if len(data) > 2 else None
     obs = data[1]
     write_pred_to_disk(
@@ -159,7 +167,7 @@ def write_pred_to_disk(fn, y_pred, y_obs, metadata=None, metrics=None):
         if len(np.unique(y_obs)) < 10:  # is categorical
             str_format = "%i"
         else:
-            str_format = "%.3f'"
+            str_format = "%.3f"
 
         f.write('pred\tobs\tmetadata\n')
         for i in range(len(y_pred)):

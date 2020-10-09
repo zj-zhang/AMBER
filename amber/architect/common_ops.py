@@ -3,7 +3,41 @@ import warnings
 import keras.backend as K
 import numpy as np
 import tensorflow as tf
+if tf.__version__.startswith("2"):
+    tf.compat.v1.disable_eager_execution()
+    import tensorflow.compat.v1 as tf
 from tensorflow.python.training import moving_averages
+
+
+def unpack_data(data, unroll_generator_x=False, unroll_generator_y=False, callable_kwargs=None):
+    is_generator = False
+    unroll_generator = unroll_generator_x or unroll_generator_y
+    if type(data) in (tuple, list):
+        x, y = data[0], data[1]
+    elif isinstance(data, tf.keras.utils.Sequence):
+        x = data
+        y = None
+        is_generator = True
+    elif hasattr(data, '__next__'):
+        x = data
+        y = None
+        is_generator = True
+    elif callable(data):
+        callable_kwargs = callable_kwargs or {}
+        x, y = unpack_data(data=data(**callable_kwargs),
+                unroll_generator_x=unroll_generator_x,
+                unroll_generator_y=unroll_generator_y)
+    else:
+        raise Exception("cannot unpack data of type: %s"%type(data))
+    if is_generator and unroll_generator:
+        gen = data if hasattr(data, '__next__') else iter(data)
+        d_ = [d for d in zip(*gen)]
+        if unroll_generator_x ^ unroll_generator_y:
+            if hasattr(data, "shuffle"):
+                assert data.shuffle == False
+        x = np.concatenate(d_[0], axis=0) if unroll_generator_x else data
+        y = np.concatenate(d_[1], axis=0) if unroll_generator_y else None
+    return x, y
 
 
 def batchify(x, y=None, batch_size=None, shuffle=True, drop_remainder=True):
@@ -88,7 +122,10 @@ def get_tf_layer(fn_str):
 
 def create_weight(name, shape, initializer=None, trainable=True, seed=None):
     if initializer is None:
-        initializer = tf.contrib.keras.initializers.he_normal(seed=seed)
+        try:
+            initializer = tf.contrib.keras.initializers.he_normal(seed=seed)
+        except AttributeError:
+            initializer = tf.keras.initializers.he_normal(seed=seed)
     return tf.get_variable(name, shape, initializer=initializer, trainable=trainable)
 
 
@@ -155,18 +192,24 @@ def get_keras_train_ops(loss, tf_variables, optim_algo, **kwargs):
     for g, v in zip(grads, tf_variables):
         if g is None:
             # get sub-scope name; if is optimizer-related, ignore
-            if v.name.split('/')[1] == 'compile':
+            if 'compile' in v.name.split('/'):
                 continue
             no_grad_var.append(v)
         else:
             grad_var.append(v)
     if no_grad_var:
         warnings.warn(
-            "=" * 80 + "\n\nWarning: the following tf.variables have no gradients"
-                       " and have been discarded: \n %s" % no_grad_var)
+            "\n" + "=" * 80 + "\nWarning: the following tf.variables have no gradients"
+                       " and have been discarded: \n %s" % no_grad_var, stacklevel=2)
     train_op = opt.get_updates(loss, grad_var)
-    config = opt.get_config()
-    learning_rate = config['lr']
+    try:
+        config = opt.get_config()
+    except NotImplementedError:  # if cannot get learning-rate when eager-execution is disableed
+        config = {'lr':None}
+    try:
+        learning_rate = config['lr']
+    except:  # for newer version of keras
+        learning_rate = config['learning_rate']
     return train_op, learning_rate, None, opt
 
 

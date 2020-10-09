@@ -304,3 +304,7 @@ class ModelSpace:
 
             ms.add_layer(layer_id=i, layer_states=[State(**d[i][j]) for j in range(len(d[i]))])
         return ms
+
+
+# alias
+Operation = State

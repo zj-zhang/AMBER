@@ -95,7 +95,7 @@ specs = {
     'manager': {
         'data': {
             'train_data': read_train_data('/mnt/ceph/users/zzhang/DeepSEA/data/deepsea_train/train.mat'),
-            'validation_data': read_val_data('./mnt/ceph/users/zzhang/DeepSEA/data/deepsea_train/valid.mat')
+            'validation_data': read_val_data('/mnt/ceph/users/zzhang/DeepSEA/data/deepsea_train/valid.mat')
         },
         'params': {
             'epochs': 1,

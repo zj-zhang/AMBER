@@ -87,7 +87,7 @@ class MultiInputController(GeneralController):
 
     def _create_weight(self):
         super()._create_weight()
-        if self.num_input_blocks > 1 and self.with_input_blocks:
+        if self.with_input_blocks:
             with tf.variable_scope("input", initializer=tf.random_uniform_initializer(minval=-0.1, maxval=0.1)):
                 # input_emb: embedding for input blocks, if present
                 self.input_emb = tf.get_variable("inp_emb", [self.num_input_blocks, self.lstm_size])
@@ -145,7 +145,7 @@ class MultiInputController(GeneralController):
             # END BLOCK 1
 
             # BLOCK 2 [optional]: sample input feature blocks
-            if self.num_input_blocks > 1 and self.with_input_blocks:
+            if self.with_input_blocks:
                 next_c, next_h = stack_lstm(inputs, prev_c, prev_h, self.w_lstm)
                 prev_c, prev_h = next_c, next_h
                 hidden_states.append(prev_h)
@@ -335,7 +335,7 @@ class MultiInputController(GeneralController):
             # inputs = tf.nn.embedding_lookup(self.w_emb["start"][branch_id], start)
             inputs = tf.nn.embedding_lookup(self.w_emb["start"][layer_id], start)
 
-            if self.num_input_blocks > 1 and self.with_input_blocks:
+            if self.with_input_blocks:
 
                 next_c, next_h = stack_lstm(inputs, prev_c, prev_h, self.w_lstm)
                 prev_c, prev_h = next_c, next_h
@@ -427,7 +427,7 @@ class MultiInputController(GeneralController):
                         logit = self.tanh_constant * tf.tanh(logit)
 
                     probs_.append(tf.reshape(tf.nn.softmax(logit), [batch_size, layer_id, 2]))
-                    if self.num_input_blocks > 1:
+                    if self.with_input_blocks:
                         skip = self.input_arc[(arc_pointer + ops_each_layer + self.num_input_blocks): (
                                 arc_pointer + ops_each_layer + self.num_input_blocks + layer_id)]
                     else:
@@ -436,9 +436,10 @@ class MultiInputController(GeneralController):
                     skip = tf.reshape(tf.transpose(skip), [batch_size * layer_id])
                     skip = tf.to_int32(skip)
 
-                    skip_prob = tf.sigmoid(logit)
+                    skip_prob = tf.sigmoid(logit)  # shape=(batch_size*layer_id, 2)
                     kl = skip_prob * tf.log(skip_prob / skip_targets)
-                    kl = tf.reduce_sum(kl)
+                    kl = tf.reduce_sum(kl, axis=1)  # shape=(batch_size*layer_id,)
+                    kl = tf.reshape(kl, [batch_size, -1])  # (batch_size, layer_id)
                     skip_penaltys.append(kl)
 
                     log_prob3 = tf.nn.sparse_softmax_cross_entropy_with_logits(
@@ -483,8 +484,10 @@ class MultiInputController(GeneralController):
         self.onehot_log_prob = tf.reduce_sum(log_probs, axis=0)
         skip_count = tf.stack(skip_count)
         self.onehot_skip_count = tf.reduce_sum(skip_count, axis=0)
-        skip_penaltys = tf.stack(skip_penaltys)
-        self.onehot_skip_penaltys = tf.reduce_mean(skip_penaltys, axis=0)
+        #skip_penaltys = tf.reduce_mean(tf.transpose(tf.stack(skip_penaltys), [1,0]), axis=1)
+        skip_penaltys_flat = [tf.reduce_mean(x, axis=1) for x in skip_penaltys] # reduce_mean of layer_id dim; each entry's shape is  (batch_size,); in total list len=num_layers-1
+        self.onehot_skip_penaltys = tf.reduce_mean(skip_penaltys_flat, axis=0)  # from [num_layers-1, batch_size] to [batch_size,]
+        #self.onehot_skip_penaltys = tf.reduce_mean(skip_penaltys, axis=0)
 
 
 class MultiIOController(MultiInputController):
@@ -522,16 +525,23 @@ class MultiIOController(MultiInputController):
                  num_output_blocks=2,
                  with_output_blocks=True,
                  output_block_unique_connection=True,
+                 output_block_diversity_weight=None,
                  **kwargs):
 
         # Attributes unique to the derived class:
-        self.with_skip_connection = True
-        self.with_input_blocks = True
+        #self.with_input_blocks = True
         self.with_output_blocks = with_output_blocks
         self.num_output_blocks = num_output_blocks
-        self.output_block_unique_connection = output_block_unique_connection
+        skip_weight = kwargs['skip_weight'] if 'skip_weight' in kwargs else None
+        if output_block_diversity_weight is not None:
+            assert skip_weight is not None, "Cannot use output_block_diversity_weight when skip_weight is None"
+            self.output_block_diversity_weight = output_block_diversity_weight / skip_weight
+        else:
+            self.output_block_diversity_weight = None
 
+        self.output_block_unique_connection = output_block_unique_connection
         super().__init__(**kwargs)
+        assert self.with_skip_connection is True, "Must have with_skip_connection=True for MultiIOController"
 
     # override
     def _create_weight(self):
@@ -546,7 +556,8 @@ class MultiIOController(MultiInputController):
     # override
     def _build_sampler(self):
         super()._build_sampler()
-        layer_hs = [self.sample_hidden_states[i][-1] for i in range(1, self.num_layers * 3, 3)]
+        step_size = 1 + int(self.with_input_blocks) + int(self.with_skip_connection)
+        layer_hs = [self.sample_hidden_states[i][-1] for i in range(0, self.num_layers*step_size-1, step_size)]
         layer_hs = tf.concat(layer_hs, axis=0)
         output_probs = []
         output_onehot = []
@@ -578,6 +589,10 @@ class MultiIOController(MultiInputController):
         self.sample_probs.extend(output_probs)
         self.sample_arc = tf.concat([self.sample_arc, tf.reshape(output_onehot, [-1])], axis=0)
         self.sample_log_prob += tf.reduce_sum(output_log_probs)
+        #if self.output_block_diversity_weight is not None:
+        #    diversity = tf.math.reduce_std(output_probs, axis=0)
+        #    diversity = tf.reduce_mean(diversity)
+        #    self.skip_penaltys -= diversity * self.output_block_diversity_weight 
 
     # override
     def _build_trainer(self):
@@ -587,7 +602,8 @@ class MultiIOController(MultiInputController):
                            for i in range(self.total_arc_len, self.total_arc_len + output_arc_len)]
         self.total_arc_len += output_arc_len
 
-        layer_hs = [self.train_hidden_states[i][-1] for i in range(1, self.num_layers * 3, 3)]
+        step_size = 1 + int(self.with_input_blocks) + int(self.with_skip_connection) 
+        layer_hs = [self.train_hidden_states[i][-1] for i in range(0, self.num_layers*step_size-1, step_size)]
         layer_hs = tf.transpose(tf.stack(layer_hs), [1, 0, 2])  # shape: batch, num_layers, lstm_size
         output_probs = []
         output_log_probs = []
@@ -620,3 +636,8 @@ class MultiIOController(MultiInputController):
         # self.output_log_probs = output_log_probs
         output_log_probs = tf.squeeze(tf.transpose(tf.stack(output_log_probs), [1, 0, 2]), axis=-1)
         self.onehot_log_prob += tf.reduce_sum(output_log_probs, axis=1)
+        if self.output_block_diversity_weight is not None:
+            output_probs = tf.transpose(tf.stack(output_probs), [1, 0, 2]) # shape: (batch, num_out_blocks, num_layers)
+            diversity_penaltys = tf.math.reduce_std(output_probs, axis=1)  # std of probs. of out_blocks on each layer; connecting every out_block to one layer will be penalized
+            diversity_penaltys = tf.reduce_mean(diversity_penaltys, axis=1)
+            self.onehot_skip_penaltys -= diversity_penaltys * self.output_block_diversity_weight

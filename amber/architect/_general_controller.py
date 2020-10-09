@@ -10,6 +10,9 @@ import sys
 
 import h5py
 import tensorflow as tf
+if tf.__version__.startswith("2"):
+    tf.compat.v1.disable_eager_execution()
+    import tensorflow.compat.v1 as tf
 
 from .buffer import get_buffer
 from .common_ops import get_keras_train_ops
@@ -153,7 +156,7 @@ class GeneralController(BaseController):
     def __init__(self, model_space, buffer_type='ordinal', with_skip_connection=True, share_embedding=None,
                  use_ppo_loss=False, kl_threshold=0.05, skip_connection_unique_connection=False, buffer_size=15,
                  batch_size=5, session=None, train_pi_iter=20, lstm_size=32, lstm_num_layers=2, lstm_keep_prob=1.0,
-                 tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=0.5,
+                 tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=None,
                  rescale_advantage_by_reward=False, name="controller", **kwargs):
         super().__init__(**kwargs)
 
@@ -170,7 +173,7 @@ class GeneralController(BaseController):
 
         buffer_fn = get_buffer(buffer_type)
         self.buffer = buffer_fn(max_size=buffer_size,
-                                ewa_beta=max(1 - 1. / buffer_size, 0.9),
+                                #ewa_beta=max(1 - 1. / buffer_size, 0.9),
                                 discount_factor=0.,
                                 is_squeeze_dim=True,
                                 rescale_advantage_by_reward=rescale_advantage_by_reward)
@@ -191,9 +194,12 @@ class GeneralController(BaseController):
 
         self.skip_target = skip_target
         self.skip_weight = skip_weight
+        if self.skip_weight is not None:
+            assert self.with_skip_connection, "If skip_weight is not None, must have with_skip_connection=True"
 
         self.optim_algo = optim_algo
         self.name = name
+        self.loss = 0
 
         with tf.variable_scope(self.name):
             self._create_weight()
@@ -250,8 +256,9 @@ class GeneralController(BaseController):
                 for layer_id in range(self.num_layers):
                     if self.share_embedding:
                         if layer_id not in self.share_embedding:
-                            self.w_soft["start"].append(tf.get_variable(
-                                "w_start", [self.lstm_size, self.num_choices_per_layer[layer_id]]))
+                            with tf.variable_scope("layer_{}".format(layer_id)):
+                                self.w_soft["start"].append(tf.get_variable(
+                                    "w_start", [self.lstm_size, self.num_choices_per_layer[layer_id]]))
                         else:
                             shared_id = self.share_embedding[layer_id]
                             assert shared_id < layer_id, \
@@ -437,7 +444,11 @@ class GeneralController(BaseController):
                   range(self.lstm_num_layers)]
         prev_h = [tf.zeros([batch_size, self.lstm_size], tf.float32) for _ in
                   range(self.lstm_num_layers)]
-        inputs = tf.matmul(tf.ones((batch_size, 1)), self.g_emb)
+        # only expand `g_emb` if necessary
+        if self.g_emb.shape[0] is not None and self.g_emb.shape[0].value == 1:
+            inputs = tf.matmul(tf.ones((batch_size, 1)), self.g_emb)
+        else:
+            inputs = self.g_emb
         skip_targets = tf.constant([1.0 - self.skip_target, self.skip_target],
                                    dtype=tf.float32)
 
@@ -508,8 +519,9 @@ class GeneralController(BaseController):
                     skip = tf.to_int32(skip)
 
                     skip_prob = tf.sigmoid(logit)
-                    kl = skip_prob * tf.log(skip_prob / skip_targets)
-                    kl = tf.reduce_sum(kl)
+                    kl = skip_prob * tf.log(skip_prob / skip_targets)  # (batch_size*layer_id, 2)
+                    kl = tf.reduce_sum(kl, axis=1)    # (batch_size*layer_id,)
+                    kl = tf.reshape(kl, [batch_size, -1])  # (batch_size, layer_id)
                     skip_penaltys.append(kl)
 
                     log_prob3 = tf.nn.sparse_softmax_cross_entropy_with_logits(
@@ -555,8 +567,8 @@ class GeneralController(BaseController):
         self.onehot_log_prob = tf.reduce_sum(log_probs, axis=0)
         skip_count = tf.stack(skip_count)
         self.onehot_skip_count = tf.reduce_sum(skip_count, axis=0)
-        skip_penaltys = tf.stack(skip_penaltys)
-        self.onehot_skip_penaltys = tf.reduce_mean(skip_penaltys, axis=0)
+        skip_penaltys_flat = [tf.reduce_mean(x, axis=1) for x in skip_penaltys] # from (num_layer-1, batch_size, layer_id) to (num_layer-1, batch_size); layer_id makes each tensor of varying lengths in the list
+        self.onehot_skip_penaltys = tf.reduce_mean(skip_penaltys_flat, axis=0)  # (batch_size,)
 
     def _build_train_op(self):
         """build train_op based on either REINFORCE or PPO
@@ -570,8 +582,10 @@ class GeneralController(BaseController):
         self.input_arc_onehot = self.convert_arc_to_onehot(self)
         self.old_probs = [tf.placeholder(shape=self.onehot_probs[i].shape, dtype=tf.float32, name="old_prob_%i" % i) for
                           i in range(len(self.onehot_probs))]
+        if self.skip_weight is not None:
+            self.loss += self.skip_weight * tf.reduce_mean(self.onehot_skip_penaltys)
         if self.use_ppo_loss:
-            self.loss = proximal_policy_optimization_loss(
+            self.loss += proximal_policy_optimization_loss(
                 curr_prediction=self.onehot_probs,
                 curr_onehot=self.input_arc_onehot,
                 old_prediction=self.old_probs,
@@ -580,9 +594,7 @@ class GeneralController(BaseController):
                 advantage=self.advantage,
                 clip_val=0.2)
         else:
-            self.loss = tf.reshape(tf.tensordot(self.onehot_log_prob, self.advantage, axes=1), [])
-            if self.skip_weight is not None:
-                self.loss += self.skip_weight * self.onehot_skip_penaltys
+            self.loss += tf.reshape(tf.tensordot(self.onehot_log_prob, self.advantage, axes=1), [])
 
         self.kl_div, self.ent = get_kl_divergence_n_entropy(curr_prediction=self.onehot_probs,
                                                             old_prediction=self.old_probs,
@@ -599,7 +611,7 @@ class GeneralController(BaseController):
             optim_algo=self.optim_algo
         )
 
-    def get_action(self, **kwargs):
+    def get_action(self, *args, **kwargs):
         """Get a sampled architecture/action and its corresponding probabilities give current controller policy parameters.
 
         The generated architecture is the out-going information from controller to manager. which in turn will feedback
@@ -671,7 +683,6 @@ class GeneralController(BaseController):
 
                 self.session.run(self.train_op, feed_dict=feed_dict)
                 curr_loss, curr_kl, curr_ent = self.session.run([self.loss, self.kl_div, self.ent], feed_dict=feed_dict)
-
                 aloss += curr_loss
                 kl_sum += curr_kl
                 ent_sum += curr_ent
@@ -691,7 +702,7 @@ class GeneralController(BaseController):
 
         return aloss / g_t
 
-    def store(self, state, prob, action, reward):
+    def store(self, state, prob, action, reward, *args, **kwargs):
         """Store all necessary information and rewards for a given architecture
 
         This is the receiving method for controller to interact with manager by storing the rewards for a given architecture.
@@ -721,7 +732,7 @@ class GeneralController(BaseController):
         None
 
         """
-        self.buffer.store(state, prob, action, reward)
+        self.buffer.store(state=state, prob=prob, action=action, reward=reward)
         return
 
     @staticmethod

@@ -475,7 +475,7 @@ class EnasAnnModel:
 
     def evaluate_ph(self, x, y, batch_size=None):
         if batch_size is None:
-            batch_size = min(1000, len(x[0]))
+            batch_size = min(100, x.shape[0])
         loss_and_metrics = []
         seen = 0
         for x_, y_ in batchify(x, y, batch_size=batch_size, shuffle=False):
@@ -574,13 +574,15 @@ class EnasCnnModel:
           methods though
     """
 
-    def __init__(self, inputs, outputs, labels, arc_seq, dag, session, dropouts=None, use_pipe=None, name='EnasModel'):
+    def __init__(self, inputs, outputs, labels, arc_seq, dag, session, dropouts=None, use_pipe=None, name='EnasModel',
+                 **kwargs):
         assert type(inputs) in (tf.Tensor, list), "get unexpected inputs types: %s" % type(inputs)
         assert type(outputs) in (tf.Tensor, list), "get unexpected outputs types: %s" % type(outputs)
         self.arc_seq = arc_seq
         self.dag = dag
         self.inputs = [inputs] if type(inputs) is tf.Tensor else inputs
         self.outputs = [outputs] if type(outputs) is tf.Tensor else outputs
+        self.callbacks = None
         self.labels = [labels] if type(labels) is tf.Tensor else labels
         self.session = session
         self.dropouts = dropouts
@@ -600,6 +602,9 @@ class EnasCnnModel:
 
         self.use_pipe = use_pipe or False
         self.reinitialize_train_pipe = None
+
+        # added 2020.5.17: add default feed-dict for sampled architecture, to account for data description NAS
+        self.sample_dag_feed_dict = kwargs.pop("sample_dag_feed_dict", {})
 
         # for Keras
         self.stop_training = False
@@ -649,7 +654,7 @@ class EnasCnnModel:
         assert x is None or type(x) is list, "x arg for _make_feed_dict must be List, got %s" % type(x)
         assert y is None or type(y) is list, "x arg for _make_feed_dict must be List, got %s" % type(y)
         if self.arc_seq is None:
-            feed_dict = {}
+            feed_dict = self.sample_dag_feed_dict
         else:
             feed_dict = {self.dag.input_arc[i]: self.arc_seq[i] for i in range(len(self.arc_seq))}
         if x is not None:
@@ -712,8 +717,9 @@ class EnasCnnModel:
                 if verbose == 2:
                     if it % 1000 == 0:
                         print(
-                        "%s %i/%i, loss=%.5f" % (datetime.datetime.now().strftime("%H:%M:%S"), it, nsteps, curr_loss),
-                        flush=True)
+                            "%s %i/%i, loss=%.5f" %
+                            (datetime.datetime.now().strftime("%H:%M:%S"), it, nsteps, curr_loss),
+                            flush=True)
 
             if validation_data:
                 val_logs = self.evaluate(validation_data[0], validation_data[1])
@@ -794,7 +800,7 @@ class EnasCnnModel:
         Returns:
 
         """
-        warnings.warn("Not implemented yet; rolling back to `save_weights`")
+        warnings.warn("Not implemented yet; rolling back to `save_weights`", stacklevel=2)
         self.save_weights(*args, **kwargs)
         return
 

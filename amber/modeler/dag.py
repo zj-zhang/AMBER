@@ -12,9 +12,11 @@ this is an upgrade of the `NetworkManager` class
 # Last update:  Aug. 18, 2020
 
 import numpy as np
-import tensorflow as tf
-from keras.layers import Concatenate
-from keras.models import Model
+import warnings
+#import tensorflow as tf
+from ..utils import corrected_tf as tf
+from tensorflow.keras.layers import Concatenate
+from tensorflow.keras.models import Model
 # TODO: need to clean up `State` as `Operation`
 from ..architect.model_space import State
 
@@ -24,12 +26,12 @@ from ..architect.common_ops import get_tf_metrics, get_keras_train_ops, get_tf_l
     create_bias, batch_norm1d
 # for get layers
 from keras import backend as K
-from keras.layers import GlobalAveragePooling1D, GlobalMaxPooling1D, GaussianNoise
-from keras.layers.core import Dense, Dropout, Flatten
-from keras.layers.convolutional import Conv1D, MaxPooling1D, AveragePooling1D
-from keras.layers import Input, Lambda, Permute
-from keras.layers.recurrent import LSTM
-from ..modeler._operators import Layer_deNovo, SeparableFC, sparsek_vec
+from tensorflow.keras.layers import GlobalAveragePooling1D, GlobalMaxPooling1D, GaussianNoise
+from tensorflow.keras.layers import Dense, Dropout, Flatten
+from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
+from tensorflow.keras.layers import Input, Lambda, Permute, BatchNormalization, Activation
+from tensorflow.keras.layers import LSTM
+from ..modeler.operators import Layer_deNovo, SeparableFC, sparsek_vec
 from ..architect.model_space import get_layer_shortname
 
 
@@ -63,13 +65,15 @@ def get_dag(arg):
             return EnasAnnDAG
         elif arg.lower() == 'enascnndag' or arg.lower() == 'enasconv1ddag':
             return EnasConv1dDAG
+        elif arg == 'EnasConv1DwDataDescrption':
+            return EnasConv1DwDataDescrption
     elif callable(arg):
         return arg
     else:
         raise ValueError("Could not understand the DAG func:", arg)
 
 
-def get_layer(x, state):
+def get_layer(x, state, with_bn=False):
     """Getter method for a Keras layer, including native Keras implementation and custom layers that are not included in
     Keras.
 
@@ -87,7 +91,14 @@ def get_layer(x, state):
         The built target layer connected to input x
     """
     if state.Layer_type == 'dense':
-        return Dense(**state.Layer_attributes)(x)
+        if with_bn is True:
+            actv_fn = state.Layer_attributes.pop('activation', 'linear')
+            x = Dense(**state.Layer_attributes)(x)
+            x = BatchNormalization()(x)
+            x = Activation(actv_fn)(x)
+            return x
+        else:
+            return Dense(**state.Layer_attributes)(x)
 
     elif state.Layer_type == 'sfc':
         return SeparableFC(**state.Layer_attributes)(x)
@@ -96,7 +107,14 @@ def get_layer(x, state):
         return Input(**state.Layer_attributes)
 
     elif state.Layer_type == 'conv1d':
-        return Conv1D(**state.Layer_attributes)(x)
+        if with_bn is True:
+            actv_fn = state.Layer_attributes.pop('activation', 'linear')
+            x = Conv1D(**state.Layer_attributes)(x)
+            x = BatchNormalization()(x)
+            x = Activation(actv_fn)(x)
+            return x
+        else:
+            return Conv1D(**state.Layer_attributes)(x)
 
     elif state.Layer_type == 'denovo':
         x = Lambda(lambda t: K.expand_dims(t))(x)
@@ -131,7 +149,8 @@ def get_layer(x, state):
         return Dropout(**state.Layer_attributes)(x)
 
     elif state.Layer_type == 'identity':
-        return Lambda(lambda t: t, **state.Layer_attributes)(x)
+        #return Lambda(lambda t: t, **state.Layer_attributes)(x)
+        return Lambda(lambda t: t)(x)
 
     elif state.Layer_type == 'gaussian_noise':
         return GaussianNoise(**state.Layer_attributes)(x)
@@ -565,8 +584,8 @@ class EnasAnnDAG:
             with_input_blocks:
             name:
         """
-        assert with_skip_connection == with_input_blocks == True, \
-            "EnasAnnDAG must have with_input_blocks and with_skip_connection"
+        #assert with_skip_connection == with_input_blocks == True, \
+        #    "EnasAnnDAG must have with_input_blocks and with_skip_connection"
         self.model_space = model_space
         if not type(input_node) in (tuple, list):
             self.input_node = [input_node]
@@ -632,6 +651,9 @@ class EnasAnnDAG:
     def _verify_args(self):
         """verify vanilla ANN model space, input nodes, etc.,
          and configure internal attr. like masking steps"""
+        # check the consistency of with_output_blocks and output_op
+        if not self.with_output_blocks and len(self.output_node)>1:
+            warnings.warn("You specified `with_output_blocks=False`, but gave a List of output operations of length %i"%len(self.output_node), stacklevel=2)
         # model space
         assert len(set([tuple(self.model_space[i]) for i in
                         range(self.num_layers)])) == 1, "model_space for EnasDAG must be identical for all layers"
@@ -804,29 +826,42 @@ class EnasAnnDAG:
             start_idx += 1
 
             # input masking for with_input_blocks
-            inp_mask = arc_seq[start_idx: start_idx + self.num_input_blocks]
-            inp_mask = tf.boolean_mask(self._input_block_map, tf.squeeze(inp_mask))
-            new_range = tf.range(0, limit=self._feature_max_size, dtype=tf.int32)
-            inp_mask = tf.map_fn(lambda x: tf.cast(tf.logical_and(x[0] <= new_range, new_range < x[1]), dtype=tf.int32),
-                                 inp_mask)
-            inp_mask = tf.reduce_sum(inp_mask, axis=0)
-            start_idx += self.num_input_blocks * self.with_input_blocks
+            if self.with_input_blocks:
+                inp_mask = arc_seq[start_idx: start_idx + self.num_input_blocks]
+                inp_mask = tf.boolean_mask(self._input_block_map, tf.squeeze(inp_mask))
+                new_range = tf.range(0, limit=self._feature_max_size, dtype=tf.int32)
+                inp_mask = tf.map_fn(lambda x: tf.cast(tf.logical_and(x[0] <= new_range, new_range < x[1]), dtype=tf.int32),
+                                     inp_mask)
+                inp_mask = tf.reduce_sum(inp_mask, axis=0)
+                start_idx += self.num_input_blocks * self.with_input_blocks
+            else:
+                # get all inputs if layer_id=0, else mask all
+                inp_mask = tf.ones(shape=(self._feature_max_size), dtype=tf.int32) if layer_id == 0 else \
+                           tf.zeros(shape=(self._feature_max_size), dtype=tf.int32)
 
             # hidden layer masking for with_skip_connection
-            if layer_id > 0:
-                layer_mask = arc_seq[
-                             start_idx: start_idx + layer_id]
-                layer_mask = tf.boolean_mask(self._skip_conn_map[layer_id], layer_mask)
-                new_range2 = tf.range(0, limit=layer_id * self._weight_max_units, delta=1, dtype=tf.int32)
-                layer_mask = tf.map_fn(
-                    lambda t: tf.cast(tf.logical_and(t[0] <= new_range2, new_range2 < t[1]), dtype=tf.int32),
-                    layer_mask)
-                layer_mask = tf.reduce_sum(layer_mask, axis=0)
+            if self.with_skip_connection:
+                if layer_id > 0:
+                    layer_mask = arc_seq[
+                                 start_idx: start_idx + layer_id]
+                    layer_mask = tf.boolean_mask(self._skip_conn_map[layer_id], layer_mask)
+                    new_range2 = tf.range(0, limit=layer_id * self._weight_max_units, delta=1, dtype=tf.int32)
+                    layer_mask = tf.map_fn(
+                        lambda t: tf.cast(tf.logical_and(t[0] <= new_range2, new_range2 < t[1]), dtype=tf.int32),
+                        layer_mask)
+                    layer_mask = tf.reduce_sum(layer_mask, axis=0)
+                    start_idx += layer_id * self.with_skip_connection
+                else:
+                    layer_mask = []
                 row_mask = tf.concat([inp_mask, layer_mask], axis=0)
-                start_idx += layer_id * self.with_skip_connection
             else:
-                row_mask = inp_mask
+                if layer_id > 0:
+                    # keep last/closest layer, mask all others
+                    layer_masks = [tf.zeros(shape=(self._weight_max_units*(layer_id-1)), dtype=tf.int32), tf.ones(shape=(self._weight_max_units), dtype=tf.int32)]
+                else:
+                    layer_masks = []
 
+                row_mask = tf.concat([inp_mask] + layer_masks, axis=0)
             w_mask = tf.matmul(tf.expand_dims(row_mask, -1), tf.expand_dims(col_mask, 0))
 
             # get the TF layer
@@ -924,103 +959,104 @@ class EnasAnnDAG:
         metrics = self.model_compile_dict['metrics'] if 'metrics' in self.model_compile_dict else None
         var_scope = var_scope or self.name
 
-        if self.feature_model is None or self.feature_model.pseudo_inputs_pipe is None:
-            labels = self.child_model_label
-        else:
-            # TODO: for now, only use data_pipe for sample_arc
-            if use_pipe:
-                labels = self.child_model_label_pipe
-            else:
+        with tf.compat.v1.variable_scope("compile", reuse=tf.AUTO_REUSE):
+            if self.feature_model is None or self.feature_model.pseudo_inputs_pipe is None:
                 labels = self.child_model_label
+            else:
+                # TODO: for now, only use data_pipe for sample_arc
+                if use_pipe:
+                    labels = self.child_model_label_pipe
+                else:
+                    labels = self.child_model_label
 
-        # TODO: process loss_weights
-        loss_weights = self.model_compile_dict['loss_weights'] if 'loss_weights' in self.model_compile_dict else None
-        if type(loss) is str:
-            loss_ = [get_tf_loss(loss, labels[i], model_output[i]) for i in range(len(model_output))]
-            # loss_ should originally all have the batch_size dim, then reduce_mean to 1-unit sample
-            # if the loss is homogeneous, then take the mean
-            loss_ = tf.reduce_mean(loss_)
-        elif type(loss) is list:
-            loss_ = []
-            for i in range(len(loss)):
-                loss_.append(get_tf_loss(
-                    loss[i],
-                    labels[i],
-                    model_output[i]
-                ))
-            # if the loss are provided by a list, assume its heterogeneous, and return the sum of
-            # each individual loss components
-            loss_ = tf.reduce_sum(loss_)
-        elif callable(loss):
-            loss_ = tf.reduce_sum([loss(labels[i], model_output[i]) for i in range(len(model_output))])
-        else:
-            raise Exception("expect loss to be str, list, dict or callable; got %s" % loss)
-        trainable_var = [var for var in tf.trainable_variables() if var.name.startswith(var_scope)]
-        if self.feature_model_trainable:
-            feature_model_trainable_var = [var for var in tf.trainable_variables() if
-                                           var.name.startswith(self.feature_model.name)]
-            assert len(feature_model_trainable_var) > 0, "You asked me to train featureModel but there is no trainable " \
-                                                         "variables in featureModel"
-            trainable_var += feature_model_trainable_var
-        regularization_penalty = 0.
-        if self.l1_reg > 0:
-            l1_regularizer = tf.contrib.layers.l1_regularizer(
-                scale=self.l1_reg, scope=self.name
-            )
-            l1_regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer,
-                                                                               [var[0] for var in w_masks])
-            loss_ += l1_regularization_penalty
-        else:
-            l1_regularization_penalty = 0.
+            # TODO: process loss_weights
+            loss_weights = self.model_compile_dict['loss_weights'] if 'loss_weights' in self.model_compile_dict else None
+            if type(loss) is str:
+                loss_ = [get_tf_loss(loss, labels[i], model_output[i]) for i in range(len(model_output))]
+                # loss_ should originally all have the batch_size dim, then reduce_mean to 1-unit sample
+                # if the loss is homogeneous, then take the mean
+                loss_ = tf.reduce_mean(loss_)
+            elif type(loss) is list:
+                loss_ = []
+                for i in range(len(loss)):
+                    loss_.append(get_tf_loss(
+                        loss[i],
+                        labels[i],
+                        model_output[i]
+                    ))
+                # if the loss are provided by a list, assume its heterogeneous, and return the sum of
+                # each individual loss components
+                loss_ = tf.reduce_sum(loss_)
+            elif callable(loss):
+                loss_ = tf.reduce_sum([loss(labels[i], model_output[i]) for i in range(len(model_output))])
+            else:
+                raise Exception("expect loss to be str, list, dict or callable; got %s" % loss)
+            trainable_var = [var for var in tf.trainable_variables() if var.name.startswith(var_scope)]
+            if self.feature_model_trainable:
+                feature_model_trainable_var = [var for var in tf.trainable_variables() if
+                                               var.name.startswith(self.feature_model.name)]
+                assert len(feature_model_trainable_var) > 0, "You asked me to train featureModel but there is no trainable " \
+                                                             "variables in featureModel"
+                trainable_var += feature_model_trainable_var
+            regularization_penalty = 0.
+            if self.l1_reg > 0:
+                l1_regularizer = tf.contrib.layers.l1_regularizer(
+                    scale=self.l1_reg, scope=self.name
+                )
+                l1_regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer,
+                                                                                   [var[0] for var in w_masks])
+                loss_ += l1_regularization_penalty
+            else:
+                l1_regularization_penalty = 0.
 
-        if self.l2_reg > 0:
-            l2_regularizer = tf.contrib.layers.l2_regularizer(
-                scale=self.l2_reg, scope=self.name
-            )
-            l2_regularization_penalty = tf.contrib.layers.apply_regularization(l2_regularizer,
-                                                                               [var[0] for var in w_masks])
-            loss_ += l2_regularization_penalty
-        else:
-            l2_regularization_penalty = 0.
+            if self.l2_reg > 0:
+                l2_regularizer = tf.contrib.layers.l2_regularizer(
+                    scale=self.l2_reg, scope=self.name
+                )
+                l2_regularization_penalty = tf.contrib.layers.apply_regularization(l2_regularizer,
+                                                                                   [var[0] for var in w_masks])
+                loss_ += l2_regularization_penalty
+            else:
+                l2_regularization_penalty = 0.
 
-        regularization_penalty += l1_regularization_penalty + l2_regularization_penalty
+            regularization_penalty += l1_regularization_penalty + l2_regularization_penalty
 
-        # default settings used from enas
-        if self.child_train_op_kwargs is None:
-            # more sensible default values
-            train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
-                # get_train_ops(
-                loss=loss_,
-                tf_variables=trainable_var,
-                optim_algo=optimizer,
-                train_step=self.train_step)
-        # user specific settings; useful when training the final searched arc
-        else:
-            train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
-                # get_train_ops
-                loss=loss_,
-                tf_variables=trainable_var,
-                train_step=self.train_step,
-                optim_algo=optimizer,
-                **self.child_train_op_kwargs)
-        if metrics is None:
-            metrics = []
-        else:
-            metrics = [get_tf_metrics(x) for x in metrics]
-        # TODO: this needs fixing to be more generic;
-        # TODO: for example, the squeeze op is not usable for
-        # TODO: other metrics such as Acc
-        metrics_ = [f(tf.squeeze(self.child_model_label[i]), tf.squeeze(model_output[i]))
-                    for i in range(len(model_output)) for f in metrics]
-        ops = {'train_op': train_op,
-               'lr': lr,
-               'grad_norm': grad_norm,
-               'optimizer': optimizer,
-               'loss': loss_,
-               'metrics': metrics_,
-               'reg_cost': regularization_penalty
-               }
-        return ops
+            # default settings used from enas
+            if self.child_train_op_kwargs is None:
+                # more sensible default values
+                train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
+                    # get_train_ops(
+                    loss=loss_,
+                    tf_variables=trainable_var,
+                    optim_algo=optimizer,
+                    train_step=self.train_step)
+            # user specific settings; useful when training the final searched arc
+            else:
+                train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
+                    # get_train_ops
+                    loss=loss_,
+                    tf_variables=trainable_var,
+                    train_step=self.train_step,
+                    optim_algo=optimizer,
+                    **self.child_train_op_kwargs)
+            if metrics is None:
+                metrics = []
+            else:
+                metrics = [get_tf_metrics(x) for x in metrics]
+            # TODO: this needs fixing to be more generic;
+            # TODO: for example, the squeeze op is not usable for
+            # TODO: other metrics such as Acc
+            metrics_ = [f(tf.squeeze(self.child_model_label[i]), tf.squeeze(model_output[i]))
+                        for i in range(len(model_output)) for f in metrics]
+            ops = {'train_op': train_op,
+                   'lr': lr,
+                   'grad_norm': grad_norm,
+                   'optimizer': optimizer,
+                   'loss': loss_,
+                   'metrics': metrics_,
+                   'reg_cost': regularization_penalty
+                   }
+            return ops
 
     def connect_controller(self, controller):
         self.sample_arc = controller.sample_arc
@@ -1035,6 +1071,7 @@ class EnasConv1dDAG:
                  output_node,
                  model_compile_dict,
                  session,
+                 with_skip_connection=True,
                  batch_size=128,
                  keep_prob=0.9,
                  l1_reg=0.0,
@@ -1074,6 +1111,7 @@ class EnasConv1dDAG:
         self.session = session
         self.l1_reg = l1_reg
         self.l2_reg = l2_reg
+        self.with_skip_connection = with_skip_connection
         self.controller = None
         if controller is not None:
             self.set_controller(controller)
@@ -1237,10 +1275,10 @@ class EnasConv1dDAG:
             self.sample_metrics = ops['metrics']
             self.sample_ops = ops
         # if not self.is_initialized:
-        vars = [v for v in tf.all_variables() if v.name.startswith(var_scope) and v not in self.vars]
-        if len(vars):
-            self.session.run(tf.initialize_variables(vars))
-            self.vars += vars
+        vars_ = [v for v in tf.all_variables() if v.name.startswith(var_scope) and v not in self.vars]
+        if len(vars_):
+            self.session.run(tf.initialize_variables(vars_))
+            self.vars += vars_
             # self.is_initialized = True
 
     def _build_fixed_arc(self, input_tensor=None, label_tensor=None, **kwargs):
@@ -1403,14 +1441,18 @@ class EnasConv1dDAG:
             # input = self.input_node
             input = self.input_ph if input_tensor is None else input_tensor
             layers = []
-            with tf.variable_scope("stem_conv"):
-                stem_kernel_size = self.stem_config.pop('stem_kernel_size', 8)
-                stem_filters = out_filters[0]
-                w = create_weight("w", [stem_kernel_size, 4, stem_filters])
-                x = tf.nn.conv1d(input, w, 1, "SAME", data_format=self.data_format)
-                x = batch_norm1d(x, is_training, data_format=self.data_format)
-                layers.append(x)
-                self.layers.append(x)
+            has_stem_conv = self.stem_config['has_stem_conv'] if 'has_stem_conv' in self.stem_config else True
+            if has_stem_conv:
+                with tf.variable_scope("stem_conv"):
+                    stem_kernel_size = self.stem_config.pop('stem_kernel_size', 8)
+                    stem_filters = out_filters[0]
+                    w = create_weight("w", [stem_kernel_size, 4, stem_filters])
+                    x = tf.nn.conv1d(input, w, 1, "SAME", data_format=self.data_format)
+                    x = batch_norm1d(x, is_training, data_format=self.data_format)
+                    layers.append(x)
+                    self.layers.append(x)
+            else:
+                layers = [input]
 
             start_idx = 0
             for layer_id in range(self.num_layers):
@@ -1426,7 +1468,7 @@ class EnasConv1dDAG:
                     else:
                         layers.append(x)
                     self.layers.append(x)
-                    if layer_id in self.pool_layers:
+                    if (self.with_skip_connection is True) and (layer_id in self.pool_layers):
                         with tf.variable_scope("pool_at_{0}".format(layer_id)):
                             pooled_layers = []
                             for i, layer in enumerate(layers):
@@ -1440,7 +1482,7 @@ class EnasConv1dDAG:
                                             layer, out_filters[layer_id + 1], is_training)
                                 pooled_layers.append(x)
                             layers = pooled_layers
-                start_idx += 1 + layer_id
+                start_idx += 1 + layer_id*int(self.with_skip_connection)
 
             flatten_op = self.stem_config['flatten_op'] if 'flatten_op' in self.stem_config else 'flatten'
             if flatten_op == 'global_avg_pool' or flatten_op == 'gap':
@@ -1460,12 +1502,20 @@ class EnasConv1dDAG:
                 x = tf.nn.dropout(x, rate=dropout_placeholders[-1])
             with tf.variable_scope("fc"):
                 fc_units = self.stem_config['fc_units'] if 'fc_units' in self.stem_config else 1000
-                if flatten_op == 'global_avg_pool':
-                    inp_c = x.get_shape()[-1].value
+                if flatten_op == 'global_avg_pool' or flatten_op == 'gap':
+                    try:
+                        inp_c = x.get_shape()[-1].value
+                    except AttributeError:
+                        inp_c = x.get_shape()[-1]
                     w = create_weight("w_fc", [inp_c, fc_units])
                 elif flatten_op == 'flatten':
-                    inp_c = np.prod(x.get_shape()[1:]).value
+                    try:
+                        inp_c = np.prod(x.get_shape()[1:]).value
+                    except AttributeError:
+                        inp_c = np.prod(x.get_shape()[1:])
                     w = create_weight("w_fc", [inp_c, fc_units])
+                else:
+                    raise Exception("Unknown fc string: %s" % flatten_op)
                 b = create_bias("b_fc", shape=[fc_units])
                 x = tf.matmul(x, w) + b
                 x = tf.nn.relu(x)
@@ -1484,10 +1534,16 @@ class EnasConv1dDAG:
     def _refactorized_channels_for_skipcon(self, layer, out_filters, is_training):
         """for dealing with mismatch-dimensions in skip connections: use a linear transformation"""
         if self.data_format == 'NWC':
-            inp_c = layer.get_shape()[-1].value
+            try:
+                inp_c = layer.get_shape()[-1].value
+            except AttributeError:
+                inp_c = layer.get_shape()[-1]
             actual_data_format = 'channels_last'
         elif self.data_format == 'NCW':
-            inp_c = layer.get_shape()[1].value
+            try:    
+                inp_c = layer.get_shape()[1].value
+            except AttributeError:
+                inp_c = layer.get_shape()[1]
             actual_data_format = 'channels_first'
 
         with tf.variable_scope("path1_conv"):
@@ -1500,15 +1556,26 @@ class EnasConv1dDAG:
     def _layer(self, arc_seq, layer_id, prev_layers, start_idx, out_filters, is_training):
         inputs = prev_layers[-1]
         if self.data_format == "NWC":
-            inp_w = inputs.get_shape()[1].value
-            inp_c = inputs.get_shape()[2].value
+            try:
+                inp_w = inputs.get_shape()[1].value
+                inp_c = inputs.get_shape()[2].value
+            except AttributeError:    # for newer tf2
+                inp_w = inputs.get_shape()[1]
+                inp_c = inputs.get_shape()[2]
+
         elif self.data_format == "NCW":
-            inp_c = inputs.get_shape()[1].value
-            inp_w = inputs.get_shape()[2].value
+            try:
+                inp_c = inputs.get_shape()[1].value
+                inp_w = inputs.get_shape()[2].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[1]
+                inp_w = inputs.get_shape()[2]
+
         else:
             raise Exception("cannot understand data format: %s" % self.data_format)
         count = arc_seq[start_idx]
         branches = {}
+        strides = []
         for i in range(len(self.model_space[layer_id])):
             if self.train_fixed_arc and i != count:
                 continue
@@ -1525,12 +1592,14 @@ class EnasConv1dDAG:
                                           layer_attr=self.model_space[layer_id][i].Layer_attributes,
                                           is_training=is_training)
                     branches[tf.equal(count, i)] = y
+                    strides.append(self.model_space[layer_id][i].Layer_attributes['strides'])
                 elif self.model_space[layer_id][i].Layer_type == 'avgpool1d':
                     # print('%i, avgpool1d' % layer_id)
                     y = self._pool_branch(inputs, "avg",
                                           layer_attr=self.model_space[layer_id][i].Layer_attributes,
                                           is_training=is_training)
                     branches[tf.equal(count, i)] = y
+                    strides.append(self.model_space[layer_id][i].Layer_attributes['strides'])
                 elif self.model_space[layer_id][i].Layer_type == 'identity':
                     y = self._identity_branch(inputs)
                     branches[tf.equal(count, i)] = y
@@ -1538,6 +1607,9 @@ class EnasConv1dDAG:
                     raise Exception("Unknown layer: %s" % self.model_space[layer_id][i])
 
         self.branches.append(branches)
+        if len(strides) > 0:
+            assert len(set(strides)) == 1, "If you set strides!=1 (i.e. a reduction layer), then all candidate operations must have the same strides to keep the shape identical; got %s" % strides
+            inp_w = int(np.ceil(inp_w / strides[0]))
         if self.train_fixed_arc:
             ks = list(branches.keys())
             assert len(ks) == 1
@@ -1551,7 +1623,7 @@ class EnasConv1dDAG:
             out.set_shape([None, inp_w, out_filters])
         elif self.data_format == "NCW":
             out.set_shape([None, out_filters, inp_w])
-        if layer_id > 0:
+        if self.with_skip_connection is True and layer_id > 0:
             skip_start = start_idx + 1
             skip = arc_seq[skip_start: skip_start + layer_id]
             with tf.variable_scope("skip"):
@@ -1576,10 +1648,15 @@ class EnasConv1dDAG:
         dilation = layer_attr['dilation'] if 'dilation' in layer_attr else 1
         filters = layer_attr['filters']
         if self.data_format == "NWC":
-            inp_c = inputs.get_shape()[-1].value
+            try:
+                inp_c = inputs.get_shape()[-1].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[-1]
         elif self.data_format == "NCW":
-            inp_c = inputs.get_shape()[1].value
-
+            try:
+                inp_c = inputs.get_shape()[1].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[1]
         w = create_weight("w", [kernel_size, inp_c, filters])
         x = tf.nn.conv1d(inputs, filters=w, stride=1, padding="SAME", dilations=dilation)
         x = batch_norm1d(x, is_training, data_format=self.data_format)
@@ -1592,10 +1669,16 @@ class EnasConv1dDAG:
         strides = layer_attr['strides']
         filters = layer_attr['filters']
         if self.data_format == "NWC":
-            inp_c = inputs.get_shape()[-1].value
+            try:
+                inp_c = inputs.get_shape()[-1].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[-1]
             actual_data_format = "channels_last"
         elif self.data_format == "NCW":
-            inp_c = inputs.get_shape()[1].value
+            try:
+                inp_c = inputs.get_shape()[1].value
+            except AttributeError:
+                inp_c = inputs.get_shape()[1]
             actual_data_format = "channels_first"
         else:
             raise Exception("Unknown data format: %s" % self.data_format)
@@ -1621,3 +1704,55 @@ class EnasConv1dDAG:
 
     def _identity_branch(self, inputs):
         return lambda: inputs
+
+
+class EnasConv1DwDataDescrption(EnasConv1dDAG):
+    """This is a modeler that specifiied for convolution network with data description features
+    Date: 2020.5.17
+    """
+    def __init__(self, data_description, *args, **kwargs):
+        self.data_description = data_description
+        super().__init__(*args, **kwargs)
+        if len(self.data_description.shape) < 2:
+            self.data_description = np.expand_dims(self.data_description, axis=0)
+
+    # overwrite
+    def _model(self, arc, **kwargs):
+        """
+        Overwrite the parent `_model` method to feed the description to controller when sampling architectures
+        :param arc:
+        :param kwargs:
+        :return:
+        """
+        if self.train_fixed_arc:
+            assert arc == self.fixed_arc or arc is None, "This DAG instance is built to train fixed arc, hence you can only provide arc=None or arc=self.fixed_arc; check the initialization of this instances"
+        if arc is None:
+            if self.train_fixed_arc:
+                model = EnasCnnModel(inputs=self.fixed_model_input,
+                                     outputs=self.fixed_model_output,
+                                     labels=self.fixed_model_label,
+                                     arc_seq=arc,
+                                     dag=self,
+                                     session=self.session,
+                                     name=self.name)
+
+            else:
+                model = EnasCnnModel(inputs=self.sample_model_input,
+                                     outputs=self.sample_model_output,
+                                     labels=self.sample_model_label,
+                                     arc_seq=arc,
+                                     dag=self,
+                                     session=self.session,
+                                     name=self.name,
+                                     sample_dag_feed_dict={
+                                         self.controller.data_descriptive_feature: self.data_description}
+                                     )
+        else:
+            model = EnasCnnModel(inputs=self.fixed_model_input,
+                                 outputs=self.fixed_model_output,
+                                 labels=self.fixed_model_label,
+                                 arc_seq=arc,
+                                 dag=self,
+                                 session=self.session,
+                                 name=self.name)
+        return model
