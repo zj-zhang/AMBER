@@ -10,10 +10,11 @@ config = {
     'setup_requires': [],
     'install_requires': [
         'numpy',
-        'tensorflow',
         'matplotlib',
         'scipy',
-        'keras>=2.0.0',
+        'tqdm',
+        'tensorflow>=1.9.0,<2.0.0',
+        'keras>=2.0.0,<2.3.0',
         'seaborn>=0.9.0',
         'networkx'
         ],

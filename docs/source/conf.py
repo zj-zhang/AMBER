@@ -22,6 +22,9 @@ copyright = '2020, Zijun Zhang'
 author = 'Zijun Zhang'
 
 
+# -- FOR compatibility with RTD
+master_doc = 'index'
+
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
