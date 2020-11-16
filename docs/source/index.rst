@@ -29,6 +29,7 @@ If you encounter any issues, please feel free to `Contact Me <https://zj-zhang.g
    :caption: Resources
 
    resource/tutorials
+   resource/gallery
    resource/downloads
 
 .. toctree::
