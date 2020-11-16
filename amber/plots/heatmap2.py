@@ -1,10 +1,13 @@
 """
-Original code from:
- https://www.kaggle.com/threecourse/heatmap-with-change-cell-size-feature/notebook#Heatmap-with-change-cell-size-feature
------
-Below is original header:
-This script is created by modifying seaborn matrix.py
-in https://github.com/mwaskom/seaborn, by Michael L. Waskom
+
+Reference
+---------
+    Original code from:
+     https://www.kaggle.com/threecourse/heatmap-with-change-cell-size-feature/notebook#Heatmap-with-change-cell-size-feature
+
+    Below is original header:
+    This script is created by modifying seaborn matrix.py
+    in https://github.com/mwaskom/seaborn, by Michael L. Waskom
 """
 
 from __future__ import division

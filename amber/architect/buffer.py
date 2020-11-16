@@ -3,6 +3,7 @@
 """Buffer class for holding reinforcement-learning histories
 
 Buffer must have the following functionality:
+
 - store a new incoming architecture and its associated reward and probability
 - get data from the stored buffers
 

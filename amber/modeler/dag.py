@@ -31,7 +31,7 @@ from tensorflow.keras.layers import Dense, Dropout, Flatten
 from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
 from tensorflow.keras.layers import Input, Lambda, Permute, BatchNormalization, Activation
 from tensorflow.keras.layers import LSTM
-from ..modeler.operators import Layer_deNovo, SeparableFC, sparsek_vec
+from ._operators import Layer_deNovo, SeparableFC, sparsek_vec
 from ..architect.model_space import get_layer_shortname
 
 

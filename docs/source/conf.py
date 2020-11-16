@@ -38,7 +38,8 @@ extensions = ['sphinx.ext.autodoc',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
-    'sphinx.ext.intersphinx']
+    'sphinx.ext.intersphinx'
+]
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/', None),

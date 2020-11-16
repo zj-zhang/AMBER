@@ -37,7 +37,7 @@ except ImportError:
 
 from sklearn import metrics
 
-from ..plots import motif as motif_fn
+from ..utils import motif as motif_fn
 
 
 # Module-level over-write for compatibility with Selene v0.4.4
@@ -142,7 +142,7 @@ class AnalyzeSequencesNAS(AnalyzeSequences):
 
     Examples
     --------
-
+    Pending
 
     """
 
@@ -302,24 +302,24 @@ class AnalyzeSequencesNAS(AnalyzeSequences):
             The path to the FASTA file of sequences.
         save_data : list(str)
             A list of the data files to output. Must input 1 or more of the
-            following options: ["abs_diffs", "diffs", "logits", "predictions"].
+            following options: [abs_diffs, diffs, logits, predictions].
         output_dir : str
             The path to the output directory. Directories in the path will be
             created if they do not currently exist.
         mutate_n_bases : int, optional
             Default is 1. The number of bases to mutate at one time in
-            *in silico* mutagenesis.
+            in silico mutagenesis.
         use_sequence_name : bool, optional.
-            Default is True. If `use_sequence_name`, output files are prefixed
+            Default is True. If use_sequence_name, output files are prefixed
             by the sequence name/description corresponding to each sequence
             in the FASTA file. Spaces in the sequence name are replaced with
-            underscores '_'. If not `use_sequence_name`, output files are
-            prefixed with an index :math:`i` (starting with 0) corresponding
-            to the :math:`i`th sequence in the FASTA file.
+            underscores '_'. If not use_sequence_name, output files are
+            prefixed with an index i (starting with 0) corresponding
+            to the i-th sequence in the FASTA file.
         output_format : {'tsv', 'hdf5'}, optional
             Default is 'tsv'. The desired output format. Each sequence in
             the FASTA file will have its own set of output files, where
-            the number of output files depends on the number of `save_data`
+            the number of output files depends on the number of save_data
             predictions/scores specified.
         start_position : int, optional
             Default is 0. The starting position of the subsequence to be
@@ -328,8 +328,6 @@ class AnalyzeSequencesNAS(AnalyzeSequences):
             Default is None. The ending position of the subsequence to be
             mutated. If left as `None`, then `self.sequence_length` will be
             used.
-
-
 
 
         Returns

@@ -6,13 +6,12 @@
 AMBER documentation
 =================================
 
-Welcome to the documentation for AMBER, an automated machine learning framework to design deep learning models in biology.
+Welcome to the documentation for AMBER, an automated machine learning framework that employs Neural Architecture Search
+(NAS) to design deep learning models in biology and genomics.
 
-The Github repository is `here <https://github.com/zj-zhang/AMBER>`_.
+Open-source code is hosted on `Github repository <https://github.com/zj-zhang/AMBER>`_.
 
-This Documentation is still much **Work-In-Progress**. As important as I understand how a good documentation is, being a postdoc researcher is not the best time to spend a week writing docstring. Thus, any contributions are greatly appreciated!
-
-Feel free to contact me `here <https://zj-zhang.github.io>`_.
+If you encounter any issues, please feel free to `Contact Me <https://zj-zhang.github.io>`_.
 
 
 .. toctree::
@@ -25,13 +24,23 @@ Feel free to contact me `here <https://zj-zhang.github.io>`_.
    overview/faq
 
 .. toctree::
+   :glob:
+   :maxdepth: 1
+   :caption: Resources
+
+   resource/tutorials
+   resource/downloads
+
+.. toctree::
    :maxdepth: 1
    :caption: Packages
 
+   modules
    amber.architect
    amber.modeler
+   amber.interpret
    amber.utils
-
+   amber.plots
 
 
 Indices and tables

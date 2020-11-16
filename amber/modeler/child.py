@@ -90,12 +90,16 @@ class DenseAddOutputChild(GeneralChild):
 class EnasAnnModel:
     def __init__(self, inputs, outputs, arc_seq, dag, session, dropouts=None, name='EnasModel'):
         """
-        Args:
-            inputs: input tensors/placeholders
-            outputs: output tensors
-            # data: tf.Dataset object for feeding training data
+        Parameters
+        ----------
+            inputs: tf.Tensor
+                input tensors/placeholders
+            outputs: tf.Tensor
+                output tensors
             session: tf.Session
-            name: name for tf.variable_scope; default is "EnasDAG"
+                tensorflow Session for use
+            name: str
+                name for tf.variable_scope; default is "EnasDAG"
         """
         assert type(inputs) in (tf.Tensor, list), "get unexpected inputs types: %s" % type(inputs)
         assert type(outputs) in (tf.Tensor, list), "get unexpected outputs types: %s" % type(outputs)
@@ -521,13 +525,10 @@ class EnasAnnModel:
         return loss_and_metrics
 
     def save(self, *args, **kwargs):
-        """TODO: save model architectures
-        Args:
-            *args:
-            **kwargs:
-
-        Returns:
-
+        """
+        TODO
+        -----
+            save model architectures
         """
         warnings.warn("Not implemented yet; rolling back to `save_weights`")
         self.save_weights(*args, **kwargs)
@@ -567,11 +568,13 @@ class EnasAnnModel:
 
 class EnasCnnModel:
     """
-    TODO:
-        1. re-write weights save/load
-        2. use the input/output/label tensors provided by EnasConv1dDAG; this should unify the
-          fit method when using placeholder and Tensor pipelines - probably still need two separate
-          methods though
+    TODO
+    -----
+    - re-write weights save/load
+    - use the input/output/label tensors provided by EnasConv1dDAG; this should unify the
+      fit method when using placeholder and Tensor pipelines - probably still need two separate
+      methods though
+
     """
 
     def __init__(self, inputs, outputs, labels, arc_seq, dag, session, dropouts=None, use_pipe=None, name='EnasModel',
@@ -792,13 +795,9 @@ class EnasCnnModel:
 
     def save(self, *args, **kwargs):
         """
-        TODO: save model architectures
-        Args:
-            *args:
-            **kwargs:
-
-        Returns:
-
+        TODO
+        ------
+            save model architectures
         """
         warnings.warn("Not implemented yet; rolling back to `save_weights`", stacklevel=2)
         self.save_weights(*args, **kwargs)
