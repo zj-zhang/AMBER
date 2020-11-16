@@ -11,7 +11,7 @@ Reward function takes in trained model and validation data as input, returns rew
 
 import numpy as np
 import copy
-from .common_ops import unpack_data
+from .commonOps import unpack_data
 from ..utils.io import read_history
 
 

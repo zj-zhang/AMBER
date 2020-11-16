@@ -59,11 +59,11 @@ def load_data_dict(d):
 # this is the ultimate goal; needs controller and manager
 def get_train_env(env_type, controller, manager, *args, **kwargs):
     if env_type == 'ControllerTrainEnv':
-        from .architect.train_env import ControllerTrainEnvironment
+        from .architect.trainEnv import ControllerTrainEnvironment
         env = ControllerTrainEnvironment(controller=controller, manager=manager,
                                          *args, **kwargs)
     elif env_type == 'EnasTrainEnv':
-        from .architect.train_env import EnasTrainEnv
+        from .architect.trainEnv import EnasTrainEnv
         env = EnasTrainEnv(controller=controller, manager=manager,
                            *args, **kwargs)
     else:
@@ -91,7 +91,7 @@ def get_controller(controller_type, model_space, session, **kwargs):
 
 # model_space
 def get_model_space(arg):
-    from .architect.model_space import ModelSpace
+    from .architect.modelSpace import ModelSpace
     if type(arg) is str:
         if arg == 'Default ANN':
             from .bootstrap.dense_skipcon_space import get_model_space as ms_ann
@@ -149,7 +149,7 @@ def get_manager(manager_type, model_fn, reward_fn, data_dict, session, *args, **
 
 # model_fn
 def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
-    from .architect.model_space import State
+    from .architect.modelSpace import State
     if model_fn_type == 'DAG' or model_fn_type == 'DAGModelBuilder':
         from .modeler import DAGModelBuilder
         assert 'inputs_op' in kwargs and 'outputs_op' in kwargs

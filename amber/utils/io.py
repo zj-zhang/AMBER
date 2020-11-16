@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from ..plots import sma
-from ..architect.model_space import get_layer_shortname
+from ..architect.modelSpace import get_layer_shortname
 
 
 def read_history_set(fn_list):

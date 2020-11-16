@@ -7,7 +7,7 @@ ZZ
 import tensorflow as tf
 import numpy as np
 from collections import defaultdict
-from .general_obj_math import multinomial_KL_divergence
+from .generalObjMath import multinomial_KL_divergence
 
 
 def compare_motif_diff_size(P, Q):

@@ -28,6 +28,14 @@ amber.plots.plot\_all\_stats module
    :undoc-members:
    :show-inheritance:
 
+amber.plots.plotsV1 module
+--------------------------
+
+.. automodule:: amber.plots.plotsV1
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 
 Module contents
 ---------------

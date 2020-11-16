@@ -19,10 +19,10 @@ import argparse
 
 from amber.modeler import EnasCnnModelBuilder
 from amber.architect.controller import ZeroShotController
-from amber.architect.model_space import State, ModelSpace
-from amber.architect.common_ops import count_model_params, unpack_data
+from amber.architect.modelSpace import State, ModelSpace
+from amber.architect.commonOps import count_model_params, unpack_data
 
-from amber.architect.train_env import MultiManagerEnvironment, ParallelMultiManagerEnvironment
+from amber.architect.trainEnv import MultiManagerEnvironment, ParallelMultiManagerEnvironment
 from amber.architect.reward import LossAucReward, LossReward
 from amber.plots import plot_controller_hidden_states
 from amber.utils import run_from_ipython, get_available_gpus
@@ -31,7 +31,7 @@ from amber.utils.data_parser import get_data_from_simdata
 
 from amber.modeler.modeler import build_sequential_model, KerasModelBuilder
 from amber.architect.manager import GeneralManager, DistributedGeneralManager
-from amber.architect.model_space import get_layer_shortname
+from amber.architect.modelSpace import get_layer_shortname
 
 from amber.utils.sequences import EncodedGenome
 from amber.utils.sequences import EncodedHDF5Genome

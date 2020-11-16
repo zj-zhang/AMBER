@@ -1,6 +1,6 @@
 from pkg_resources import resource_filename
 
-from ..architect.model_space import *
+from ..architect.modelSpace import *
 from ..utils import data_parser
 
 input_state = State('Input', shape=(200, 4))

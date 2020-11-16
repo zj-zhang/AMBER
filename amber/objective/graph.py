@@ -7,8 +7,8 @@ import keras.backend as K
 import numpy as np
 import tensorflow as tf
 
-from .general_obj_func import GeneralKnowledgeObjectiveFunction
-from .general_obj_math import bias_var_decomp
+from .generalObjFunc import GeneralKnowledgeObjectiveFunction
+from .generalObjMath import bias_var_decomp
 
 
 class GraphHierarchyTree(GeneralKnowledgeObjectiveFunction):

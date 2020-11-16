@@ -73,95 +73,25 @@ class DAGModelBuilder(ModelBuilder):
 
 
 class EnasAnnModelBuilder(DAGModelBuilder):
+    """This function builds an Artificial Neural net.
+
+    It uses tensorflow low-level API to define a big graph, where
+    each child network architecture is a subgraph in this big DAG.
+
+    Parameters
+    ----------
+    session
+    controller
+    dag_func
+    l1_reg
+    l2_reg
+    with_output_blocks
+    use_node_dag
+    feature_model
+    dag_kwargs
+    args
+    kwargs
     """
-    This function builds a vanilla Artificial Neural net. It uses tensorflow low-level API to define a big graph, where
-    each child network architecture is a subgraph in this big DAG
-    Examples:
-        from BioNAS.Controller.model_builder import EnasAnnModelBuilder
-        from BioNAS.Controller.model_space import State, ModelSpace
-        from BioNAS.MockBlackBox.dense_skipcon_space import get_input_nodes, get_output_nodes, get_data_correlated
-        import tensorflow as tf
-        import numpy as np
-
-
-        def get_model_space(num_layers):
-            state_space = ModelSpace()
-            for i in range(num_layers):
-                state_space.add_layer(i, [
-                    State('Dense', units=3, activation='relu'),
-                    State('Dense', units=10, activation='relu'),
-                ])
-            return state_space
-
-
-        (X_train, y_train), (X_val, y_val), (X_test, y_test) = get_data_correlated(False, 0.6)
-        model_space = get_model_space(3)
-        input_nodes = get_input_nodes(4, True)
-        output_node = get_output_nodes()
-
-        s = tf.compat.v1.Session()
-
-        model_fn = EnasAnnModelBuilder(session=s, model_space=model_space, inputs_op=input_nodes, output_op=output_node,
-                                       num_layers=3,
-                                       l1_reg=0.001,
-                                       model_compile_dict={'optimizer': 'adam', 'loss': 'mse', 'metrics': ['mae', 'mse']})
-        arc2 = [1, 1, 1, 0, 0,
-                1, 0, 0, 1, 1, 0,
-                0, 0, 0, 0, 0, 1, 1]
-
-        # shrink the size a little
-        arc1 = [0, 1, 1, 0, 0,
-                0, 0, 0, 1, 1, 0,
-                0, 0, 0, 0, 0, 1, 1]
-
-        model = model_fn(arc1)
-        model2 = model_fn(arc2)
-
-        print('w1:\n', np.round(s.run(model_fn.dag.w[0])[0:4, 0:10], 2))
-
-        for _ in range(1):
-            model.fit(X_train, y_train, batch_size=500, epochs=10, verbose=0, validation_data=(X_val, y_val))
-            print('model1:', model.evaluate(X_test, y_test))
-            print('w1:\n', np.round(s.run(model_fn.dag.fixed_w_masks[0], feed_dict=model._make_feed_dict())[0:4, 0:10], 2))
-
-            model2.fit(X_train, y_train, batch_size=500, epochs=10, verbose=0, validation_data=(X_val, y_val))
-            print('model2:', model2.evaluate(X_test, y_test))
-            print('w1:\n', np.round(s.run(model_fn.dag.fixed_w_masks[0], feed_dict=model2._make_feed_dict())[0:4, 0:10], 2))
-
-    Another Example using output_blocks:
-        model_fn = EnasAnnModelBuilder(session=s, model_space=model_space, inputs_op=input_nodes, output_op=[output_node],
-                                       num_layers=3,
-                                       l1_reg=0.001,
-                                       use_node_dag=False,
-                                       with_output_blocks=True,
-                                       model_compile_dict={'optimizer': 'adam', 'loss': 'mse', 'metrics': ['mae', 'mse']})
-
-        # fully connected
-        arc1 = [1, 1, 1, 1, 1,
-                0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0,
-                1,0,0]
-        # branching
-        arc2 = [0, 1, 1, 0, 0,
-                0, 0, 0, 1, 1, 0,
-                0, 0, 0, 0, 0, 1, 1,
-                0,0,1]
-
-        model1 = model_fn(arc1)
-        model2 = model_fn(arc2)
-
-        print('w1:\n', np.round(s.run(model_fn.dag.w[0])[0:4, 0:10], 2))
-
-        for _ in range(1):
-            model1.fit(X_train, y_train, batch_size=500, epochs=10, verbose=0, validation_data=(X_val, y_val))
-            print('model1:', model1.evaluate(X_test, y_test))
-            print('w1:\n', np.round(s.run(model_fn.dag.fixed_w_masks[0], feed_dict=model1._make_feed_dict())[0:4, 0:10], 2))
-
-            model2.fit(X_train, y_train, batch_size=500, epochs=10, verbose=0, validation_data=(X_val, y_val))
-            print('model2:', model2.evaluate(X_test, y_test))
-            print('w1:\n', np.round(s.run(model_fn.dag.fixed_w_masks[0], feed_dict=model2._make_feed_dict())[0:4, 0:10], 2))
-    """
-
     def __init__(self, session=None, controller=None, dag_func='enas', l1_reg=0.0, l2_reg=0.0,
                  with_output_blocks=False,
                  use_node_dag=True,
@@ -169,18 +99,6 @@ class EnasAnnModelBuilder(DAGModelBuilder):
                  dag_kwargs=None,
                  *args,
                  **kwargs):
-        """
-        Args:
-            session:
-            controller:
-            dag_func:
-            l1_reg:
-            use_node_dag: if True, will use InputBlockDAG to build a list of `ComputationNode`s to record the parent/
-                child relationships; otherwise, do not use node_dag.
-                Currently `use_node_dag=True` is incompatible with `with_output_blocks=True`
-            *args:
-            **kwargs:
-        """
         super().__init__(dag_func=dag_func, *args, **kwargs)
         assert dag_func.lower() in ('enas', 'enasanndag'), "EnasModelBuilder only support enasDAG."
         self.session = session

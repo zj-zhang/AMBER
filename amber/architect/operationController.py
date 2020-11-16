@@ -17,8 +17,8 @@ from keras.layers.recurrent import LSTM
 from keras.models import Model
 
 from .buffer import Buffer
-from ._general_controller import BaseController
-from .common_ops import get_kl_divergence_n_entropy, proximal_policy_optimization_loss
+from .generalController import BaseController
+from .commonOps import get_kl_divergence_n_entropy, proximal_policy_optimization_loss
 
 
 def get_optimizer(name: str, lr: float, decay: float = 0.995):

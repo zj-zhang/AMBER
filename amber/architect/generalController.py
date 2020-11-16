@@ -15,10 +15,10 @@ if tf.__version__.startswith("2"):
     import tensorflow.compat.v1 as tf
 
 from .buffer import get_buffer
-from .common_ops import get_keras_train_ops
-from .common_ops import get_kl_divergence_n_entropy
-from .common_ops import proximal_policy_optimization_loss
-from .common_ops import stack_lstm
+from .commonOps import get_keras_train_ops
+from .commonOps import get_kl_divergence_n_entropy
+from .commonOps import proximal_policy_optimization_loss
+from .commonOps import stack_lstm
 
 
 class BaseController(object):
@@ -445,7 +445,9 @@ class GeneralController(BaseController):
         prev_h = [tf.zeros([batch_size, self.lstm_size], tf.float32) for _ in
                   range(self.lstm_num_layers)]
         # only expand `g_emb` if necessary
-        if self.g_emb.shape[0] is not None and self.g_emb.shape[0].value == 1:
+        g_emb_nrow = self.g_emb.shape[0] if type(self.g_emb.shape[0]) is int \
+            else self.g_emb.shape[0].value
+        if self.g_emb.shape[0] is not None and g_emb_nrow == 1:
             inputs = tf.matmul(tf.ones((batch_size, 1)), self.g_emb)
         else:
             inputs = self.g_emb

@@ -6,10 +6,10 @@ import numpy as np
 import tensorflow as tf
 from tqdm import trange, tqdm
 
-from .general_obj_func import GeneralKnowledgeObjectiveFunction
-from ..architect.common_ops import batchify
+from .generalObjFunc import GeneralKnowledgeObjectiveFunction
+from ..architect.commonOps import batchify
 
-from ._motif_utils import group_motif_by_factor, compare_motif_diff_size, get_seq_chunks, create_conv_from_motif, remove_dup_motif
+from .motifUtils import group_motif_by_factor, compare_motif_diff_size, get_seq_chunks, create_conv_from_motif, remove_dup_motif
 
 
 class MotifKLDivergence(GeneralKnowledgeObjectiveFunction):

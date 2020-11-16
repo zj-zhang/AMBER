@@ -4,7 +4,7 @@ Classes for breaking down an architecture sequence into a more structured format
 """
 
 
-# Author : zzj
+# Author : zzjfrank
 # Date : 2020.8.2; revised 2020-10-06
 
 import numpy as np

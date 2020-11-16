@@ -9,7 +9,7 @@ import networkx as nx
 # from GenoPheno2 import SubSystem
 from networkx.drawing.nx_agraph import graphviz_layout
 
-from ._plotsV1 import reset_plot
+from .plotsV1 import reset_plot
 
 
 def plot_nx_dag(ss, save_fn=None):

@@ -2,4 +2,4 @@
 """
 
 from .modeler import DAGModelBuilder, EnasAnnModelBuilder, EnasCnnModelBuilder
-from .modeler import KerasModelBuilder, KerasMultiIOModelBuilder
+from .modeler import KerasModelBuilder, KerasMultiIOModelBuilder, KerasResidualCnnBuilder

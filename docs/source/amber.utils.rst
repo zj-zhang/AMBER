@@ -20,10 +20,42 @@ amber.utils.io module
    :undoc-members:
    :show-inheritance:
 
+amber.utils.logging module
+--------------------------
+
+.. automodule:: amber.utils.logging
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+amber.utils.motif module
+------------------------
+
+.. automodule:: amber.utils.motif
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 amber.utils.saliency module
 ---------------------------
 
 .. automodule:: amber.utils.saliency
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+amber.utils.sampler module
+--------------------------
+
+.. automodule:: amber.utils.sampler
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+amber.utils.sequences module
+----------------------------
+
+.. automodule:: amber.utils.sequences
    :members:
    :undoc-members:
    :show-inheritance:
@@ -36,10 +68,10 @@ amber.utils.simulator module
    :undoc-members:
    :show-inheritance:
 
-amber.utils.tensorflow\_mem module
-----------------------------------
+amber.utils.tensorflowMem module
+--------------------------------
 
-.. automodule:: amber.utils.tensorflow_mem
+.. automodule:: amber.utils.tensorflowMem
    :members:
    :undoc-members:
    :show-inheritance:

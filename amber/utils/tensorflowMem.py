@@ -6,7 +6,7 @@ num_threads = os.environ.get('OMP_NUM_THREADS')
 
 
 def get_session(gpu_fraction=0.75):
-    '''Assume that you have 6GB of GPU memory and want to allocate ~2GB'''
+    """Assume that you have 6GB of GPU memory and want to allocate ~2GB"""
 
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_fraction)
 

@@ -12,7 +12,7 @@ except Exception as e:
     print(e)
     from keras import initializations
 
-from keras.layers.core import Layer
+from keras.layers import Layer
 from keras.constraints import Constraint
 from keras.regularizers import Regularizer
 

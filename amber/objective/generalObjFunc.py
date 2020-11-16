@@ -6,7 +6,7 @@ ZZJ
 Nov. 16, 2018
 """
 
-from .general_obj_math import *
+from .generalObjMath import *
 
 
 class GeneralKnowledgeObjectiveFunction(object):

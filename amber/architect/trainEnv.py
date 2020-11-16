@@ -13,7 +13,7 @@ import warnings
 from collections import defaultdict
 
 from .buffer import parse_action_str, parse_action_str_squeezed
-from ._operation_controller import *
+from .operationController import *
 from ..utils.io import save_action_weights, save_stats
 from ..plots import plot_stats2, plot_environment_entropy, plot_controller_performance, \
     plot_action_weights, plot_wiring_weights

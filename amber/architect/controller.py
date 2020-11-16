@@ -13,10 +13,10 @@ Changelog
 """
 
 
-from ._general_controller import BaseController, GeneralController
-from ._multiio_controller import MultiInputController, MultiIOController
-from ._operation_controller import OperationController
-from ._zero_shot_controller import ZeroShotController
+from .generalController import BaseController, GeneralController
+from .multiioController import MultiInputController, MultiIOController
+from .operationController import OperationController
+from .zeroShotController import ZeroShotController
 
 
 __all__ = [

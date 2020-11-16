@@ -1,7 +1,7 @@
 import matplotlib
 import matplotlib.pyplot as plt
 from pandas import read_csv
-from ._plotsV1 import accum_opt
+from .plotsV1 import accum_opt
 
 matplotlib.use('Agg')
 

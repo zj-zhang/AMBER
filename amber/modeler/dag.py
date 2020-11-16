@@ -18,11 +18,11 @@ from ..utils import corrected_tf as tf
 from tensorflow.keras.layers import Concatenate
 from tensorflow.keras.models import Model
 # TODO: need to clean up `State` as `Operation`
-from ..architect.model_space import State
+from ..architect.modelSpace import State
 
 # for general child
 from .child import DenseAddOutputChild, EnasAnnModel, EnasCnnModel
-from ..architect.common_ops import get_tf_metrics, get_keras_train_ops, get_tf_layer, get_tf_loss, create_weight, \
+from ..architect.commonOps import get_tf_metrics, get_keras_train_ops, get_tf_layer, get_tf_loss, create_weight, \
     create_bias, batch_norm1d
 # for get layers
 from keras import backend as K
@@ -32,7 +32,7 @@ from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
 from tensorflow.keras.layers import Input, Lambda, Permute, BatchNormalization, Activation
 from tensorflow.keras.layers import LSTM
 from ._operators import Layer_deNovo, SeparableFC, sparsek_vec
-from ..architect.model_space import get_layer_shortname
+from ..architect.modelSpace import get_layer_shortname
 
 
 def get_dag(arg):
@@ -79,11 +79,12 @@ def get_layer(x, state, with_bn=False):
 
     Parameters
     ----------
-    x : tf.keras.layers
+    x : tf.keras.layers or None
         The input Keras layer
-
     state : amber.architect.Operation
         The target layer to be built
+    with_bn : bool, optional
+        If true, add batch normalization layers before activation
 
     Returns
     -------
@@ -1725,7 +1726,9 @@ class EnasConv1DwDataDescrption(EnasConv1dDAG):
         :return:
         """
         if self.train_fixed_arc:
-            assert arc == self.fixed_arc or arc is None, "This DAG instance is built to train fixed arc, hence you can only provide arc=None or arc=self.fixed_arc; check the initialization of this instances"
+            assert arc == self.fixed_arc or arc is None, "This DAG instance is built to train fixed arc, hence you " \
+                                                         "can only provide arc=None or arc=self.fixed_arc; check the " \
+                                                         "initialization of this instances "
         if arc is None:
             if self.train_fixed_arc:
                 model = EnasCnnModel(inputs=self.fixed_model_input,

@@ -20,7 +20,7 @@ from keras.models import Model
 from keras.utils.data_utils import GeneratorEnqueuer
 from tqdm import trange
 
-from ..architect.common_ops import batchify, numpy_shuffle_in_unison
+from ..architect.commonOps import batchify, numpy_shuffle_in_unison
 
 
 class GeneralChild(Model):

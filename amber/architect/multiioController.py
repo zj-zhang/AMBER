@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from ._general_controller import GeneralController, stack_lstm
+from .generalController import GeneralController, stack_lstm
 
 
 class MultiInputController(GeneralController):

@@ -9,7 +9,7 @@ architecture.
 This module's documentation is Work-In-Progress.
 """
 
-from .sequence_model import AnalyzeSequencesNAS
+from .sequenceModel import AnalyzeSequencesNAS
 from .scores import PrecisionAtRecall, TprAtFpr
 from . import heritability
 

@@ -11,7 +11,8 @@ Welcome to the documentation for AMBER, an automated machine learning framework 
 
 Open-source code is hosted on `Github repository <https://github.com/zj-zhang/AMBER>`_.
 
-If you encounter any issues, please feel free to `Contact Me <https://zj-zhang.github.io>`_.
+If you encounter any issues, please feel free to `Open an Issue at GitHub <https://github.com/zj-zhang/AMBER/issues>`_,
+or `Contact Me <https://zj-zhang.github.io>`_ directly.
 
 
 .. toctree::
@@ -22,6 +23,7 @@ If you encounter any issues, please feel free to `Contact Me <https://zj-zhang.g
    overview/overview
    overview/installation
    overview/faq
+   overview/reference
 
 .. toctree::
    :glob:

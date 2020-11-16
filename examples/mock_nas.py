@@ -2,8 +2,8 @@ import os
 import sys
 import logging
 from amber.architect.controller import GeneralController
-from amber.architect.model_space import State, ModelSpace
-from amber.architect.train_env import ControllerTrainEnvironment
+from amber.architect.modelSpace import State, ModelSpace
+from amber.architect.trainEnv import ControllerTrainEnvironment
 from amber.bootstrap.mock_manager import MockManager
 from amber.bootstrap.simple_conv1d_space import get_state_space
 from amber.utils.logging import setup_logger
