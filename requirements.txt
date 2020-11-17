@@ -1,6 +1,6 @@
 numpy~=1.17.2
 h5py~=2.9.0
-amber~=0.1.0
+amber-automl~=0.1.0
 pillow~=6.2.0
 matplotlib~=3.1.1
 psutil~=5.6.3

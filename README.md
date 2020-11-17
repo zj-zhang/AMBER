@@ -2,12 +2,13 @@
 
 Automated Modeling for Biological Evidence-based Research
 
-August, 2020
+November, 2020
 
-Below we provide a short guide to help you get quick started.
-
-The API documentation is still *Work-In-Progress*. More comprehensive docs to follow. Latest docs can be found at:
+The overview, tutorials, API documentation can be found at:
 https://amber-dl.readthedocs.io/en/latest/
+
+To get quick started, use this Google Colab notebook. [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/gist/zj-zhang/43235f916303284fdf8c42a6e3d7b8b4)
+
 
 ### Installation
 
