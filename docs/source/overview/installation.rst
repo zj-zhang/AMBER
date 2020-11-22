@@ -3,7 +3,9 @@ Installation
 
 AMBER is developed under Python 3.7 and Tensorflow 1.15.
 
-Please follow the steps below to install AMBER.
+Please follow the steps below to install AMBER. There are two ways to install `AMBER`: 1) cloning the latest development
+from the GitHub repository and install with `Anaconda`; and 2) using `pypi` to install a versioned
+release.
 
 
 Get the latest source code
@@ -27,6 +29,18 @@ environment for AMBER:
 
     conda create --file ./templates/conda_amber.linux_env.yml
     python setup.py develop
+
+
+Installing with Pip
+-------------------
+As of version `0.1.0`, AMBER is on pypi. In the command-line terminal, type the following commands to get it installed:
+
+.. code-block:: bash
+
+    pip install amber-automl
+
+This will also install the required dependencies automatically. The pip install is still in its beta phase, so if you
+encouter any issues, please send me a bug report, and try installing with Anaconda as above.
 
 
 Testing your installation
