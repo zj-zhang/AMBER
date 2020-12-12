@@ -8,11 +8,10 @@
 
 ---
 
-Automated Modeling for Biological Evidence-based Research
+**Automated Modeling for Biological Evidence-based Research**
 
-November, 2020
 
-AMBER is a toolkit for designing high-performance neral network models automatically in
+AMBER is a toolkit for designing high-performance neural network models automatically in
 Genomics and Bioinformatics.
 
 The overview, tutorials, API documentation can be found at:
@@ -33,9 +32,11 @@ AMBER is a toolkit for designing high-performance neral network models automatic
 Genomics and Bioinformatics. For more details, please read our
 preprint [here](https://www.biorxiv.org/content/10.1101/2020.08.18.251561v1).
 
-What's new?
-- AMBER now has a logo.
-- We added a tutorial hosted by Google Colab.
+**What's new?**
+
+- Nov. 24, 2020: Evan gave a great talk at *MLCB 2020* about a zero-shot version of AMBER, tentatively under the
+name "AMBIENT". See his talk on YouTube [here](https://youtu.be/8co5_aqBwGQ?t=11171).
+- Nov. 22, 2020: AMBER now has a logo. We also added a tutorial hosted by Google Colab.
 
 
 [Back to Top](#sec0)
@@ -132,6 +133,7 @@ settings are central to an `Amber` instance: a `types` dictionary and a `specs` 
 training environment) it should be using.
 - The `specs` will further detail every possible settings for the `types` you specified. Only
 use this as an expert mode.
+
 [Back to Top](#sec0)
 
 
