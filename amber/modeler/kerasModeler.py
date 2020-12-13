@@ -1,3 +1,5 @@
+from abc import ABC
+
 import tensorflow.keras as keras
 from ..architect import Operation
 from .dag import get_layer
@@ -11,7 +13,7 @@ from tensorflow.keras import regularizers
 from tensorflow.keras import constraints
 from tensorflow.keras.models import Model
 import copy
-import numpy as np
+from ..architect.modelSpace import BranchedModelSpace
 
 
 class KerasModelBuilder(ModelBuilder):
@@ -50,6 +52,63 @@ class KerasModelBuilder(ModelBuilder):
                             model_compile_dict=self.model_compile_dict,
                             model_space=self.model_space
                             )
+        return model
+
+
+class KerasBranchModelBuilder(ModelBuilder):
+    def __init__(self, inputs_op, output_op, model_compile_dict, model_space=None, with_bn=False, **kwargs):
+        assert type(model_space) is BranchedModelSpace
+        assert len(inputs_op) == len(model_space.subspaces[0])
+        self.inputs_op = inputs_op
+        self.output_op = output_op
+        self.model_space = model_space
+        self.model_compile_dict = model_compile_dict
+        self.with_bn = with_bn
+        self._branch_to_layer = self.model_space.branch_to_layer
+
+    def _build_branch(self, input_op, model_states, model_space):
+        if issubclass(type(input_op), Operation):
+            inp = get_layer(None, input_op)
+        else:
+            inp = input_op
+        x = inp
+        assert len(model_states) > 0
+        for i, state in enumerate(model_states):
+            if issubclass(type(state), Operation):
+                x = get_layer(x, state)
+            elif issubclass(type(state), int) or np.issubclass_(type(state), np.integer):
+                assert model_space is not None, "if provided integer model_arc, must provide model_space in kwargs"
+                x = get_layer(x, model_space[i][state], with_bn=self.with_bn)
+            else:
+                raise Exception("cannot understand %s of type %s" % (state, type(state)))
+        return inp, x
+
+    def __call__(self, model_states, **kwargs):
+        inps = []
+        branches = []
+        # build branch sequentially
+        for i in range(len(self.inputs_op)):
+            inp, out = self._build_branch(
+                input_op=self.inputs_op[i],
+                model_states=[model_states[j] for j in self._branch_to_layer[(0, i)]],
+                model_space=self.model_space.subspaces[0][i]
+            )
+            inps.append(inp)
+            branches.append(out)
+        # merge branches
+        if self.model_space.concat_op == 'concatenate':
+            branch_merge = get_layer(x=branches, state=Operation('concatenate'))
+        else:
+            raise ValueError('Model builder cannot understand model space concat op: %s' % self.model_space.conat_op)
+        # build stem
+        _, h = self._build_branch(
+            input_op=branch_merge,
+            model_states=[model_states[j] for j in self._branch_to_layer[(1, None)]],
+            model_space=self.model_space.subspaces[1]
+        )
+        out = get_layer(x=h, state=self.output_op)
+        model = Model(inputs=inps, outputs=out)
+        model.compile(**self.model_compile_dict)
         return model
 
 

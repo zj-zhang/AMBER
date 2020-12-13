@@ -13,7 +13,6 @@ this is an upgrade of the `NetworkManager` class
 
 import numpy as np
 import warnings
-#import tensorflow as tf
 from ..utils import corrected_tf as tf
 from tensorflow.keras.layers import Concatenate
 from tensorflow.keras.models import Model
@@ -155,6 +154,9 @@ def get_layer(x, state, with_bn=False):
 
     elif state.Layer_type == 'gaussian_noise':
         return GaussianNoise(**state.Layer_attributes)(x)
+
+    elif state.Layer_type == 'concatenate':
+        return Concatenate(**state.Layer_attributes)(x)
 
     else:
         raise Exception('Layer_type "%s" is not understood' % state.Layer_type)
