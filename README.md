@@ -34,7 +34,7 @@ preprint [here](https://www.biorxiv.org/content/10.1101/2020.08.18.251561v1).
 
 **What's new?**
 
-- Nov. 24, 2020: Evan gave a great talk at *MLCB 2020* about a zero-shot version of AMBER, tentatively under the
+- Nov. 24, 2020: Evan Cofer ([@evan_cofer](https://twitter.com/evan_cofer)) gave a great talk at *MLCB 2020* about a zero-shot version of AMBER, tentatively under the
 name "AMBIENT". See his talk on YouTube [here](https://youtu.be/8co5_aqBwGQ?t=11171).
 - Nov. 22, 2020: AMBER now has a logo. We also added a tutorial hosted by Google Colab.
 
