@@ -74,6 +74,15 @@ class GeneralManager(BaseNetworkManager):
     child_batchsize : int
         The batch size for training the child model.
 
+    fit_kwargs : dict or None
+        Keyword arguments for model.fit
+
+    predict_kwargs : dict or None
+        Keyword arguments for model.predict
+
+    evaluate_kwargs : dict or None
+        Keyword arguments for model.evaluate
+
     verbose : bool or int
         Verbose level. 0=non-verbose, 1=verbose, 2=less verbose.
 
@@ -128,12 +137,16 @@ class GeneralManager(BaseNetworkManager):
                  child_batchsize=128,
                  verbose=0,
                  fit_kwargs=None,
+                 predict_kwargs=None,
+                 evaluate_kwargs=None,
                  **kwargs):
         super(GeneralManager, self).__init__(**kwargs)
         self.train_data = train_data
         self.validation_data = validation_data
         self.working_dir = working_dir
         self.fit_kwargs = fit_kwargs or {}
+        self.predict_kwargs = predict_kwargs or {}
+        self.evaluate_kwargs = evaluate_kwargs or {}
         if not os.path.exists(self.working_dir):
             os.makedirs(self.working_dir)
         self.model_compile_dict = kwargs.pop("model_compile_dict", None)
@@ -213,7 +226,7 @@ class GeneralManager(BaseNetworkManager):
 
                 # evaluate the model by `reward_fn`
                 this_reward, loss_and_metrics, reward_metrics = \
-                    self.reward_fn(model, (self.validation_data),
+                    self.reward_fn(model, self.validation_data,
                                    session=train_sess,
                                    graph=train_graph)
                 loss = loss_and_metrics.pop(0)
@@ -226,7 +239,7 @@ class GeneralManager(BaseNetworkManager):
                 # do any post processing,
                 # e.g. save child net, plot training history, plot scattered prediction.
                 if self.store_fn:
-                    val_pred = model.predict(self.validation_data) 
+                    val_pred = model.predict(self.validation_data, **self.predict_kwargs)
                     self.store_fn(
                         trial=trial,
                         model=model,

@@ -204,6 +204,19 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
             output_op=output_op,
             session=session,
             *args, **kwargs)
+
+    elif model_fn_type == 'KerasBranchModelBuilder':
+        from .modeler import KerasBranchModelBuilder
+        inp_op_list = kwargs.pop("inputs_op")
+        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        out_op_list = kwargs.pop("outputs_op")
+        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
+        assert len(output_op) == 1
+        model_fn = KerasBranchModelBuilder(
+            model_space=model_space,
+            inputs_op=inputs_op,
+            output_op=output_op[0],
+            *args, **kwargs)
  
     else:
         raise Exception('cannot understand model_builder type: %s' % model_fn_type)
