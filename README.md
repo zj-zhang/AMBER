@@ -1,9 +1,9 @@
 [![Documentation Status](https://readthedocs.org/projects/darts-dnn/badge/?version=latest)](https://darts-dnn.readthedocs.io/en/latest/?badge=latest)
 [![Latest Release](https://img.shields.io/github/release/zj-zhang/AMBER.svg?label=Release)](https://github.com/zj-zhang/AMBER/releases/latest)
+[![DOI](https://zenodo.org/badge/260604309.svg)](https://zenodo.org/badge/latestdoi/260604309)
 <!-- 
 [![Github All Releases](https://img.shields.io/github/downloads/zj-zhang/AMBER/total.svg?label=Download)](https://github.com/zj-zhang/AMBER/releases)
 -->
-[![DOI](https://zenodo.org/badge/260604309.svg)](https://zenodo.org/badge/latestdoi/260604309)
 
 ![logo](docs/source/_static/img/amber-logo.png)
 
