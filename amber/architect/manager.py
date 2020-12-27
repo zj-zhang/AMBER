@@ -222,7 +222,12 @@ class GeneralManager(BaseNetworkManager):
                                  **self.fit_kwargs
                                  )
                 # load best performance epoch in this training session
-                model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
+                # in corner cases, the optimization might fail and no temp_network 
+                # would be created
+                if os.path.isfile((os.path.join(self.working_dir, 'temp_network.h5'))):
+                    model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
+                else:
+                    model.save_weights((os.path.join(self.working_dir, 'temp_network.h5')))
 
                 # evaluate the model by `reward_fn`
                 this_reward, loss_and_metrics, reward_metrics = \
