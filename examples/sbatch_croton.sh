@@ -30,7 +30,7 @@ if [ $? != 0 ]; then
 fi
 
 # Run train script.
-/usr/bin/time -v python examples/amber_croton.py
+/usr/bin/time -v python examples/amber_croton.py $1
 echo $?
 
 # Deactivate conda.

@@ -15,7 +15,8 @@ Original file is located at
 # %tensorflow_version 1.x
 import tensorflow as tf
 from tensorflow.keras.utils import Sequence
-#!python -m pip install -q git+https://github.com/zj-zhang/AMBER@ead6b74bddd721e61f4134c166992b0f62d53ceb
+from tensorflow.keras.optimizers import SGD, Adam
+#!python -m pip install -q git+https://github.com/zj-zhang/AMBER@ac839aebcceb1a61c1664ab19bb8d681228232f3
 #!python -m pip install -q keras==2.2.5
 import os
 import sys
@@ -50,10 +51,11 @@ def dataset_split(set_, train_prop, test_prop): #set_ = 'train', 'test', or 'val
 
 
 class CrisprGenerator(Sequence):
-    def __init__(self, ref_store, out_store, samp_list):
+    def __init__(self, ref_store, out_store, samp_list, minproba=1):
         self.ref_store = ref_store
         self.out_store = out_store
         self.samp_list = samp_list
+        self.minproba = minproba
 
     def __getitem__(self, item):
         samp_id = self.samp_list[item]
@@ -61,6 +63,10 @@ class CrisprGenerator(Sequence):
         x_right = self.ref_store[samp_id]['x_right']
         x_out = self.out_store[samp_id]['x_out']
         proba = self.out_store[samp_id]['proba']
+        # Filter by min proba.
+        proba_inds = np.where(proba > self.minproba)
+        x_out = x_out[proba_inds]
+        proba = proba[proba_inds]
         total = x_out.shape[0]
         x_left = np.dstack([x_left]*total)
         x_right = np.dstack([x_right]*total)
@@ -118,39 +124,46 @@ def get_branch_ms(ns):
     branch_ms = ModelSpace.from_dict([
         # layer 1
         [
-            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 12, 'activation': 'relu', 'name': '%s_L1_relu' % ns},
-            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 12, 'activation': 'tanh', 'name': '%s_L1_tanh' % ns},
-            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 12, 'activation': 'sigmoid', 'name': '%s_L1_sigmoid' % ns}
+            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 12, 'activation': 'relu', 'name': '%s_L1_relu12' % ns},
+            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 12, 'activation': 'tanh', 'name': '%s_L1_tanh12' % ns},
+            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 12, 'activation': 'sigmoid', 'name': '%s_L1_sigmoid12' % ns},
+            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 2, 'activation': 'relu', 'name': '%s_L1_relu2' % ns},
+            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 2, 'activation': 'tanh', 'name': '%s_L1_tanh2' % ns},
+            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 2, 'activation': 'sigmoid', 'name': '%s_L1_sigmoid2' % ns}
         ],
         # layer 2
         [
-            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 12, 'activation': 'relu', 'name': '%s_L2_relu' % ns},
-            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 12, 'activation': 'tanh', 'name': '%s_L2_tanh' % ns},
-            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 12, 'activation': 'sigmoid', 'name': '%s_L2_sigmoid' % ns},
-            {'Layer_type': 'identity'}
+            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 12, 'activation': 'relu', 'name': '%s_L2_relu12' % ns},
+            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 12, 'activation': 'tanh', 'name': '%s_L2_tanh12' % ns},
+            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 12, 'activation': 'sigmoid', 'name': '%s_L2_sigmoid12' % ns},
+            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 2, 'activation': 'relu', 'name': '%s_L2_relu2' % ns},
+            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 2, 'activation': 'tanh', 'name': '%s_L2_tanh2' % ns},
+            {'Layer_type': 'conv1d', 'filters': 32, 'kernel_size': 2, 'activation': 'sigmoid', 'name': '%s_L2_sigmoid2' % ns},
+
+            {'Layer_type': 'identity', 'name': '%s_L2_id' % ns}
         ],
         # layer 3
         [
             {'Layer_type': 'maxpool1d', 'pool_size': 2, 'strides': 2, 'name': '%s_L3_maxp2' % ns},
             {'Layer_type': 'avgpool1d', 'pool_size': 2, 'strides': 2, 'name': '%s_L3_avgp2' % ns},
-            # {'Layer_type': 'maxpool1d', 'pool_size': 4, 'strides': 4, 'name': '%s_l3_maxp4' % ns},
-            # {'Layer_type': 'avgpool1d', 'pool_size': 4, 'strides': 4, 'name': '%s_l3_avgp4' % ns},
-            {'Layer_type': 'identity'}
+            # {'Layer_type': 'maxpool1d', 'pool_size': 4, 'strides': 4, 'name': '%s_L3_maxp4' % ns},
+            # {'Layer_type': 'avgpool1d', 'pool_size': 4, 'strides': 4, 'name': '%s_L3_avgp4' % ns},
+            {'Layer_type': 'identity', 'name': '%s_L3_id' % ns}
         ],
 
         # layer 4
         [
             {'Layer_type': 'dropout', 'rate': 0.2, 'name': '%s_L4_drop0.2' % ns},
             {'Layer_type': 'dropout', 'rate': 0.4, 'name': '%s_L4_drop0.4' % ns},
-            # {'Layer_type': 'dropout', 'rate': 0.6, 'name': '%s_l4_drop0.6' % ns},
-            {'Layer_type': 'identity', 'name': '%s_l4_id' % ns}
+            # {'Layer_type': 'dropout', 'rate': 0.6, 'name': '%s_L4_drop0.6' % ns},
+            {'Layer_type': 'identity', 'name': '%s_L4_id' % ns}
         ],
         # layer 5
         [
             {'Layer_type': 'flatten', 'name': '%s_L5_flat' % ns},
-            # {'Layer_type': 'globalmaxpool1d', 'name': '%s_l5_gbmax' % ns},
+            # {'Layer_type': 'globalmaxpool1d', 'name': '%s_L5_gbmax' % ns},
             {'Layer_type': 'globalavgpool1d', 'name': '%s_L5_gbavg' % ns},
-            # {'Layer_type': 'lstm', 'units': 128, 'name': '%s_l5_lstm' % ns}
+            # {'Layer_type': 'lstm', 'units': 128, 'name': '%s_L5_lstm' % ns}
         ]
 
 
@@ -210,6 +223,7 @@ inputs_op = [
 output_op = Operation('identity', name='pseudo_output')
 model_compile_dict = {
     'optimizer': 'adam',
+    #'optimizer': SGD(lr=0.01, momentum=0.9, decay=1e-5, nesterov=True),
     'loss': batched_pearson_loss
 }
 
@@ -254,19 +268,18 @@ specs = {
     'model_space': ms,
     
     'controller': {
-            'share_embedding': layer_embedding_sharing,
-            'with_skip_connection': False,
-            'lstm_size': 64,
-            'lstm_num_layers': 1,
-            'kl_threshold': 0.01,
-            'train_pi_iter': 100,
-            'optim_algo': 'adam',
-            'temperature': 1.5,
-            'lr_init': 0.001,
-            'tanh_constant': 2.0,
-            'use_ppo_loss': True,
-            'buffer_size': 3,
-            'batch_size': 5
+        'share_embedding': layer_embedding_sharing,
+        'with_skip_connection': False,
+        'lstm_size': 64,
+        'lstm_num_layers': 1,
+        'kl_threshold': 0.01,
+        'train_pi_iter': 100,
+        'optim_algo': 'adam',
+        'temperature': 1.5,
+        'lr_init': 0.001,
+        'tanh_constant': 2.0,
+        'buffer_size': 5,
+        'batch_size': 5
     },
 
     'model_builder': {
@@ -286,12 +299,12 @@ specs = {
             'validation_data': val_gen
         },
         'params': {
-            'epochs': 5,
+            'epochs': 50,
             'child_batchsize': None,
             'fit_kwargs': {
-                'earlystop_patience': 5,
+                'earlystop_patience': 10,
                 'workers': 5,
-                'max_queue_size': 100
+                'max_queue_size': 200
                 # 'steps_per_epoch': 1580,
                 # 'validation_steps': 198
             },
@@ -301,13 +314,13 @@ specs = {
             },
             'store_fn': 'model_plot',
             'working_dir': wd,
-            'verbose': 1
+            'verbose': 2
         }
     },
 
     'train_env': {
         'max_episode': 150,
-        'max_step_per_ep': 5,
+        'max_step_per_ep': 3,
         'working_dir': wd,
         'time_budget': "48:00:00",
         'with_skip_connection': False,
