@@ -61,9 +61,9 @@ def get_dag(arg):
             return InputBlockDAG
         elif arg.lower() == 'inputblockauxlossdag':
             return InputBlockAuxLossDAG
-        elif arg.lower() == 'enas' or arg.lower() == 'enasanndag':
+        elif arg.lower() == 'enasanndag':
             return EnasAnnDAG
-        elif arg.lower() == 'enascnndag' or arg.lower() == 'enasconv1ddag':
+        elif arg.lower() == 'enasconv1ddag':
             return EnasConv1dDAG
         elif arg == 'EnasConv1DwDataDescrption':
             return EnasConv1DwDataDescrption
@@ -1142,7 +1142,8 @@ class EnasConv1dDAG:
         self.vars = []
         if controller is None:
             self.controller = None
-            print("this EnasDAG instance did not connect a controller; pleaes make sure you are only training a fixed architecture.")
+            print("this EnasDAG instance did not connect a controller; pleaes make sure you are only training a fixed "
+                  "architecture.")
         else:
             self.controller = controller
             self._build_sample_arc()
@@ -1157,7 +1158,8 @@ class EnasConv1dDAG:
             this_out_filters = [l.Layer_attributes['filters'] for l in layer]
             assert len(
                 set(this_out_filters)) == 1, "EnasConv1dDAG only supports one identical number of filters per layer," \
-                                             "but found %i in layer %s" % (len(set(this_out_filters)), layer)
+                                             "but found %i different number of filters in layer %s" % \
+                                             (len(set(this_out_filters)), layer)
             if len(out_filters) and this_out_filters[0] != out_filters[-1]:
                 pool_layers.append(layer_id - 1)
 
@@ -1205,7 +1207,9 @@ class EnasConv1dDAG:
 
     def _model(self, arc, **kwargs):
         if self.train_fixed_arc:
-            assert arc == self.fixed_arc or arc is None, "This DAG instance is built to train fixed arc, hence you can only provide arc=None or arc=self.fixed_arc; check the initialization of this instances"
+            assert arc == self.fixed_arc or arc is None, "This DAG instance is built to train fixed arc, hence you " \
+                                                         "can only provide arc=None or arc=self.fixed_arc; check the " \
+                                                         "initialization of this instances "
         if arc is None:
             if self.train_fixed_arc:
                 model = EnasCnnModel(inputs=self.fixed_model_input,

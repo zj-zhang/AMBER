@@ -92,7 +92,7 @@ class EnasAnnModelBuilder(DAGModelBuilder):
     args
     kwargs
     """
-    def __init__(self, session=None, controller=None, dag_func='enas', l1_reg=0.0, l2_reg=0.0,
+    def __init__(self, session=None, controller=None, dag_func='EnasAnnDAG', l1_reg=0.0, l2_reg=0.0,
                  with_output_blocks=False,
                  use_node_dag=True,
                  feature_model=None,
@@ -172,7 +172,7 @@ class EnasAnnModelBuilder(DAGModelBuilder):
 
 
 class EnasCnnModelBuilder(DAGModelBuilder):
-    def __init__(self, session=None, controller=None, dag_func='enas', l1_reg=0.0, l2_reg=0.0,
+    def __init__(self, session=None, controller=None, dag_func='EnasConv1DDAG', l1_reg=0.0, l2_reg=0.0,
                  batch_size=None,
                  dag_kwargs=None,
                  *args,
