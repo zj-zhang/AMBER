@@ -1086,19 +1086,25 @@ class EnasConv1dDAG:
                  fixed_arc=None,
                  name='EnasDAG',
                  **kwargs):
-        """
-        EnasCnnDAG is a DAG model builder for using the weight sharing framework. This class deals with the Convolutional
-         neural network.
-        Args:
-            model_space:
-            input_node:
-            output_node:
-            model_compile_dict: compile dict for child models
-            session: tf.Session
-            train_fixed_arc: whether is the final stage
-            fixed_arc: the architecture for final stage training
-            name:
-        Examples:
+        """EnasCnnDAG is a DAG model builder for using the weight sharing framework.
+
+        This class deals with the Convolutional neural network.
+
+        Parameters
+        ----------
+        model_space: amber.architect.ModelSpace
+        input_node: amber.architect.Operation, or list
+        output_node: amber.architect.Operation, or list
+        model_compile_dict: dict
+            compile dict for child models
+        session: tf.Session
+            session for building enas DAG
+        train_fixed_arc: bool
+            boolean indicator for whether is the final stage; if is True, must provide `fixed_arc` and not connect
+            to a controller
+        fixed_arc: list-like
+            the architecture for final stage training
+        name: str
         """
         assert type(input_node) in (State, tf.Tensor) or len(
             input_node) == 1, "EnasCnnDAG currently does not accept List type of inputs"

@@ -44,7 +44,13 @@ class TestEnasConvModeler(testing_utils.TestCase):
             model_compile_dict=self.model_compile_dict,
             session=self.session,
             controller=self.controller,
-            batch_size=1
+            batch_size=1,
+            dag_kwargs={
+                'stem_config': {
+                    'has_stem_conv': True,
+                    'fc_units': 5
+                }
+            }
         )
         self.num_samps = 15
 

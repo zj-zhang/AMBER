@@ -77,8 +77,8 @@ class KerasResidualCnnBuilder(ModelBuilder):
         self.inputs = inputs_op
         self.outputs = output_op
         self.fc_units = fc_units
-        assert flatten_mode in {'GAP', 'Flatten'}, "Unknown flatten mode: %s" % flatten_mode
-        self.flatten_mode = flatten_mode
+        assert flatten_mode.lower() in {'gap', 'flatten'}, "Unknown flatten mode: %s" % flatten_mode
+        self.flatten_mode = flatten_mode.lower()
         self.model_space = model_space
         self.dropout_rate = dropout_rate
         self.wsf = wsf
@@ -145,9 +145,9 @@ class KerasResidualCnnBuilder(ModelBuilder):
             if verbose: print('-' * 80)
 
         # fully-connected layer
-        if self.flatten_mode == 'GAP':
+        if self.flatten_mode == 'gap':
             x = GlobalAveragePooling1D()(x)
-        elif self.flatten_mode == 'Flatten':
+        elif self.flatten_mode == 'flatten':
             x = Flatten()(x)
         else:
             raise Exception("Unknown flatten mode: %s" % self.flatten_mode)

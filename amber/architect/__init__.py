@@ -8,12 +8,14 @@ from .controller import GeneralController, MultiInputController, MultiIOControll
 from .modelSpace import State, ModelSpace
 from .manager import GeneralManager, NetworkManager
 from .trainEnv import ControllerTrainEnvironment, EnasTrainEnv
+from . import buffer, store, reward, trainEnv, modelSpace, controller
 
 # alias
 Operation = State
 
 # TODO: Do not include MultiIO until its tested in multiio branch
 __all__ = [
+    # funcs
     'GeneralController',
     'Operation',
     'State',
@@ -21,6 +23,13 @@ __all__ = [
     'GeneralManager',
     'ControllerTrainEnvironment',
     'EnasTrainEnv',
+    # modules
+    'buffer',
+    'store',
+    'reward',
+    'trainEnv',
+    'modelSpace',
+    'controller',
     # For legacy use
     'OperationController',
     'NetworkManager'
