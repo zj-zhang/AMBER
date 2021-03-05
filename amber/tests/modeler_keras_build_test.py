@@ -14,7 +14,7 @@ class TestKerasBuilder(testing_utils.TestCase):
         self.target_arc = [0, 0, 1]
         self.input_op = architect.Operation('input', shape=(10, 4), name="input")
         self.output_op = architect.Operation('dense', units=1, activation='sigmoid', name="output")
-        self.model_compile_dict = {'loss': 'binary_crossentropy', 'optimizer': 'sgd'}
+        self.model_compile_dict = {'loss': 'binary_crossentropy', 'optimizer': 'adam'}
         self.x = np.random.choice(2, 40).reshape((1, 10, 4))
         self.y = np.random.sample(1).reshape((1, 1))
         self.modeler = modeler.KerasResidualCnnBuilder(

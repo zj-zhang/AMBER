@@ -320,9 +320,8 @@ class ControllerTrainEnvironment:
 
                 # save the controller states and weights
                 if self.save_controller:
-                    np.save(os.path.join(self.working_dir, 'controller_states.npy'),
-                            get_controller_states(self.controller.model))
-                    self.controller.model.save_weights(os.path.join(self.working_dir, 'controller_weights.h5'))
+                    self.controller.save_weights(
+                        os.path.join(self.working_dir, "controller_weights.h5"))
 
                 # TODO: add early-stopping
                 # check the entropy record and stop training if no progress was made

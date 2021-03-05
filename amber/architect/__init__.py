@@ -6,7 +6,7 @@ The :mod:`architect` module provides neural architecture search implementations 
 
 from .controller import GeneralController, MultiInputController, MultiIOController, OperationController
 from .modelSpace import State, ModelSpace
-from .manager import GeneralManager, NetworkManager
+from .manager import GeneralManager, EnasManager
 from .trainEnv import ControllerTrainEnvironment, EnasTrainEnv
 from . import buffer, store, reward, trainEnv, modelSpace, controller
 
@@ -21,6 +21,7 @@ __all__ = [
     'State',
     'ModelSpace',
     'GeneralManager',
+    'EnasManager',
     'ControllerTrainEnvironment',
     'EnasTrainEnv',
     # modules

@@ -278,7 +278,7 @@ class Buffer(object):
                     ' || '.join([str(np.round(x, 2)).replace("\n ", ";") for x in self.prob_buffer[-1]])
                 )
             )
-            print("Saved buffers to file `buffers.txt` !")
+            # print("Saved buffers to file `buffers.txt` !")
 
         if len(self.lt_pbuffer) > self.max_size:
             self.lt_sbuffer = self.lt_sbuffer[-self.max_size:]
@@ -429,6 +429,21 @@ class MultiManagerBuffer:
         self.manager_index_buffer = []
         self.lt_manager_idx_buffer = []
 
+    @property
+    def lt_adbuffer(self):
+        """For legacy use"""
+        return self.lt_adv
+
+    @property
+    def lt_abuffer(self):
+        """For legacy use"""
+        return self.lt_action
+
+    @property
+    def lt_pbuffer(self):
+        """For legacy use"""
+        return self.lt_prob
+
     def store(self, prob, action, reward, description, manager_index):
         """
         Parameters
@@ -444,6 +459,8 @@ class MultiManagerBuffer:
         manager_index: int
             Integer number showing the index for which the reward is coming from
         """
+        assert len(np.asarray(description).shape) > 1, ValueError('Expect descriptor shape of >=2 dims, got %s' %
+                                                                  np.asarray(description).shape)
         self.prob_buffer.append(prob)
         self.action_buffer.append(action)
         self.reward_buffer.append(reward)
@@ -483,7 +500,7 @@ class MultiManagerBuffer:
                         ' || '.join([str(np.round(x, 2)).replace("\n ", ";") for x in self.prob_buffer[this[max_idx]]])
                     )
                 )
-            print("Saved buffers to file `buffers.txt` !")
+            # print("Saved buffers to file `buffers.txt` !")
 
     def stratified_reward_mean(self):
         """
@@ -501,7 +518,7 @@ class MultiManagerBuffer:
             stratified_mean[idx] = r_mean
         return stratified_mean
 
-    def finish_path(self, model_space, global_ep, working_dir, *args, **kwargs):
+    def finish_path(self, state_space, global_ep, working_dir, *args, **kwargs):
         old_prob = [np.concatenate(p, axis=0) for p in zip(*self.prob_buffer)]
         if self.is_squeeze_dim:
             action_onehot = np.array(self.action_buffer)
@@ -535,7 +552,7 @@ class MultiManagerBuffer:
         self.lt_reward.append(reward)
         self.lt_reward_mean.append(self.stratified_reward_mean())
 
-        self.dump_buffer(model_space=model_space, global_ep=global_ep, working_dir=working_dir)
+        self.dump_buffer(model_space=state_space, global_ep=global_ep, working_dir=working_dir)
 
         # NOTE: this will only keep the `max_size` number of short-term buffers;
         # whereas each short-term buffer could have multiple samples
@@ -578,8 +595,8 @@ class MultiManagerBuffer:
             lt_reward = lt_reward[slice_]
             lt_desc = lt_desc[slice_]
 
-        for i in range(0, len(lt_prob), bs):
-            b = min(i + bs, len(lt_prob))
+        for i in range(0, len(lt_adv), bs):
+            b = min(i + bs, len(lt_adv))
             p_batch = [p[i:b, :] for p in lt_prob]
             if self.is_squeeze_dim:
                 a_batch = lt_action[i:b]
