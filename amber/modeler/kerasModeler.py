@@ -72,11 +72,12 @@ class KerasResidualCnnBuilder(ModelBuilder):
         width scale factor
     """
     def __init__(self, inputs_op, output_op, fc_units, flatten_mode, model_compile_dict, model_space,
-                 dropout_rate=0.2, wsf=1, add_conv1_under_pool=True, **kwargs):
+                 dropout_rate=0.2, wsf=1, add_conv1_under_pool=True, verbose=1, **kwargs):
         self.model_compile_dict = model_compile_dict
         self.inputs = inputs_op
         self.outputs = output_op
         self.fc_units = fc_units
+        self.verbose = verbose
         assert flatten_mode.lower() in {'gap', 'flatten'}, "Unknown flatten mode: %s" % flatten_mode
         self.flatten_mode = flatten_mode.lower()
         self.model_space = model_space
@@ -86,7 +87,7 @@ class KerasResidualCnnBuilder(ModelBuilder):
         self.decoder = ResConvNetArchitecture(model_space=model_space)
 
     def __call__(self, model_states):
-        model = self._convert(model_states)
+        model = self._convert(model_states, verbose=self.verbose)
         if model is not None:
             model.compile(**self.model_compile_dict)
         return model
@@ -247,8 +248,8 @@ class KerasResidualCnnBuilder(ModelBuilder):
                 pool_layers.append(layer_id - 1)
 
             out_filters.append(this_out_filters[0])
-        print(out_filters)
-        print(pool_layers)
+        # print(out_filters)
+        # print(pool_layers)
         return out_filters, pool_layers
 
 

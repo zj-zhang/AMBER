@@ -1,10 +1,10 @@
-"""Test architect helpers (that is, buffer, store, manager and train environments)
+"""Test architect helpers (that is, buffer, reward, store, manager)
 """
 
-# TODO: parameterize tests for different sub classes
-
+import os
 import unittest
 from parameterized import parameterized, parameterized_class
+import tensorflow as tf
 import numpy as np
 import tempfile
 import scipy.stats
@@ -250,11 +250,56 @@ class TestManager(testing_utils.TestCase):
 
 
 # ----------
-# architect.trainEnv
+# architect.store
 # ----------
 
 
+class TestStore(testing_utils.TestCase):
+    x = np.random.sample(10*4*1000).reshape((1000, 10, 4))
+    y = np.random.sample(1000)
 
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.trial = 0
+        self.model = testing_utils.PseudoConv1dModelBuilder(input_shape=(10, 4), output_units=1)()
+        model_checkpointer = tf.keras.callbacks.ModelCheckpoint(
+            filepath=os.path.join(self.tempdir.name, 'temp_network.h5'),
+            monitor='loss',
+            save_best_only=True
+        )
+        self.history = self.model.fit(
+            self.x, self.y,
+            batch_size=100,
+            epochs=5,
+            verbose=0,
+            callbacks=[model_checkpointer]
+        )
+        self.pred = self.model.predict(self.x, verbose=0)
+        eval_retr = self.model.evaluate(self.x, self.y, verbose=0)
+        self.loss_and_metrics = {'loss': eval_retr}
+
+    @parameterized.expand([
+        ('general', ('weights/trial_0/bestmodel.h5', 'weights/trial_0/pred.txt')),
+        ('minimal', ('weights/trial_0/bestmodel.h5',)),
+        ('model_plot', ('weights/trial_0/bestmodel.h5', 'weights/trial_0/pred.txt', 'weights/trial_0/model_arc.png'))
+    ])
+    def test_store_fn(self, store_name, files):
+        store_fn = architect.store.get_store_fn(store_name)
+        store_fn(
+            trial=self.trial,
+            model=self.model,
+            hist=self.history,
+            data=(self.x, self.y),
+            pred=self.pred,
+            loss_and_metrics=self.loss_and_metrics,
+            working_dir=self.tempdir.name
+        )
+        for f in files:
+            self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, f)))
+
+    def tearDown(self):
+        super(TestStore, self).tearDown()
+        self.tempdir.cleanup()
 
 
 if __name__ == '__main__':

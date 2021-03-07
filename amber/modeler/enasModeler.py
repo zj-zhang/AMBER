@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 
+import warnings
 from .dag import get_dag, get_layer
 from .dag import ComputationNode
 from .dag import EnasConv1dDAG
@@ -17,17 +18,22 @@ class ModelBuilder:
 
 class DAGModelBuilder(ModelBuilder):
     def __init__(self, inputs_op, output_op,
-                 num_layers, model_space, model_compile_dict,
+                 model_space, model_compile_dict,
+                 num_layers=None,
                  with_skip_connection=True,
                  with_input_blocks=True,
                  dag_func=None,
                  *args, **kwargs):
-        assert type(inputs_op) in (
-            list, tuple), "inputs_op must be list-like; if only one input, try using ``[inputs_op]`` as argument"
-        self.inputs_op = inputs_op
+
+        if type(inputs_op) not in (list, tuple):
+            self.inputs_op = [inputs_op]
+            warnings.warn("inputs_op should be list-like; if only one input, try using ``[inputs_op]`` as argument",
+                         stacklevel=2)
+        else:
+            self.inputs_op = inputs_op
         self.output_op = output_op
-        self.num_layers = num_layers
         self.model_space = model_space
+        self.num_layers = num_layers or len(self.model_space)
         self.model_compile_dict = model_compile_dict
         self.with_input_blocks = with_input_blocks
         self.with_skip_connection = with_skip_connection

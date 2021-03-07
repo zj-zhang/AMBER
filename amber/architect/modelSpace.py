@@ -94,15 +94,15 @@ class State(object):
 
     def __init__(self, Layer_type, **kwargs):
         Layer_type = Layer_type.lower()
-        assert Layer_type in [
-            'conv1d', 'maxpool1d', 'avgpool1d',
-            'conv2d', 'maxpool2d', 'avgpool2d',
-            'lstm',
-            'dense', 'input', 'identity',
-            'dropout', 'sparsek_vec', 'batchnorm',
-            'flatten', 'globalavgpool1d', 'globalavgpool2d', 'globalmaxpool1d', 'globalmaxpool1d'
-                                                                                'data', 'denovo', 'sfc'
-        ]
+        # assert Layer_type in [
+        #     'conv1d', 'maxpool1d', 'avgpool1d',
+        #     'conv2d', 'maxpool2d', 'avgpool2d',
+        #     'lstm',
+        #     'dense', 'input', 'identity',
+        #     'dropout', 'sparsek_vec', 'batchnorm',
+        #     'flatten', 'globalavgpool1d', 'globalavgpool2d', 'globalmaxpool1d', 'globalmaxpool1d'
+        #                                                                         'data', 'denovo', 'sfc'
+        # ]
         self.Layer_type = Layer_type
         self.Layer_attributes = kwargs
 

@@ -148,6 +148,7 @@ class ControllerTrainEnvironment:
         self.save_controller = save_controller
         self.initial_buffering_queue = min(initial_buffering_queue, controller.buffer.max_size)
         self.continuous_run = continuous_run
+        self.verbose = verbose
 
         # FOR DEPRECATED USE
         try:
@@ -225,7 +226,7 @@ class ControllerTrainEnvironment:
         # returns a state given an action (prob list)
         # fix discrepancy between operation_controller and general_controller. 20190912 ZZ
         try:
-            next_state = np.array(action_prob[-1]).reshape(1, 1, self.last_actionState_size)
+            next_state = np.array(action_prob[-1]).reshape((1, 1, self.last_actionState_size))
         except ValueError:
             next_state = self.reset()
         return next_state
@@ -393,7 +394,10 @@ class EnasTrainEnv(ControllerTrainEnvironment):
 
     def train(self):
         LOGGER = self.logger
-
+        if self.verbose:
+            LOGGER.setLevel(10)  # DEBUG
+        else:
+            LOGGER.setLevel(40)  # ERROR
         action_probs_record = []
         loss_and_metrics_list = []
         state = self.reset()  # nuisance param
@@ -487,6 +491,9 @@ class EnasTrainEnv(ControllerTrainEnvironment):
                 break
 
         LOGGER.debug("Total Reward : %s" % self.total_reward)
+        if self.save_controller:
+            self.controller.save_weights(
+                os.path.join(self.working_dir, "controller_weights.h5"))
 
         f.close()
         plot_controller_performance(os.path.join(self.working_dir, 'train_history.csv'),

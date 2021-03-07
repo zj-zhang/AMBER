@@ -3,6 +3,7 @@
 import tensorflow as tf
 import numpy as np
 import copy
+import tempfile
 from amber.utils import testing_utils
 from amber import architect
 
@@ -88,6 +89,37 @@ class TestGeneralController(testing_utils.TestCase):
             self.session.run(self.controller.train_op, feed_dict=feed_dict)
         act2, prob2 = self.controller.get_action()
         self.assertAllEqual(act, act2)
+
+
+class TestOperationController(testing_utils.TestCase):
+    def setUp(self):
+        super(TestOperationController, self).setUp()
+        self.model_space, _ = testing_utils.get_example_conv1d_space()
+        self.controller = architect.OperationController(
+            state_space=self.model_space,
+            controller_units=8,
+            kl_threshold=0.05,
+            buffer_size=15,
+            batch_size=5,
+            train_pi_iter=2
+        )
+        self.tempdir = tempfile.TemporaryDirectory()
+
+    def test_optimize(self):
+        seed = np.array([0]*3).reshape((1, 1, 3))
+        for _ in range(8):
+            act, proba = self.controller.get_action(seed)
+            self.controller.store(
+                state=seed,
+                prob=proba,
+                action=act,
+                reward=_
+            )
+        self.controller.train(episode=0, working_dir=self.tempdir.name)
+
+    def tearDown(self):
+        super(TestOperationController, self).tearDown()
+        self.tempdir.cleanup()
 
 
 if __name__ == '__main__':

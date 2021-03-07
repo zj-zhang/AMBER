@@ -228,7 +228,7 @@ class GeneralManager(BaseNetworkManager):
                 # do any post processing,
                 # e.g. save child net, plot training history, plot scattered prediction.
                 if self.store_fn:
-                    val_pred = model.predict(self.validation_data) 
+                    val_pred = model.predict(self.validation_data, verbose=self.verbose)
                     self.store_fn(
                         trial=trial,
                         model=model,
@@ -354,7 +354,7 @@ class DistributedGeneralManager(GeneralManager):
                     # do any post processing,
                     # e.g. save child net, plot training history, plot scattered prediction.
                     if self.store_fn:
-                        val_pred = model.predict(self.validation_data)
+                        val_pred = model.predict(self.validation_data, verbose=self.verbose)
                         self.store_fn(
                             trial=trial,
                             model=model,
@@ -519,7 +519,7 @@ class EnasManager(GeneralManager):
             # do any post processing,
             # e.g. save child net, plot training history, plot scattered prediction.
             if self.store_fn:
-                val_pred = self.model.predict(X_val)
+                val_pred = self.model.predict(X_val, verbose=self.verbose)
                 self.store_fn(
                     trial=trial,
                     model=self.model,

@@ -11,7 +11,7 @@ network manipulations
 
 import datetime
 import warnings
-
+from tqdm import tqdm
 import h5py
 import numpy as np
 import tensorflow as tf
@@ -477,12 +477,16 @@ class EnasAnnModel:
             y_pred = y_pred[0]
         return y_pred
 
-    def evaluate_ph(self, x, y, batch_size=None):
+    def evaluate_ph(self, x, y, batch_size=None, verbose=0):
         if batch_size is None:
             batch_size = min(100, x.shape[0])
         loss_and_metrics = []
         seen = 0
-        for x_, y_ in batchify(x, y, batch_size=batch_size, shuffle=False):
+        if verbose:
+            gen = tqdm(batchify(x, y, batch_size=batch_size, shuffle=False))
+        else:
+            gen = batchify(x, y, batch_size=batch_size, shuffle=False)
+        for x_, y_ in gen:
             feed_dict = self._make_feed_dict(x_, y_)
             loss, metrics = self.session.run([self.loss, self.metrics], feed_dict=feed_dict)
             this_batch_size = x_[0].shape[0]
@@ -756,12 +760,14 @@ class EnasCnnModel:
         logs.update({'loss': batch_loss, 'size': batch_size})
         return logs
 
-    def evaluate(self, x, y, batch_size=None):
+    def evaluate(self, x, y, batch_size=None, verbose=0):
         assert self.is_compiled, "Must compile model first"
         batch_size = batch_size or self.batch_size
         loss_and_metrics = []
         seen = 0
-        for x_, y_ in batchify(x, y, batch_size=batch_size, shuffle=False, drop_remainder=False):
+        gen = tqdm(batchify(x, y, batch_size=batch_size, shuffle=False, drop_remainder=False)) if verbose else \
+            batchify(x, y, batch_size=batch_size, shuffle=False, drop_remainder=False)
+        for x_, y_ in gen:
             feed_dict = self._make_feed_dict(x_, y_)
             loss, metrics = self.session.run([self.loss, self.metrics], feed_dict=feed_dict)
             this_batch_size = x_[0].shape[0]
@@ -777,12 +783,16 @@ class EnasCnnModel:
         logs.update({'val_%s' % self.metrics_name[i]: loss_and_metrics[i] for i in range(len(self.metrics_name))})
         return logs
 
-    def predict(self, x, batch_size=None):
+    def predict(self, x, batch_size=None, verbose=0):
         assert self.is_compiled, "Must compile model first"
         if type(x) is not list: x = [x]
         batch_size = batch_size or self.batch_size
         y_pred_ = []
-        for x_ in batchify(x, None, batch_size=batch_size, shuffle=False, drop_remainder=False):
+        if verbose:
+            gen = tqdm(batchify(x, None, batch_size=batch_size, shuffle=False, drop_remainder=False))
+        else:
+            gen = batchify(x, None, batch_size=batch_size, shuffle=False, drop_remainder=False)
+        for x_ in gen:
             feed_dict = self._make_feed_dict(x_)
             y_pred = self.session.run(self.outputs, feed_dict)
             y_pred_.append(y_pred)
