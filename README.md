@@ -1,4 +1,5 @@
-[![Documentation Status](https://readthedocs.org/projects/darts-dnn/badge/?version=latest)](https://darts-dnn.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/amber-automl/badge/?version=latest)](https://amber-automl.readthedocs.io/en/latest/?badge=latest)
+[![Coverage](https://raw.githubusercontent.com/zj-zhang/AMBER/master/amber/tests/coverage-badge.svg)]()
 [![Latest Release](https://img.shields.io/github/release/zj-zhang/AMBER.svg?label=Release)](https://github.com/zj-zhang/AMBER/releases/latest)
 [![PyPI Install](https://img.shields.io/pypi/dm/amber-automl.svg?label=PyPI%20Installs)](https://pypi.org/project/amber-automl/)
 [![DOI](https://zenodo.org/badge/260604309.svg)](https://zenodo.org/badge/latestdoi/260604309)
@@ -35,7 +36,8 @@ Genomics and Bioinformatics. For more details, please read our
 preprint [here](https://www.biorxiv.org/content/10.1101/2020.08.18.251561v1).
 
 **What's new?**
-
+- Mar. 7, 2021: Initial testing coverage added; covered test paths include RL-NAS and ENAS to build Conv1D resnets. See [here](https://github.com/zj-zhang/AMBER/blob/master/amber/tests/integration_bionas_test.py)
+for a quick mock controller training test.
 - Nov. 24, 2020: Evan Cofer ([@evan_cofer](https://twitter.com/evan_cofer)) gave a great talk at *MLCB 2020* about a zero-shot version of AMBER, tentatively under the
 name "AMBIENT". See his talk on YouTube [here](https://youtu.be/8co5_aqBwGQ?t=11171).
 - Nov. 22, 2020: AMBER now has a logo. We also added a tutorial hosted by Google Colab.
