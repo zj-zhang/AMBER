@@ -20,7 +20,8 @@ Genomics and Bioinformatics.
 The overview, tutorials, API documentation can be found at:
 https://amber-automl.readthedocs.io/en/latest/
 
-To get quick started, use this Google Colab notebook. [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/gist/zj-zhang/43235f916303284fdf8c42a6e3d7b8b4)
+To get quick started, use this Google Colab notebook. 
+<a href="https://colab.research.google.com/gist/zj-zhang/48689d8bdc8adf3375719911f7e41989/amber-epigenetics-tutorial-v2.ipynb" target="_blank"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
 
 <a id='sec0'></a>
 ## Table of Contents
