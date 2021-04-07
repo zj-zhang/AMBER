@@ -23,12 +23,14 @@ https://amber-automl.readthedocs.io/en/latest/
 To get quick started, use this Google Colab notebook. 
 <a href="https://colab.research.google.com/gist/zj-zhang/48689d8bdc8adf3375719911f7e41989/amber-epigenetics-tutorial-v2.ipynb" target="_blank"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
 
+Finally, you can read the AMBER paper for epigenetics regulatory modelling published in [Nature Machine Intelligence](https://www.nature.com/articles/s42256-021-00316-z).
+
 <a id='sec0'></a>
 ## Table of Contents
 1. [Introduction](#sec1)
 2. [Installation](#sec2)
 3. [Quick Start](#sec3)
-4. [Contact](#sec4)
+4. [Contact & References](#sec4)
 
 <a id='sec1'></a>
 ## Introduction
@@ -146,6 +148,10 @@ use this as an expert mode.
 ## Contact
 If you encounter any issues and/or would like feedbacks, please leave a [GitHub issue](https://github.com/zj-zhang/AMBER/issues).
 We will try to get back to you as soon as possible.
+
+If you find AMBER useful in your research, please cite the following paper:
+
+Zhang Z, Park CY, Theesfeld CL, Troyanskaya OG. An automated framework for efficiently designing deep convolutional neural networks in genomics. Nature Machine Intelligence. 2021 Mar 15:1-9. [Paper](https://www.nature.com/articles/s42256-021-00316-z) [Preprint](https://www.biorxiv.org/content/10.1101/2020.08.18.251561v1.full)
 
 [Back to Top](#sec0)
 
