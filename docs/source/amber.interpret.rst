@@ -28,10 +28,10 @@ amber.interpret.scores module
    :undoc-members:
    :show-inheritance:
 
-amber.interpret.sequence\_model module
---------------------------------------
+amber.interpret.sequenceModel module
+------------------------------------
 
-.. automodule:: amber.interpret.sequence_model
+.. automodule:: amber.interpret.sequenceModel
    :members:
    :undoc-members:
    :show-inheritance:

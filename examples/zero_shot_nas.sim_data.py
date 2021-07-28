@@ -16,11 +16,11 @@ import argparse
 
 from amber.modeler import EnasCnnModelBuilder
 from amber.architect.controller import ZeroShotController
-from amber.architect.model_space import State, ModelSpace
-from amber.architect.common_ops import count_model_params
+from amber.architect.modelSpace import State, ModelSpace
+from amber.architect.commonOps import count_model_params
 
 from amber.architect.manager import EnasManager
-from amber.architect.train_env import MultiManagerEnvironment
+from amber.architect.trainEnv import MultiManagerEnvironment
 from amber.architect.reward import LossAucReward
 from amber.plots import plot_controller_hidden_states
 from amber.utils import run_from_ipython
@@ -29,7 +29,7 @@ from amber.utils.data_parser import get_data_from_simdata
 
 from amber.modeler.modeler import build_sequential_model
 from amber.architect.manager import GeneralManager
-from amber.architect.model_space import get_layer_shortname
+from amber.architect.modelSpace import get_layer_shortname
 
 from amber.bootstrap.mock_manager import MockManager
 

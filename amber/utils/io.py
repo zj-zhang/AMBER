@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from ..plots import sma
-from ..architect.model_space import get_layer_shortname
+from ..architect.modelSpace import get_layer_shortname
 
 
 def read_history_set(fn_list):
@@ -48,7 +48,8 @@ def read_action_weights(fn):
     by function `save_action_weights` for a bunch of independent mock BioNAS
     optimization runs.
     """
-    data = json.load(open(fn, 'r'))
+    with open(fn, 'r') as f:
+        data = json.load(f)
     archs = []
     tmp = list(data['L0']['operation'].keys())
     B = len(data['L0']['operation'][tmp[0]])
@@ -69,7 +70,8 @@ def read_action_weights_old(fn):
     by function `save_action_weights` for a bunch of independent mock BioNAS
     optimization runs.
     """
-    data = json.load(open(fn, 'r'))
+    with open(fn, 'r') as f:
+        data = json.load(f)
     archs = []
     tmp = list(data['L0'].keys())
     B = len(data['L0'][tmp[0]])
@@ -86,7 +88,9 @@ def read_action_weights_old(fn):
 
 def annotate_probs_list(probs_list, model_space, with_input_blocks, with_skip_connection):
     """for a given probs_list, annotate what is each prob about
-    Args:
+
+    Parameters
+    ----------
         probs_list:
         model_space:
         with_skip_connection
@@ -115,9 +119,14 @@ def annotate_probs_list(probs_list, model_space, with_input_blocks, with_skip_co
 def save_action_weights(probs_list, state_space, working_dir, with_input_blocks=False, with_skip_connection=False,
                         **kwargs):
     """
-    probs_list: list of probability at each time step
-    output a series of graphs each plotting weight of options of each layer over time
-    Note:
+    Parameters
+    ----------
+    probs_list: list
+        list of probability at each time step output a series of graphs each plotting weight of options of
+        each layer over time
+
+    Note
+    --------
         if `with_input_blocks` is True, then expect `input_nodes` in keyword_arguments
         `input_nodes` is a List of BioNAS.Controller.state_space.State, hence the layer name
         can be accessed by State.Layer_attributes['name']
@@ -146,7 +155,8 @@ def save_action_weights(probs_list, state_space, working_dir, with_input_blocks=
                     df['L%i' % layer]['skip_connection']['from_L%i' % i] = []
 
     else:
-        df = json.load(open(save_path, 'r+'))
+        with open(save_path, 'r+') as f:
+            df = json.load(f)
 
     for layer, state_list in enumerate(state_space):
         try:
@@ -172,7 +182,8 @@ def save_action_weights(probs_list, state_space, working_dir, with_input_blocks=
             for i in range(layer):
                 df['L' + str(layer)]['skip_connection']['from_L%i' % i].append(sma(sc_data[i, :]).tolist())
 
-    json.dump(df, open(save_path, 'w'))
+    with open(save_path, 'w') as f:
+        json.dump(df, f)
 
 
 def save_stats(loss_and_metrics_list, working_dir):
@@ -180,7 +191,8 @@ def save_stats(loss_and_metrics_list, working_dir):
     if not os.path.exists(save_path):
         df = {'Knowledge': [], 'Accuracy': [], 'Loss': []}
     else:
-        df = json.load(open(save_path, 'r+'))
+        with open(save_path, 'r+') as f:
+            df = json.load(f)
 
     keys = list(loss_and_metrics_list[0].keys())
     data = [list(loss_and_metrics.values()) for loss_and_metrics in loss_and_metrics_list]
@@ -195,4 +207,5 @@ def save_stats(loss_and_metrics_list, working_dir):
         df['Accuracy'].append(list(acc_data))
     except ValueError:
         pass
-    json.dump(df, open(save_path, 'w'))
+    with open(save_path, 'w') as f:
+        json.dump(df, f)

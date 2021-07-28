@@ -4,18 +4,18 @@ amber.objective package
 Submodules
 ----------
 
-amber.objective.general\_obj\_func module
------------------------------------------
+amber.objective.generalObjFunc module
+-------------------------------------
 
-.. automodule:: amber.objective.general_obj_func
+.. automodule:: amber.objective.generalObjFunc
    :members:
    :undoc-members:
    :show-inheritance:
 
-amber.objective.general\_obj\_math module
------------------------------------------
+amber.objective.generalObjMath module
+-------------------------------------
 
-.. automodule:: amber.objective.general_obj_math
+.. automodule:: amber.objective.generalObjMath
    :members:
    :undoc-members:
    :show-inheritance:
@@ -32,6 +32,14 @@ amber.objective.motif module
 ----------------------------
 
 .. automodule:: amber.objective.motif
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+amber.objective.motifUtils module
+---------------------------------
+
+.. automodule:: amber.objective.motifUtils
    :members:
    :undoc-members:
    :show-inheritance:

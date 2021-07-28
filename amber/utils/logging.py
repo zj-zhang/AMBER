@@ -3,6 +3,20 @@ import os
 
 
 def setup_logger(working_dir='.', verbose_level=logging.INFO):
+    """The logging used by throughout the training envrionment
+
+    Parameters
+    ----------
+    working_dir : str
+        File path to working directory. Logging will be stored in working directory.
+
+    verbose_level : int
+        Verbosity level; can be specified as in ``logging``
+
+    Returns
+    -------
+    logger : the logging object
+    """
     # setup logger
     logger = logging.getLogger('AMBER')
     logger.setLevel(verbose_level)
@@ -20,4 +34,3 @@ def setup_logger(working_dir='.', verbose_level=logging.INFO):
     logger.addHandler(fh)
     logger.addHandler(ch)
     return logger
-

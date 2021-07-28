@@ -3,7 +3,7 @@ import pandas as pd
 import scipy.stats as ss
 
 from .grid_search import get_model_space_generator
-from ..architect.model_space import get_layer_shortname
+from ..architect.modelSpace import get_layer_shortname
 from ..utils.io import read_history
 
 pd.set_option('display.expand_frame_repr', False)

@@ -7,7 +7,7 @@ from tkinter import ttk
 
 from .config import *
 from .widgets import create_widget
-from .._getter import gui_mapper
+from ..getter import gui_mapper
 
 """workflow
 1. config target model: model_space, model_builder, model_data

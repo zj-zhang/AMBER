@@ -12,14 +12,6 @@ amber.plots.heatmap2 module
    :undoc-members:
    :show-inheritance:
 
-amber.plots.motif module
-------------------------
-
-.. automodule:: amber.plots.motif
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 amber.plots.ontology module
 ---------------------------
 
@@ -32,6 +24,14 @@ amber.plots.plot\_all\_stats module
 -----------------------------------
 
 .. automodule:: amber.plots.plot_all_stats
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+amber.plots.plotsV1 module
+--------------------------
+
+.. automodule:: amber.plots.plotsV1
    :members:
    :undoc-members:
    :show-inheritance:

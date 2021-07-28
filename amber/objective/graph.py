@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
 import itertools
@@ -8,62 +7,69 @@ import keras.backend as K
 import numpy as np
 import tensorflow as tf
 
-from .general_obj_func import GeneralKnowledgeObjectiveFunction
-from .general_obj_math import bias_var_decomp
+from .generalObjFunc import GeneralKnowledgeObjectiveFunction
+from .generalObjMath import bias_var_decomp
 
 
 class GraphHierarchyTree(GeneralKnowledgeObjectiveFunction):
     """GraphHierarchyTree measures the clustering cost function for a given
-    undirected graph.
-    The hierarchy must be generated with `unique_input_connection=True`
+    undirected graph. The hierarchy must be generated with ```unique_input_connection=True```.
 
-    Examples:
-        an exemplar call for GHT knowledge function::
-            # import functions from MockBlackBox
-            from BioNAS.MockBlackBox.dense_skipcon_space import get_data, get_data_correlated, get_model_space, \
-                get_manager, get_reward_fn, get_knowledge_fn, get_model_fn, get_input_nodes, get_output_nodes
-            inputs_op = get_input_nodes(4, with_input_blocks)
-            output_op = get_output_nodes()
 
-            model_fn = get_model_fn(model_space, inputs_op, output_op, num_layers,
-                                    with_skip_connection=with_skip_connection,
-                                    with_input_blocks=with_input_blocks)
+    Parameters
+    -----------
+    input_blocks : list of str
+        a list of the input node names
 
-            # architecture for num_layers=3, num_input_blocks=4
-            arc = np.array([1, 1,1,0,0,
-                            1, 0,0,1,1, 0,
-                            1, 0,0,0,0, 1,1])
-            model = model_fn(arc)
+    total_feature_num : int
+        number of total features
 
-            ght = GraphHierarchyTree(
-                input_blocks=['X%i'%i for i in range(4)],
-                total_feature_num=4,
-                block_index_mapping={'X%i'%i:[i] for i in range(4)}
-            )
+    block_index_mapping : dict
+        maps input block names (str) to the index (int) of the flattened feature list
+        Flattened feature list = tf.concat(model.inputs, axis=0)
 
-            # distance = 1 - adjacency
-            adjacency = np.zeros((4,4))
-            adjacency[0,1] = adjacency[1,0] = 1
-            adjacency[2,3] = adjacency[3,2] = 1
-            ght.knowledge_encoder(adjacency)
+    Examples
+    --------
+    An exemplar call for GHT knowledge function.
+    .. code-block::
 
-            # call knowledge function to get dissimilarity score
-            k = ght(model, None)
-            print(k) # k = 0.5
-            print(ght.W_model) # W_model is the pair-wise leave cardinality, i.e. $|leaves(T[i \vee j])|$
+        # import functions from MockBlackBox
+        from BioNAS.MockBlackBox.dense_skipcon_space import get_data, get_data_correlated, get_model_space, \
+            get_manager, get_reward_fn, get_knowledge_fn, get_model_fn, get_input_nodes, get_output_nodes
+        inputs_op = get_input_nodes(4, with_input_blocks)
+        output_op = get_output_nodes()
+
+        model_fn = get_model_fn(model_space, inputs_op, output_op, num_layers,
+                                with_skip_connection=with_skip_connection,
+                                with_input_blocks=with_input_blocks)
+
+        # architecture for num_layers=3, num_input_blocks=4
+        arc = np.array([1, 1,1,0,0,
+                        1, 0,0,1,1, 0,
+                        1, 0,0,0,0, 1,1])
+        model = model_fn(arc)
+
+        ght = GraphHierarchyTree(
+            input_blocks=['X%i'%i for i in range(4)],
+            total_feature_num=4,
+            block_index_mapping={'X%i'%i:[i] for i in range(4)}
+        )
+
+        # distance = 1 - adjacency
+        adjacency = np.zeros((4,4))
+        adjacency[0,1] = adjacency[1,0] = 1
+        adjacency[2,3] = adjacency[3,2] = 1
+        ght.knowledge_encoder(adjacency)
+
+        # call knowledge function to get dissimilarity score
+        k = ght(model, None)
+        print(k) # k = 0.5
+        print(ght.W_model) # W_model is the pair-wise leave cardinality
+
+
     """
 
     def __init__(self, input_blocks, total_feature_num, block_index_mapping, *args, **kwargs):
-        """
-
-        Args:
-            input_blocks: str, a list of the input node names
-            total_feature_num: int, number of total features
-            block_index_mapping: dict, maps input block names (str) to the index (int) of the flattened feature list
-                Flattened feature list = tf.concat(model.inputs, axis=0)
-            *args:
-            **kwargs:
-        """
         self.input_blocks = input_blocks
         self.total_feature_num = total_feature_num
         self.block_index_mapping = block_index_mapping
@@ -131,13 +137,18 @@ class GraphHierarchyTree(GeneralKnowledgeObjectiveFunction):
 
     def knowledge_encoder(self, adjacency):
         """
-        Note:
+        Parameters
+        ----------
+        adjacency:
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
             adjacency is on the feature-level, not block-level; in the context of
             biology, adjacency is for genes, not for GO terms/blocks
-        Args:
-            adjacency:
-
-        Returns:
 
         """
         assert adjacency.shape[0] == adjacency.shape[
@@ -320,14 +331,18 @@ class GraphKnowledgeHessFunc(GeneralKnowledgeObjectiveFunction):
         return _gradients, hess_op
 
     def knowledge_encoder(self, intr_idx, intr_eff, **kwargs):
-        """
-        encoding a partial graph/adjacency matrix from prior knowledge
-        Args:
-            intr_idx: a List of length-of-2 tuples, each tuple is
-                the indices for two X features
-            intr_eff: a List of interaction effect size; inverse of distance
-            **kwargs:
-        Returns:
+        """encoding a partial graph/adjacency matrix from prior knowledge
+
+        Parameters
+        ----------
+        intr_idx: list
+             a List of length-of-2 tuples, each tuple is
+            the indices for two X features
+        intr_eff: list
+            a List of interaction effect size; inverse of distance
+
+        Returns
+        -------
             None
         """
         for idx, eff in zip(intr_idx, intr_eff):

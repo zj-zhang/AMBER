@@ -1,14 +1,33 @@
 # -*- coding: UTF-8 -*-
 
+"""
+Store functions will take care of storage and post-processing related matters after a child model is trained.
+"""
+
 import shutil
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 from ..plots import plot_hessian, plot_training_history
-from .common_ops import unpack_data
+from .commonOps import unpack_data
 
 
 def get_store_fn(arg):
+    """The getter function that returns a callable store function from a string
+
+    Parameters
+    ----------
+    arg : str
+        The string identifier for a particular store function. Current choices are:
+        - general
+        - model_plot
+        - minimal
+
+    Returns
+    -------
+    callable
+        A callable store function
+    """
     if callable(arg) is True:
         return arg
     elif arg is None:
@@ -100,13 +119,16 @@ def store_general(
     par_dir = os.path.join(working_dir, 'weights', 'trial_%s' % trial)
     if os.path.isdir(par_dir):
         shutil.rmtree(par_dir)
-    os.mkdir(par_dir)
+    os.makedirs(par_dir)
     if save_full_model:
         model.save(os.path.join(working_dir, 'weights', 'trial_%s' % trial, 'full_bestmodel.h5'))
-    plot_training_history(hist, par_dir)
+    try:
+        plot_training_history(hist, par_dir)
+    except:
+        # TODO: this still not working for non-keras models, e.g. EnasAnn/Cnn
+        pass
     if os.path.isfile(os.path.join(working_dir, 'temp_network.h5')):
         shutil.move(os.path.join(working_dir, 'temp_network.h5'), os.path.join(par_dir, 'bestmodel.h5'))
-    # TODO: REVAMP THIS. if data is a generator/keras.utils.Sequence
     data = unpack_data(data, unroll_generator_y=True)
     metadata = data[2] if len(data) > 2 else None
     obs = data[1]
@@ -127,7 +149,7 @@ def store_minimal(
     par_dir = os.path.join(working_dir, 'weights', 'trial_%s' % trial)
     if os.path.isdir(par_dir):
         shutil.rmtree(par_dir)
-    os.mkdir(par_dir)
+    os.makedirs(par_dir)
     if save_full_model:
         model.save(os.path.join(working_dir, 'weights', 'trial_%s' % trial, 'full_bestmodel.h5'))
     if os.path.isfile(os.path.join(working_dir, 'temp_network.h5')):
@@ -144,7 +166,7 @@ def write_pred_to_disk(fn, y_pred, y_obs, metadata=None, metrics=None):
         if len(np.unique(y_obs)) < 10:  # is categorical
             str_format = "%i"
         else:
-            str_format = "%.3f'"
+            str_format = "%.3f"
 
         f.write('pred\tobs\tmetadata\n')
         for i in range(len(y_pred)):
@@ -158,36 +180,3 @@ def write_pred_to_disk(fn, y_pred, y_obs, metadata=None, metrics=None):
                 f.write('%s\t%s\t%s\n' % (y_pred_i, y_obs_i, metadata[i]))
             else:
                 f.write('%s\t%s\t%s\n' % (y_pred_i, y_obs_i, 'NA'))
-
-
-def write_pred_to_disk_regression(fn, y_pred, y_obs, eid_list, metrics=None):
-    with open(fn, 'w') as f:
-        if metrics is not None:
-            f.write('\n'.join(['# {}: {}'.format(x, metrics[x]) for x in metrics]) + '\n')
-        f.write('pred\tobs\teid\n')
-        for i in range(len(y_pred)):
-            # f.write('%f\t%f\t%s\n'%(expit(y_pred[i]), expit(y_obs[i]), eid_list[i]))
-            f.write('%f\t%f\t%s\n' % (y_pred[i], y_obs[i], eid_list[i]))
-
-        os.system('Rscript plotPredScatter.R %s %s' % (fn, fn.rstrip('txt') + 'pdf'))
-
-
-def store_regression(trial, model, train_hist, val_data, val_pred, val_metrics):
-    pearson = val_metrics[-3]
-    lins_con = val_metrics[-2]
-    r2 = val_metrics[-1]
-    _, y_val, eid_val, x_test, y_test, eid_test = val_data
-    metrics = {'r2': r2, 'pearson': pearson, 'lins_con': lins_con}
-    par_dir = os.path.join('weights', 'trial_%i' % trial)
-    if os.path.isdir(par_dir):
-        shutil.rmtree(par_dir)
-    os.mkdir(par_dir)
-    write_pred_to_disk_regression(os.path.join(par_dir, 'val.txt'), val_pred, y_val, eid_val, metrics)
-    shutil.move('temp_network.h5', os.path.join(par_dir, 'bestmodel.h5'))
-    plot_training_history(train_hist, par_dir)
-
-    test_metrics_list = model.evaluate(x_test, y_test)
-    y_test_pred = model.predict(x_test).flatten()
-    test_metrics = {'r2': test_metrics_list[-1], 'pearson': test_metrics_list[-3],
-                    'lines_con': test_metrics_list[-2]}
-    write_pred_to_disk_regression(os.path.join(par_dir, 'test.txt'), y_test_pred, y_test, eid_test, test_metrics)

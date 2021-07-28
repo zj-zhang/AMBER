@@ -1,24 +1,22 @@
 # -*- coding: UTF-8 -*-
 
 """
-Implementation of NAS controller network
+Implementations of NAS controller for searching architectures
 
-History
+Changelog
 ----------
-    Aug. 7, 2018: initial
-
-    Feb. 6. 2019: finished v0.1.0 OperationController
-
-    Jun. 17. 2019: separated to OperationController and GeneralController
-
+    - Aug. 7, 2018: initial
+    - Feb. 6. 2019: finished initial OperationController
+    - Jun. 17. 2019: separated to OperationController and GeneralController
+    - Aug. 15, 2020: updated documentations
 
 """
 
 
-from ._general_controller import BaseController, GeneralController
-from ._multiio_controller import MultiInputController, MultiIOController
-from ._operation_controller import OperationController
-from ._zero_shot_controller import ZeroShotController
+from .generalController import BaseController, GeneralController
+from .multiioController import MultiInputController, MultiIOController
+from .operationController import OperationController
+from .zeroShotController import ZeroShotController
 
 
 __all__ = [

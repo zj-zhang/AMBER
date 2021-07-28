@@ -1,13 +1,16 @@
 """represent neural network computation graph
 as a directed-acyclic graph from a list of 
 architecture selections
-Note:
-    this is an upgrade of the `NetworkManager` class in v0.2.0
-Author:
-    ZZJ
-Date:
-    6.12.2019
+
+Notes
+-----
+this is an upgrade of the `NetworkManager` class
 """
+
+# Author: ZZJ
+# Initial Date: June 12, 2019
+# Last update:  Aug. 18, 2020
+
 import numpy as np
 import warnings
 #import tensorflow as tf
@@ -15,24 +18,40 @@ from ..utils import corrected_tf as tf
 from tensorflow.keras.layers import Concatenate
 from tensorflow.keras.models import Model
 # TODO: need to clean up `State` as `Operation`
-from ..architect.model_space import State
+from ..architect.modelSpace import State
 
 # for general child
 from .child import DenseAddOutputChild, EnasAnnModel, EnasCnnModel
-from ..architect.common_ops import get_tf_metrics, get_keras_train_ops, get_tf_layer, get_tf_loss, create_weight, \
+from ..architect.commonOps import get_tf_metrics, get_keras_train_ops, get_tf_layer, get_tf_loss, create_weight, \
     create_bias, batch_norm1d
 # for get layers
 from keras import backend as K
 from tensorflow.keras.layers import GlobalAveragePooling1D, GlobalMaxPooling1D, GaussianNoise
 from tensorflow.keras.layers import Dense, Dropout, Flatten
 from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
-from tensorflow.keras.layers import Input, Lambda, Permute
+from tensorflow.keras.layers import Input, Lambda, Permute, BatchNormalization, Activation
 from tensorflow.keras.layers import LSTM
-from ..modeler.operators import Layer_deNovo, SeparableFC, sparsek_vec
-from ..architect.model_space import get_layer_shortname
+from ._operators import Layer_deNovo, SeparableFC, sparsek_vec
+from ..architect.modelSpace import get_layer_shortname
 
 
 def get_dag(arg):
+    """Getter method for getting a DAG class from a string
+
+    DAG refers to the underlying tensor computation graphs for child models. Whenever possible, we prefer to use Keras
+    Model API to get the job done. For ENAS, the parameter-sharing scheme is implemented by tensorflow.
+
+    Parameters
+    ----------
+    arg : str or callable
+        return the DAG constructor corresponding to that identifier; if is callable, assume it's a DAG constructor
+        already, do nothing and return it
+
+    Returns
+    -------
+    callable
+        A DAG constructor
+    """
     if arg is None:
         return None
     elif type(arg) is str:
@@ -42,9 +61,9 @@ def get_dag(arg):
             return InputBlockDAG
         elif arg.lower() == 'inputblockauxlossdag':
             return InputBlockAuxLossDAG
-        elif arg.lower() == 'enas' or arg.lower() == 'enasanndag':
+        elif arg.lower() == 'enasanndag':
             return EnasAnnDAG
-        elif arg.lower() == 'enascnndag' or arg.lower() == 'enasconv1ddag':
+        elif arg.lower() == 'enasconv1ddag':
             return EnasConv1dDAG
         elif arg == 'EnasConv1DwDataDescrption':
             return EnasConv1DwDataDescrption
@@ -54,9 +73,33 @@ def get_dag(arg):
         raise ValueError("Could not understand the DAG func:", arg)
 
 
-def get_layer(x, state):
+def get_layer(x, state, with_bn=False):
+    """Getter method for a Keras layer, including native Keras implementation and custom layers that are not included in
+    Keras.
+
+    Parameters
+    ----------
+    x : tf.keras.layers or None
+        The input Keras layer
+    state : amber.architect.Operation
+        The target layer to be built
+    with_bn : bool, optional
+        If true, add batch normalization layers before activation
+
+    Returns
+    -------
+    x : tf.keras.layers
+        The built target layer connected to input x
+    """
     if state.Layer_type == 'dense':
-        return Dense(**state.Layer_attributes)(x)
+        if with_bn is True:
+            actv_fn = state.Layer_attributes.pop('activation', 'linear')
+            x = Dense(**state.Layer_attributes)(x)
+            x = BatchNormalization()(x)
+            x = Activation(actv_fn)(x)
+            return x
+        else:
+            return Dense(**state.Layer_attributes)(x)
 
     elif state.Layer_type == 'sfc':
         return SeparableFC(**state.Layer_attributes)(x)
@@ -65,7 +108,14 @@ def get_layer(x, state):
         return Input(**state.Layer_attributes)
 
     elif state.Layer_type == 'conv1d':
-        return Conv1D(**state.Layer_attributes)(x)
+        if with_bn is True:
+            actv_fn = state.Layer_attributes.pop('activation', 'linear')
+            x = Conv1D(**state.Layer_attributes)(x)
+            x = BatchNormalization()(x)
+            x = Activation(actv_fn)(x)
+            return x
+        else:
+            return Conv1D(**state.Layer_attributes)(x)
 
     elif state.Layer_type == 'denovo':
         x = Lambda(lambda t: K.expand_dims(t))(x)
@@ -111,8 +161,8 @@ def get_layer(x, state):
 
 
 class ComputationNode:
-    def __init__(self, operation, node_name, merge_op=Concatenate):  # TODO: need to change `State` to Operation overall
-        assert type(operation) is State, "Expect operation is BioNAS.Controller.model_space.State, got %s" % type(
+    def __init__(self, operation, node_name, merge_op=Concatenate):
+        assert type(operation) is State, "Expect operation is of type amber.architect.State, got %s" % type(
             operation)
         self.operation = operation
         self.node_name = node_name
@@ -122,10 +172,12 @@ class ComputationNode:
         self.operation_layer = None
         self.merge_layer = None
         self.is_built = False
-        return
 
     def build(self):
-        """
+        """Build the keras layer with merge operations if applicable
+
+        Notes
+        -----
         when building a node, its parents must all be built already
         """
         if self.parent:
@@ -533,8 +585,8 @@ class EnasAnnDAG:
             with_input_blocks:
             name:
         """
-        assert with_skip_connection == with_input_blocks == True, \
-            "EnasAnnDAG must have with_input_blocks and with_skip_connection"
+        #assert with_skip_connection == with_input_blocks == True, \
+        #    "EnasAnnDAG must have with_input_blocks and with_skip_connection"
         self.model_space = model_space
         if not type(input_node) in (tuple, list):
             self.input_node = [input_node]
@@ -775,29 +827,42 @@ class EnasAnnDAG:
             start_idx += 1
 
             # input masking for with_input_blocks
-            inp_mask = arc_seq[start_idx: start_idx + self.num_input_blocks]
-            inp_mask = tf.boolean_mask(self._input_block_map, tf.squeeze(inp_mask))
-            new_range = tf.range(0, limit=self._feature_max_size, dtype=tf.int32)
-            inp_mask = tf.map_fn(lambda x: tf.cast(tf.logical_and(x[0] <= new_range, new_range < x[1]), dtype=tf.int32),
-                                 inp_mask)
-            inp_mask = tf.reduce_sum(inp_mask, axis=0)
-            start_idx += self.num_input_blocks * self.with_input_blocks
+            if self.with_input_blocks:
+                inp_mask = arc_seq[start_idx: start_idx + self.num_input_blocks]
+                inp_mask = tf.boolean_mask(self._input_block_map, tf.squeeze(inp_mask))
+                new_range = tf.range(0, limit=self._feature_max_size, dtype=tf.int32)
+                inp_mask = tf.map_fn(lambda x: tf.cast(tf.logical_and(x[0] <= new_range, new_range < x[1]), dtype=tf.int32),
+                                     inp_mask)
+                inp_mask = tf.reduce_sum(inp_mask, axis=0)
+                start_idx += self.num_input_blocks * self.with_input_blocks
+            else:
+                # get all inputs if layer_id=0, else mask all
+                inp_mask = tf.ones(shape=(self._feature_max_size), dtype=tf.int32) if layer_id == 0 else \
+                           tf.zeros(shape=(self._feature_max_size), dtype=tf.int32)
 
             # hidden layer masking for with_skip_connection
-            if layer_id > 0:
-                layer_mask = arc_seq[
-                             start_idx: start_idx + layer_id]
-                layer_mask = tf.boolean_mask(self._skip_conn_map[layer_id], layer_mask)
-                new_range2 = tf.range(0, limit=layer_id * self._weight_max_units, delta=1, dtype=tf.int32)
-                layer_mask = tf.map_fn(
-                    lambda t: tf.cast(tf.logical_and(t[0] <= new_range2, new_range2 < t[1]), dtype=tf.int32),
-                    layer_mask)
-                layer_mask = tf.reduce_sum(layer_mask, axis=0)
+            if self.with_skip_connection:
+                if layer_id > 0:
+                    layer_mask = arc_seq[
+                                 start_idx: start_idx + layer_id]
+                    layer_mask = tf.boolean_mask(self._skip_conn_map[layer_id], layer_mask)
+                    new_range2 = tf.range(0, limit=layer_id * self._weight_max_units, delta=1, dtype=tf.int32)
+                    layer_mask = tf.map_fn(
+                        lambda t: tf.cast(tf.logical_and(t[0] <= new_range2, new_range2 < t[1]), dtype=tf.int32),
+                        layer_mask)
+                    layer_mask = tf.reduce_sum(layer_mask, axis=0)
+                    start_idx += layer_id * self.with_skip_connection
+                else:
+                    layer_mask = []
                 row_mask = tf.concat([inp_mask, layer_mask], axis=0)
-                start_idx += layer_id * self.with_skip_connection
             else:
-                row_mask = inp_mask
+                if layer_id > 0:
+                    # keep last/closest layer, mask all others
+                    layer_masks = [tf.zeros(shape=(self._weight_max_units*(layer_id-1)), dtype=tf.int32), tf.ones(shape=(self._weight_max_units), dtype=tf.int32)]
+                else:
+                    layer_masks = []
 
+                row_mask = tf.concat([inp_mask] + layer_masks, axis=0)
             w_mask = tf.matmul(tf.expand_dims(row_mask, -1), tf.expand_dims(col_mask, 0))
 
             # get the TF layer
@@ -1021,19 +1086,25 @@ class EnasConv1dDAG:
                  fixed_arc=None,
                  name='EnasDAG',
                  **kwargs):
-        """
-        EnasCnnDAG is a DAG model builder for using the weight sharing framework. This class deals with the Convolutional
-         neural network.
-        Args:
-            model_space:
-            input_node:
-            output_node:
-            model_compile_dict: compile dict for child models
-            session: tf.Session
-            train_fixed_arc: whether is the final stage
-            fixed_arc: the architecture for final stage training
-            name:
-        Examples:
+        """EnasCnnDAG is a DAG model builder for using the weight sharing framework.
+
+        This class deals with the Convolutional neural network.
+
+        Parameters
+        ----------
+        model_space: amber.architect.ModelSpace
+        input_node: amber.architect.Operation, or list
+        output_node: amber.architect.Operation, or list
+        model_compile_dict: dict
+            compile dict for child models
+        session: tf.Session
+            session for building enas DAG
+        train_fixed_arc: bool
+            boolean indicator for whether is the final stage; if is True, must provide `fixed_arc` and not connect
+            to a controller
+        fixed_arc: list-like
+            the architecture for final stage training
+        name: str
         """
         assert type(input_node) in (State, tf.Tensor) or len(
             input_node) == 1, "EnasCnnDAG currently does not accept List type of inputs"
@@ -1077,7 +1148,8 @@ class EnasConv1dDAG:
         self.vars = []
         if controller is None:
             self.controller = None
-            print("this EnasDAG instance did not connect a controller; pleaes make sure you are only training a fixed architecture.")
+            print("this EnasDAG instance did not connect a controller; pleaes make sure you are only training a fixed "
+                  "architecture.")
         else:
             self.controller = controller
             self._build_sample_arc()
@@ -1092,7 +1164,8 @@ class EnasConv1dDAG:
             this_out_filters = [l.Layer_attributes['filters'] for l in layer]
             assert len(
                 set(this_out_filters)) == 1, "EnasConv1dDAG only supports one identical number of filters per layer," \
-                                             "but found %i in layer %s" % (len(set(this_out_filters)), layer)
+                                             "but found %i different number of filters in layer %s" % \
+                                             (len(set(this_out_filters)), layer)
             if len(out_filters) and this_out_filters[0] != out_filters[-1]:
                 pool_layers.append(layer_id - 1)
 
@@ -1140,7 +1213,9 @@ class EnasConv1dDAG:
 
     def _model(self, arc, **kwargs):
         if self.train_fixed_arc:
-            assert arc == self.fixed_arc or arc is None, "This DAG instance is built to train fixed arc, hence you can only provide arc=None or arc=self.fixed_arc; check the initialization of this instances"
+            assert arc == self.fixed_arc or arc is None, "This DAG instance is built to train fixed arc, hence you " \
+                                                         "can only provide arc=None or arc=self.fixed_arc; check the " \
+                                                         "initialization of this instances "
         if arc is None:
             if self.train_fixed_arc:
                 model = EnasCnnModel(inputs=self.fixed_model_input,
@@ -1661,7 +1736,9 @@ class EnasConv1DwDataDescrption(EnasConv1dDAG):
         :return:
         """
         if self.train_fixed_arc:
-            assert arc == self.fixed_arc or arc is None, "This DAG instance is built to train fixed arc, hence you can only provide arc=None or arc=self.fixed_arc; check the initialization of this instances"
+            assert arc == self.fixed_arc or arc is None, "This DAG instance is built to train fixed arc, hence you " \
+                                                         "can only provide arc=None or arc=self.fixed_arc; check the " \
+                                                         "initialization of this instances "
         if arc is None:
             if self.train_fixed_arc:
                 model = EnasCnnModel(inputs=self.fixed_model_input,

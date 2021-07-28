@@ -13,10 +13,14 @@ import abc
 
 import h5py
 import numpy
-import pyfaidx
+try:
+    import pyfaidx
+except ModuleNotFoundError:
+    pass
 
 _DNA_COMP_TABLE = str.maketrans("ATCGN", "TAGCN")
 _STORE_TYPE = numpy.half
+
 
 class Sequence(metaclass=abc.ABCMeta):
     """This class represents a source of sequence data, which can be

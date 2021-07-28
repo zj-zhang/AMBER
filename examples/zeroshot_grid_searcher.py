@@ -5,7 +5,7 @@ from amber.bootstrap.grid_search import grid_search
 from amber.objective.motif import MotifKLDivergence
 from amber.modeler import KerasModelBuilder
 from amber.architect.reward import KnowledgeReward, LossAucReward
-from amber.architect.model_space import State
+from amber.architect.modelSpace import State
 from amber.architect.manager import GeneralManager
 from zero_shot_nas import get_model_space_common as get_model_space
 #from zero_shot_nas import get_manager_common as get_manager

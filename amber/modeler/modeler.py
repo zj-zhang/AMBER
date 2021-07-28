@@ -4,8 +4,8 @@ Modeler is an interface class that interacts outside with manager, and inside co
 - child facilitates training and evaluating
 """
 
-from ._enas_modeler import DAGModelBuilder, EnasAnnModelBuilder, EnasCnnModelBuilder
-from ._keras_modeler import KerasModelBuilder, \
+from .enasModeler import DAGModelBuilder, EnasAnnModelBuilder, EnasCnnModelBuilder
+from .kerasModeler import KerasModelBuilder, KerasMultiIOModelBuilder, KerasResidualCnnBuilder, \
     build_sequential_model, build_multi_gpu_sequential_model, \
     build_multi_gpu_sequential_model_from_string, build_sequential_model_from_string
 
@@ -15,8 +15,10 @@ __all__ = [
     'EnasCnnModelBuilder',
     'EnasAnnModelBuilder',
     'KerasModelBuilder',
-    'build_sequential_model',
-    'build_sequential_model_from_string',
-    'build_multi_gpu_sequential_model_from_string',
-    'build_multi_gpu_sequential_model'
+    'KerasMultiIOModelBuilder',
+    'KerasResidualCnnBuilder',
+    #'build_sequential_model',
+    #'build_sequential_model_from_string',
+    #'build_multi_gpu_sequential_model_from_string',
+    #'build_multi_gpu_sequential_model'
 ]

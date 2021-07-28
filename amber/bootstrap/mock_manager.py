@@ -8,7 +8,7 @@ import os
 
 import numpy as np
 
-from ..architect import NetworkManager
+from ..architect import GeneralManager
 from ..utils.io import read_history
 
 
@@ -49,7 +49,7 @@ def get_mock_reward_fn(train_history_df, metric, stringify_states, lbd=1.):
     return reward_fn
 
 
-class MockManager(NetworkManager):
+class MockManager(GeneralManager):
     """Helper class for bootstrapping a random reward for any given architecture from a set of history records"""
 
     def __init__(self,

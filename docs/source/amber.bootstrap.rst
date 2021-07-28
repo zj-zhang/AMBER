@@ -4,6 +4,14 @@ amber.bootstrap package
 Submodules
 ----------
 
+amber.bootstrap.analyze module
+------------------------------
+
+.. automodule:: amber.bootstrap.analyze
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 amber.bootstrap.dense\_skipcon\_space module
 --------------------------------------------
 
@@ -48,14 +56,6 @@ amber.bootstrap.simple\_conv1d\_space module
 --------------------------------------------
 
 .. automodule:: amber.bootstrap.simple_conv1d_space
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-amber.bootstrap.tmp module
---------------------------
-
-.. automodule:: amber.bootstrap.tmp
    :members:
    :undoc-members:
    :show-inheritance:

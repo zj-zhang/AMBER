@@ -18,9 +18,10 @@ import pandas as pd
 import argparse
 
 from amber.architect.controller import ZeroShotController
-from amber.architect.model_space import State, ModelSpace
+from amber.architect.modelSpace import State, ModelSpace
+from amber.architect.commonOps import count_model_params, unpack_data
 
-from amber.architect.train_env import ParallelMultiManagerEnvironment
+from amber.architect.trainEnv import MultiManagerEnvironment, ParallelMultiManagerEnvironment
 from amber.architect.reward import LossAucReward, LossReward
 from amber.utils import run_from_ipython, get_available_gpus
 from amber.utils.logging import setup_logger

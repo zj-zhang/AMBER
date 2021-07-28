@@ -4,7 +4,7 @@
 """
 
 import numpy as np
-from ..modeler.operators import Layer_deNovo, SeparableFC, sparsek_vec
+from ..modeler._operators import Layer_deNovo, SeparableFC, sparsek_vec
 # custom layers
 from keras.models import load_model
 

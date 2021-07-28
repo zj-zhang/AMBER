@@ -22,6 +22,9 @@ copyright = '2020, Zijun Zhang'
 author = 'Zijun Zhang'
 
 
+# -- FOR compatibility with RTD
+master_doc = 'index'
+
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
@@ -35,7 +38,8 @@ extensions = ['sphinx.ext.autodoc',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
-    'sphinx.ext.intersphinx']
+    'sphinx.ext.intersphinx'
+]
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/', None),
@@ -50,6 +54,13 @@ napoleon_google_docstring = False
 napoleon_use_param = False
 napoleon_use_ivar = True
 
+
+# The suffix(es) of source filenames.
+# You can specify multiple suffix as a list of string:
+#
+#source_parsers = {
+#        '.md' : 'recommonmark.parser.CommonMarkParser'
+#        }
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
