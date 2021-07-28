@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-#SBATCH --time=7-0:00:00
+#SBATCH --time=4-12:00:00
 #SBATCH --gres=gpu:v100-32gb:4
 #SBATCH --partition=gpu
-#SBATCH --mem 128g
+#SBATCH --mem 96g
 #SBATCH -c 32
 
-echo 'Just plain run.'
+INDEX=$1
+echo 'Just plain run for INDEX='"${INDEX}"
+
+if [ "$SLURM_JOB_ID" == "" ]; then
+	SLURM_JOB_ID="test-amber"
+fi
 
 # Load bash config.
 source "${HOME}"'/.bashrc'
@@ -22,7 +27,7 @@ if [ $? != 0 ]; then
 fi
 
 # Start up anaconda.
-conda activate 'amber'
+conda activate 'amber-zh'
 if [ $? != 0 ]; then
     echo 'Failed to activate conda environment.'
     exit 1
@@ -31,6 +36,7 @@ fi
 # Change directories.
 SRC_DIR='.'
 cd "${SRC_DIR}"
+mkdir -p "${SRC_DIR}"'/outputs/new_20200919/long_and_dilation.ppo.'"${INDEX}"
 if [ $? != 0 ]; then
     echo 'Failed changing directories to '"${SRC_DIR}"
     exit 1
@@ -74,15 +80,14 @@ else
 fi
 
 # Run train script.
-/usr/bin/time -v python -u "${SRC_DIR}"'/zero_shot_nas.deepsea.py' \
-    --analysis 'train' \
-    --wd "${SRC_DIR}"'/outputs/zero_shot_deepsea' \
-    --config-file "${SRC_DIR}"'/data/zero_shot_deepsea/debug_feats.config.4_cats.tsv' \
+/usr/bin/time -v python -u "${SRC_DIR}"'/zero_shot_nas.real_deepsea.py' \
+    --model-space long_and_dilation \
+    --ppo \
+    --wd "${SRC_DIR}"'/outputs/new_20200919/long_and_dilation.ppo.'"${INDEX}" \
+    --config-file "${SRC_DIR}"'/data/zero_shot_deepsea/train_feats.config_file.tsv' \
     --train-file '/dev/shm/'"${SLURM_JOB_ID}"'/train.h5' \
     --val-file '/dev/shm/'"${SLURM_JOB_ID}"'/val.h5' \
-    --dfeature-name-file "${SRC_DIR}"'/data/zero_shot_deepsea/dfeatures_ordered_list.txt' \
-    --parallel  #\
-#    --resume
+    --dfeature-name-file "${SRC_DIR}"'/data/zero_shot_deepsea/dfeatures_ordered_list.txt'
 echo $?
 
 # Deactivate conda.
