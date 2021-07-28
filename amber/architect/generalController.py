@@ -202,11 +202,12 @@ class GeneralController(BaseController):
         self.name = name
         self.loss = 0
 
-        with tf.variable_scope(self.name):
-            self._create_weight()
-            self._build_sampler()
-            self._build_trainer()
-            self._build_train_op()
+        with tf.device("/cpu:0"):
+            with tf.variable_scope(self.name):
+                self._create_weight()
+                self._build_sampler()
+                self._build_trainer()
+                self._build_train_op()
         # initialize variables in this scope
         self.weights = [var for var in tf.trainable_variables() if var.name.startswith(self.name)]
         self.session.run(tf.variables_initializer(self.weights))
