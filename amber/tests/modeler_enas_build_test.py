@@ -18,7 +18,7 @@ class TestEnasConvModeler(testing_utils.TestCase):
         self.x = np.random.choice(2, 40).reshape((1, 10, 4))
         self.y = np.random.sample(1).reshape((1, 1))
         self.model_space, _ = testing_utils.get_example_conv1d_space()
-        self.model_compile_dict = {'loss': 'binary_crossentropy', 'optimizer': 'adam'}
+        self.model_compile_dict = {'loss': 'binary_crossentropy', 'optimizer': 'sgd'}
         self.controller = architect.GeneralController(
             model_space=self.model_space,
             buffer_type='ordinal',

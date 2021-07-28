@@ -249,6 +249,8 @@ class GeneralManager(BaseNetworkManager):
 
 
 class DistributedGeneralManager(GeneralManager):
+    """Distributed manager will place all tensors of any child models to a pre-assigned GPU device
+    """
     def __init__(self, devices, train_data_kwargs, validate_data_kwargs, *args, **kwargs):
         self.devices = devices
         super().__init__(*args, **kwargs)
