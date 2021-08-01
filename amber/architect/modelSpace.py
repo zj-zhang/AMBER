@@ -94,15 +94,17 @@ class State(object):
 
     def __init__(self, Layer_type, **kwargs):
         Layer_type = Layer_type.lower()
-        # assert Layer_type in [
-        #     'conv1d', 'maxpool1d', 'avgpool1d',
-        #     'conv2d', 'maxpool2d', 'avgpool2d',
-        #     'lstm',
-        #     'dense', 'input', 'identity',
-        #     'dropout', 'sparsek_vec', 'batchnorm',
-        #     'flatten', 'globalavgpool1d', 'globalavgpool2d', 'globalmaxpool1d', 'globalmaxpool1d'
-        #                                                                         'data', 'denovo', 'sfc'
-        # ]
+        assert Layer_type in [
+            'conv1d', 'maxpool1d', 'avgpool1d',
+            'conv2d', 'maxpool2d', 'avgpool2d',
+            'lstm',
+            'dense', 'input', 'identity',
+            'dropout', 'sparsek_vec', 'batchnorm',
+            'flatten', 'globalavgpool1d', 'globalavgpool2d', 'globalmaxpool1d', 'globalmaxpool1d',
+            'data', 'denovo', 'sfc',
+            'concatenate'
+        ]
+
         self.Layer_type = Layer_type
         self.Layer_attributes = kwargs
 
@@ -146,7 +148,7 @@ class ModelSpace:
 
     """
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.state_space = defaultdict(list)
 
     def __str__(self):
@@ -304,6 +306,51 @@ class ModelSpace:
 
             ms.add_layer(layer_id=i, layer_states=[State(**d[i][j]) for j in range(len(d[i]))])
         return ms
+
+
+class BranchedModelSpace(ModelSpace):
+    """
+    Parameters
+    ----------
+    subspaces : list
+        A list of `ModelSpace`. First element is a list of input branches. Second element is a stem model space
+    concat_op : str
+        string identifier for how to concatenate different input branches
+
+    """
+    def __init__(self, subspaces, concat_op='concatenate', **kwargs):
+        super().__init__(**kwargs)
+        self.subspaces = subspaces
+        self.concat_op = concat_op
+        # layer id to branch; expects a tuple of two elements
+        # first element is type index, 0=input branch, 1=stem
+        # second element is branch index, int=index of list, None=only one space present
+        self._layer_to_branch = {}
+        self._branch_to_layer = {}
+        # delineate subspaces
+        layer_id = 0
+        for i, model_space in enumerate(self.subspaces[0]):
+            for _layer in range(len(model_space)):
+                self.state_space[layer_id] = model_space[_layer]
+                self._layer_to_branch[layer_id] = (0, i)
+                layer_id += 1
+        for _layer in range(len(self.subspaces[1])):
+            self.state_space[layer_id] = self.subspaces[1][_layer]
+            self._layer_to_branch[layer_id] = (1, None)
+            layer_id += 1
+        for k, v in self._layer_to_branch.items():
+            if v in self._branch_to_layer:
+                self._branch_to_layer[v].append(k)
+            else:
+                self._branch_to_layer[v] = [k]
+
+    @property
+    def layer_to_branch(self):
+        return self._layer_to_branch
+
+    @property
+    def branch_to_layer(self):
+        return self._branch_to_layer
 
 
 # alias

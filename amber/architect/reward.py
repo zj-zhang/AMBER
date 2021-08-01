@@ -67,13 +67,14 @@ class LossReward(Reward):
     """The most basic reward function; returns negative loss as rewards
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, validation_steps=None, *args, **kwargs):
         self.knowledge_function = None
+        self.validation_steps = validation_steps
         self.c = 1.
 
     def __call__(self, model, data, *args, **kwargs):
         X, y = unpack_data(data)
-        loss_and_metrics = model.evaluate(X, y, verbose=0)
+        loss_and_metrics = model.evaluate(X, y, steps=self.validation_steps, verbose=0)
         # Loss function values will always be the first value
         if type(loss_and_metrics) is list:
             L = loss_and_metrics[0]

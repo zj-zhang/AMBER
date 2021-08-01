@@ -75,6 +75,15 @@ class GeneralManager(BaseNetworkManager):
     child_batchsize : int
         The batch size for training the child model.
 
+    fit_kwargs : dict or None
+        Keyword arguments for model.fit
+
+    predict_kwargs : dict or None
+        Keyword arguments for model.predict
+
+    evaluate_kwargs : dict or None
+        Keyword arguments for model.evaluate
+
     verbose : bool or int
         Verbose level. 0=non-verbose, 1=verbose, 2=less verbose.
 
@@ -129,12 +138,16 @@ class GeneralManager(BaseNetworkManager):
                  child_batchsize=128,
                  verbose=0,
                  fit_kwargs=None,
+                 predict_kwargs=None,
+                 evaluate_kwargs=None,
                  **kwargs):
         super(GeneralManager, self).__init__(**kwargs)
         self.train_data = train_data
         self.validation_data = validation_data
         self.working_dir = working_dir
         self.fit_kwargs = fit_kwargs or {}
+        self.predict_kwargs = predict_kwargs or {}
+        self.evaluate_kwargs = evaluate_kwargs or {}
         self._earlystop_patience = self.fit_kwargs.pop("earlystop_patience",5)
         if not os.path.exists(self.working_dir):
             os.makedirs(self.working_dir)
@@ -213,11 +226,16 @@ class GeneralManager(BaseNetworkManager):
                                  **self.fit_kwargs
                                  )
                 # load best performance epoch in this training session
-                model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
+                # in corner cases, the optimization might fail and no temp_network 
+                # would be created
+                if os.path.isfile((os.path.join(self.working_dir, 'temp_network.h5'))):
+                    model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
+                else:
+                    model.save_weights((os.path.join(self.working_dir, 'temp_network.h5')))
 
                 # evaluate the model by `reward_fn`
                 this_reward, loss_and_metrics, reward_metrics = \
-                    self.reward_fn(model, (self.validation_data),
+                    self.reward_fn(model, self.validation_data,
                                    session=train_sess,
                                    graph=train_graph)
                 loss = loss_and_metrics.pop(0)
@@ -230,7 +248,7 @@ class GeneralManager(BaseNetworkManager):
                 # do any post processing,
                 # e.g. save child net, plot training history, plot scattered prediction.
                 if self.store_fn:
-                    val_pred = model.predict(self.validation_data, verbose=self.verbose)
+                    val_pred = model.predict(self.validation_data, verbose=self.verbos, **self.predict_kwargs)
                     self.store_fn(
                         trial=trial,
                         model=model,

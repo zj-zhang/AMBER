@@ -177,9 +177,9 @@ class ControllerTrainEnvironment:
 
     def restore(self):
         if self.save_controller:
-            controller_states = np.load(os.path.join(self.working_dir, 'controller_states.npy'))
-            set_controller_states(self.controller.model, controller_states)
-            self.controller.model.load_weights(os.path.join(self.working_dir, 'controller_weights.h5'))
+            #controller_states = np.load(os.path.join(self.working_dir, 'controller_states.npy'))
+            #set_controller_states(self.controller, controller_states)
+            self.controller.load_weights(os.path.join(self.working_dir, 'controller_weights.h5'))
             self.start_ep = get_controller_history(os.path.join(self.working_dir, 'train_history.csv'))
         else:
             raise Exception("Did not turn on option `save_controller`")
