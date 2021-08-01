@@ -111,7 +111,8 @@ class OperationController(BaseController):
                  train_pi_iter=100,   # num of substeps for training
                  lr_pi=0.005,
                  buffer_size=50,
-                 batch_size=5
+                 batch_size=5,
+                 verbose=0
                  ):
         self.state_space = state_space
         self.controller_units = controller_units
@@ -127,6 +128,7 @@ class OperationController(BaseController):
         self.kl_div = 0
         self.train_pi_iter = train_pi_iter
         self.batch_size = batch_size
+        self.verbose = verbose
 
         self._build_sampler()
         self._build_trainer()
@@ -221,11 +223,11 @@ class OperationController(BaseController):
                 g_t += 1
 
                 if kl_sum / t > self.kl_threshold:
-                    print("     Early stopping at step {} as KL(old || new) = ".format(g_t), kl_sum / t)
+                    if self.verbose: print("     Early stopping at step {} as KL(old || new) = ".format(g_t), kl_sum / t)
                     return aloss / g_t
 
             if epoch % (self.train_pi_iter // 5) == 0:
-                print('     Epoch: {} Actor Loss: {} KL(old || new): {} Entropy(new) = {}'.format(epoch, aloss / g_t,
+                if self.verbose: print('     Epoch: {} Actor Loss: {} KL(old || new): {} Entropy(new) = {}'.format(epoch, aloss / g_t,
                                                                                                   kl_sum / t,
                                                                                                   ent_sum / t))
 

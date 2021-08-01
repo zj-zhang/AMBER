@@ -278,7 +278,7 @@ class Buffer(object):
                     ' || '.join([str(np.round(x, 2)).replace("\n ", ";") for x in self.prob_buffer[-1]])
                 )
             )
-            print("Saved buffers to file `buffers.txt` !")
+            # print("Saved buffers to file `buffers.txt` !")
 
         if len(self.lt_pbuffer) > self.max_size:
             self.lt_sbuffer = self.lt_sbuffer[-self.max_size:]
@@ -399,10 +399,10 @@ class ReplayBuffer(Buffer):
 
 class MultiManagerBuffer:
     def __init__(self, max_size,
-                 ewa_beta=None,
+                 ewa_beta=0.5,   # for multimanager, shorten the average period
                  is_squeeze_dim=False,
                  rescale_advantage_by_reward=False,
-                 clip_advantage=10.,
+                 clip_advantage=3.,
                  **kwargs
                  ):
         self.max_size = max_size
@@ -410,7 +410,7 @@ class MultiManagerBuffer:
         self.is_squeeze_dim = is_squeeze_dim
         self.rescale_advantage_by_reward = rescale_advantage_by_reward
         self.clip_advantage = clip_advantage
-        self.r_bias = None
+        self.r_bias = {}
 
         # short term buffer storing single trajectory
         self.action_buffer = []
@@ -429,6 +429,21 @@ class MultiManagerBuffer:
         self.manager_index_buffer = []
         self.lt_manager_idx_buffer = []
 
+    @property
+    def lt_adbuffer(self):
+        """For legacy use"""
+        return self.lt_adv
+
+    @property
+    def lt_abuffer(self):
+        """For legacy use"""
+        return self.lt_action
+
+    @property
+    def lt_pbuffer(self):
+        """For legacy use"""
+        return self.lt_prob
+
     def store(self, prob, action, reward, description, manager_index):
         """
         Parameters
@@ -444,6 +459,8 @@ class MultiManagerBuffer:
         manager_index: int
             Integer number showing the index for which the reward is coming from
         """
+        assert len(np.asarray(description).shape) > 1, ValueError('Expect descriptor shape of >=2 dims, got %s' %
+                                                                  np.asarray(description).shape)
         self.prob_buffer.append(prob)
         self.action_buffer.append(action)
         self.reward_buffer.append(reward)
@@ -463,6 +480,7 @@ class MultiManagerBuffer:
             # write out one example for each manager
             for j in self.r_bias:
                 this = np.where(np.array(self.manager_index_buffer)==j)[0]
+                if len(this) == 0: continue
                 max_idx = np.argmax(np.array(self.reward_buffer)[this]).tolist()
                 action_onehot = self.action_buffer[this[max_idx]]
                 if self.is_squeeze_dim:
@@ -483,7 +501,6 @@ class MultiManagerBuffer:
                         ' || '.join([str(np.round(x, 2)).replace("\n ", ";") for x in self.prob_buffer[this[max_idx]]])
                     )
                 )
-            print("Saved buffers to file `buffers.txt` !")
 
     def stratified_reward_mean(self):
         """
@@ -494,14 +511,24 @@ class MultiManagerBuffer:
             buffer
         """
         stratified_mean = {}
-        # Assumes manager_index is starting from 0
-        for idx in range(0, max(self.manager_index_buffer)+1):
+        # Assumes manager_index is starting from 0 and is continuous
+        max_manager_index = max(self.manager_index_buffer) + 1
+        if len(self.lt_reward_mean) > 0:
+            max_manager_index = max(max_manager_index, max(self.lt_reward_mean[-1])+1)
+        for idx in range(0, max_manager_index):
             this = np.where(np.array(self.manager_index_buffer)==idx)[0]
-            r_mean = np.mean(np.array(self.reward_buffer)[this])
+            if len(this)>0:
+                r_mean = np.mean(np.array(self.reward_buffer)[this])
+            # account for manager sampling - find the last occurence of idx
+            else:
+                if len(self.lt_reward_mean)>0 and (idx in self.lt_reward_mean[-1]):
+                    r_mean = self.lt_reward_mean[-1][idx]
+                else:
+                    r_mean = np.nan
             stratified_mean[idx] = r_mean
         return stratified_mean
 
-    def finish_path(self, model_space, global_ep, working_dir, *args, **kwargs):
+    def finish_path(self, state_space, global_ep, working_dir, *args, **kwargs):
         old_prob = [np.concatenate(p, axis=0) for p in zip(*self.prob_buffer)]
         if self.is_squeeze_dim:
             action_onehot = np.array(self.action_buffer)
@@ -509,20 +536,24 @@ class MultiManagerBuffer:
             action_onehot = [np.concatenate(onehot, axis=0) for onehot in zip(*self.action_buffer)]
 
         reward = np.array(self.reward_buffer)
-        if not self.lt_reward_mean:
-            self.r_bias = self.stratified_reward_mean()
-        else:
-            self.r_bias = {
-                    j: self.r_bias[j] * self.ewa_beta +
-                       self.lt_reward_mean[-1][j] * (1 - self.ewa_beta)
-                            for j in self.r_bias
-            }
+        # need to account for manager sampling. zz 2020.9.2
+        for j in set(self.manager_index_buffer):
+            if not j in self.r_bias:
+                self.r_bias[j] = self.stratified_reward_mean()[j]
+            else:
+                self.r_bias[j] = self.r_bias[j] * self.ewa_beta + \
+                           self.lt_reward_mean[-1][j] * (1 - self.ewa_beta)
 
         # unroll the r_bias to fill in corresponding locations in short-term buffer
         expanded_r_bias = np.array([ self.r_bias[j] for j in self.manager_index_buffer  ])
         assert expanded_r_bias.shape == reward.shape
+        # For multi-manager buffer, scale each manager's reward to have the unit variance too
         if self.rescale_advantage_by_reward:
             ad = (reward - expanded_r_bias) / np.abs(expanded_r_bias)
+            index_buffer = np.array(self.manager_index_buffer)
+            manager_to_index = {j:np.where(index_buffer==j)[0] for j in set(index_buffer)}
+            for j in manager_to_index:
+                ad[manager_to_index[j]] /= (ad[manager_to_index[j]].std() + 1e-2)
         else:
             ad = (reward - expanded_r_bias)
 
@@ -535,7 +566,7 @@ class MultiManagerBuffer:
         self.lt_reward.append(reward)
         self.lt_reward_mean.append(self.stratified_reward_mean())
 
-        self.dump_buffer(model_space=model_space, global_ep=global_ep, working_dir=working_dir)
+        self.dump_buffer(model_space=state_space, global_ep=global_ep, working_dir=working_dir)
 
         # NOTE: this will only keep the `max_size` number of short-term buffers;
         # whereas each short-term buffer could have multiple samples
@@ -578,8 +609,8 @@ class MultiManagerBuffer:
             lt_reward = lt_reward[slice_]
             lt_desc = lt_desc[slice_]
 
-        for i in range(0, len(lt_prob), bs):
-            b = min(i + bs, len(lt_prob))
+        for i in range(0, len(lt_adv), bs):
+            b = min(i + bs, len(lt_adv))
             p_batch = [p[i:b, :] for p in lt_prob]
             if self.is_squeeze_dim:
                 a_batch = lt_action[i:b]

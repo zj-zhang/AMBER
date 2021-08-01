@@ -19,6 +19,7 @@ from ..plots import plot_stats2, plot_environment_entropy, plot_controller_perfo
     plot_action_weights, plot_wiring_weights
 from ..utils.logging import setup_logger
 from .manager import BaseNetworkManager, EnasManager
+from ..utils import get_available_gpus
 
 
 def get_controller_states(model):
@@ -148,6 +149,7 @@ class ControllerTrainEnvironment:
         self.save_controller = save_controller
         self.initial_buffering_queue = min(initial_buffering_queue, controller.buffer.max_size)
         self.continuous_run = continuous_run
+        self.verbose = verbose
 
         # FOR DEPRECATED USE
         try:
@@ -225,7 +227,7 @@ class ControllerTrainEnvironment:
         # returns a state given an action (prob list)
         # fix discrepancy between operation_controller and general_controller. 20190912 ZZ
         try:
-            next_state = np.array(action_prob[-1]).reshape(1, 1, self.last_actionState_size)
+            next_state = np.array(action_prob[-1]).reshape((1, 1, self.last_actionState_size))
         except ValueError:
             next_state = self.reset()
         return next_state
@@ -320,9 +322,8 @@ class ControllerTrainEnvironment:
 
                 # save the controller states and weights
                 if self.save_controller:
-                    np.save(os.path.join(self.working_dir, 'controller_states.npy'),
-                            get_controller_states(self.controller.model))
-                    self.controller.save_weights(os.path.join(self.working_dir, 'controller_weights.h5'))
+                    self.controller.save_weights(
+                        os.path.join(self.working_dir, "controller_weights.h5"))
 
                 # TODO: add early-stopping
                 # check the entropy record and stop training if no progress was made
@@ -394,7 +395,10 @@ class EnasTrainEnv(ControllerTrainEnvironment):
 
     def train(self):
         LOGGER = self.logger
-
+        if self.verbose:
+            LOGGER.setLevel(10)  # DEBUG
+        else:
+            LOGGER.setLevel(40)  # ERROR
         action_probs_record = []
         loss_and_metrics_list = []
         state = self.reset()  # nuisance param
@@ -488,6 +492,9 @@ class EnasTrainEnv(ControllerTrainEnvironment):
                 break
 
         LOGGER.debug("Total Reward : %s" % self.total_reward)
+        if self.save_controller:
+            self.controller.save_weights(
+                os.path.join(self.working_dir, "controller_weights.h5"))
 
         f.close()
         plot_controller_performance(os.path.join(self.working_dir, 'train_history.csv'),
@@ -678,11 +685,14 @@ class MultiManagerEnvironment(EnasTrainEnv):
 
 
 class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
-    def __init__(self, processes=2, *args, **kwargs):
+    def __init__(self, processes=2, enable_manager_sampling=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.processes = processes
-        assert self.processes <= self.manager_cnt, "Cannot have more processes than managers"
+        self.enable_manager_sampling = enable_manager_sampling
+        self._gpus = get_available_gpus()
         assert self.processes >= 1
+        if self.enable_manager_sampling is False:
+            assert self.processes <= self.manager_cnt, "Cannot have more processes than managers without sampling"
 
     @staticmethod
     def _reward_getter(args):
@@ -690,16 +700,21 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
         res = []
         for i in range(len(args)):
             try:
-                if hasattr(args[i]['manager'], 'devices'):
+                if 'remap_device' in args[i]:
+                    devices = args[i]['remap_device']
+                elif hasattr(args[i]['manager'], 'devices'):
                     devices = args[i]['manager'].devices
+                    args[i]['remap_device'] = None
                 else:
                     devices = "NoAttribute"
+                    args[i]['remap_device'] = None
                 sys.stderr.write("PID %i: %i/%i run; devices=%s\n" % (pid, i, len(args), devices))
                 reward, loss_and_metrics = args[i]['manager'].get_rewards(
-                    trial=args[i]['trial'], model_arc=args[i]['model_arc'], nsteps=args[i]['nsteps']
+                    trial=args[i]['trial'], model_arc=args[i]['model_arc'], nsteps=args[i]['nsteps'],
+                    remap_device=args[i]['remap_device']
                     )
             except Exception as e:
-                raise Exception("child pid %i has exception %s" % (pid, e))
+                raise Exception("child pid %i when processing %s, has exception %s" % (pid, args[i]['model_arc'], e))
             res.append({'reward': reward, 'loss_and_metrics': loss_and_metrics})
         # close all handlers opened in this thread
         for i in range(len(args)):
@@ -749,7 +764,13 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                 # for controller.store; ordered the same as pool_args
                 store_args = []
 
-                for j in range(self.manager_cnt):
+                if self.enable_manager_sampling == True:
+                    replace = True if len(self._gpus) > self.manager_cnt else False
+                    this_manager_index = np.random.choice(self.manager_cnt, len(self._gpus), replace=replace)
+                else:
+                    this_manager_index = np.arange(self.manager_cnt)
+
+                for k, j in enumerate(this_manager_index):
                     this_pool = []
                     this_store = []
                     controller_step_ = controller_step
@@ -768,9 +789,12 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                                 'manager': self.manager[j],
                                 'trial': controller_step_,
                                 'model_arc': arc_seq,
-                                'nsteps': self.child_train_steps
+                                'nsteps': self.child_train_steps,
                             }
                         )
+
+                        if self.enable_manager_sampling:
+                            this_pool[-1].update({'remap_device': self._gpus[k]})
 
                         this_store.append(
                             {
@@ -796,26 +820,28 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                     elp = time.time() - a_time
                     # distribute args to the pool of workers
                     if self.processes > 1:
-                        self.logger.info("distributing reward-getter to a pool of %i workers.. %.3f sec" % (self.processes, elp))
+                        self.logger.info("distributing %i/%i reward-getters to a pool of %i workers.. %.3f sec" % (len(pool_args), self.manager_cnt, self.processes, elp))
                         res_list = pool.map(self._reward_getter, pool_args)
                     else:
                         self.logger.info("Only %i worker, running sequentially.. %.3f" % (self.processes, elp))
                         res_list = []
                         for x in pool_args:
                             res_list.append(self._reward_getter(x))
-
-                for m, (store_, res_) in enumerate(zip(store_args, res_list)):  # manager level
+                
+                assert len(res_list) == len(this_manager_index)
+                self.logger.info("storing..")
+                for m_, (store_, res_) in enumerate(zip(store_args, res_list)):  # manager level
+                    m = this_manager_index[m_]
                     for t, (store, res) in enumerate(zip(store_, res_)):        # trial level
-
                         reward, loss_and_metrics = res['reward'], res['loss_and_metrics']
                         probs, arc_seq, description = store['prob'], store['action'], store['description']
                         ep_reward += reward
-                        trial = pool_args[m][t]['trial']
+                        trial = pool_args[m_][t]['trial']
                         for x in loss_and_metrics.keys():
                             loss_and_metrics_ep[x] += loss_and_metrics[x]
                         # save the arc_seq and reward
                         self.controller.store(prob=probs, action=arc_seq, reward=reward,
-                                              description=self.data_descriptive_features[[j]],
+                                              description=self.data_descriptive_features[[m]],
                                               manager_index=m)
                         # write the results of this trial into a file
                         data = ["%i-%i"%(m,trial), [loss_and_metrics[x] for x in sorted(loss_and_metrics.keys())],

@@ -184,6 +184,7 @@ def batch_norm1d(x, is_training, name="bn", decay=0.9, epsilon=1e-5,
 
 def get_keras_train_ops(loss, tf_variables, optim_algo, **kwargs):
     assert K.backend() == 'tensorflow'
+    # TODO: change to TF.keras
     from keras.optimizers import get as get_opt
     opt = get_opt(optim_algo)
     grads = tf.gradients(loss, tf_variables)

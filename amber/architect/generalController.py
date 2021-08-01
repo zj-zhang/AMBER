@@ -157,7 +157,7 @@ class GeneralController(BaseController):
                  use_ppo_loss=False, kl_threshold=0.05, skip_connection_unique_connection=False, buffer_size=15,
                  batch_size=5, session=None, train_pi_iter=20, lstm_size=32, lstm_num_layers=2, lstm_keep_prob=1.0,
                  tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=None,
-                 rescale_advantage_by_reward=False, name="controller", **kwargs):
+                 rescale_advantage_by_reward=False, name="controller", verbose=0, **kwargs):
         super().__init__(**kwargs)
 
         self.model_space = model_space
@@ -178,6 +178,7 @@ class GeneralController(BaseController):
                                 is_squeeze_dim=True,
                                 rescale_advantage_by_reward=rescale_advantage_by_reward)
         self.batch_size = batch_size
+        self.verbose = verbose
 
         # need to use the same session throughout one App; ZZ 2020.3.2
         assert session is not None
@@ -201,11 +202,12 @@ class GeneralController(BaseController):
         self.name = name
         self.loss = 0
 
-        with tf.variable_scope(self.name):
-            self._create_weight()
-            self._build_sampler()
-            self._build_trainer()
-            self._build_train_op()
+        with tf.device("/cpu:0"):
+            with tf.variable_scope(self.name):
+                self._create_weight()
+                self._build_sampler()
+                self._build_trainer()
+                self._build_train_op()
         # initialize variables in this scope
         self.weights = [var for var in tf.trainable_variables() if var.name.startswith(self.name)]
         self.session.run(tf.variables_initializer(self.weights))
@@ -691,11 +693,11 @@ class GeneralController(BaseController):
                 t += 1
                 g_t += 1
 
-                if kl_sum / t > self.kl_threshold and epoch > 0:
+                if kl_sum / t > self.kl_threshold and epoch > 0 and self.verbose > 0:
                     print("     Early stopping at step {} as KL(old || new) = ".format(g_t), kl_sum / t)
                     return aloss / g_t
 
-            if epoch % max(1, (self.train_pi_iter // 5)) == 0:
+            if epoch % max(1, (self.train_pi_iter // 5)) == 0 and self.verbose > 0:
                 print("     Epoch: {} Actor Loss: {} KL(old || new): {} Entropy(new) = {}".format(
                     epoch, aloss / g_t,
                     kl_sum / t,

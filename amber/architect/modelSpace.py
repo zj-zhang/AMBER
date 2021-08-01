@@ -104,6 +104,7 @@ class State(object):
             'data', 'denovo', 'sfc',
             'concatenate'
         ]
+
         self.Layer_type = Layer_type
         self.Layer_attributes = kwargs
 

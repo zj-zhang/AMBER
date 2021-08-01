@@ -103,10 +103,10 @@ class ZeroShotController(GeneralController):
                 g_t += 1
 
                 if kl_sum / t > self.kl_threshold and epoch > 0:
-                    print("     Early stopping at step {} as KL(old || new) = ".format(g_t), kl_sum / t)
+                    if self.verbose: print("     Early stopping at step {} as KL(old || new) = ".format(g_t), kl_sum / t)
                     return aloss / g_t
 
-            if epoch % max(1, (self.train_pi_iter // 5)) == 0:
+            if epoch % max(1, (self.train_pi_iter // 5)) == 0 and self.verbose:
                 print("     Epoch: {} Actor Loss: {} KL(old || new): {} Entropy(new) = {}".format(
                     epoch, aloss / g_t,
                     kl_sum / t,

@@ -60,9 +60,9 @@ def get_dag(arg):
             return InputBlockDAG
         elif arg.lower() == 'inputblockauxlossdag':
             return InputBlockAuxLossDAG
-        elif arg.lower() == 'enas' or arg.lower() == 'enasanndag':
+        elif arg.lower() == 'enasanndag':
             return EnasAnnDAG
-        elif arg.lower() == 'enascnndag' or arg.lower() == 'enasconv1ddag':
+        elif arg.lower() == 'enasconv1ddag':
             return EnasConv1dDAG
         elif arg == 'EnasConv1DwDataDescrption':
             return EnasConv1DwDataDescrption
@@ -1087,19 +1087,25 @@ class EnasConv1dDAG:
                  fixed_arc=None,
                  name='EnasDAG',
                  **kwargs):
-        """
-        EnasCnnDAG is a DAG model builder for using the weight sharing framework. This class deals with the Convolutional
-         neural network.
-        Args:
-            model_space:
-            input_node:
-            output_node:
-            model_compile_dict: compile dict for child models
-            session: tf.Session
-            train_fixed_arc: whether is the final stage
-            fixed_arc: the architecture for final stage training
-            name:
-        Examples:
+        """EnasCnnDAG is a DAG model builder for using the weight sharing framework.
+
+        This class deals with the Convolutional neural network.
+
+        Parameters
+        ----------
+        model_space: amber.architect.ModelSpace
+        input_node: amber.architect.Operation, or list
+        output_node: amber.architect.Operation, or list
+        model_compile_dict: dict
+            compile dict for child models
+        session: tf.Session
+            session for building enas DAG
+        train_fixed_arc: bool
+            boolean indicator for whether is the final stage; if is True, must provide `fixed_arc` and not connect
+            to a controller
+        fixed_arc: list-like
+            the architecture for final stage training
+        name: str
         """
         assert type(input_node) in (State, tf.Tensor) or len(
             input_node) == 1, "EnasCnnDAG currently does not accept List type of inputs"
@@ -1143,7 +1149,8 @@ class EnasConv1dDAG:
         self.vars = []
         if controller is None:
             self.controller = None
-            print("this EnasDAG instance did not connect a controller; pleaes make sure you are only training a fixed architecture.")
+            print("this EnasDAG instance did not connect a controller; pleaes make sure you are only training a fixed "
+                  "architecture.")
         else:
             self.controller = controller
             self._build_sample_arc()
@@ -1158,7 +1165,8 @@ class EnasConv1dDAG:
             this_out_filters = [l.Layer_attributes['filters'] for l in layer]
             assert len(
                 set(this_out_filters)) == 1, "EnasConv1dDAG only supports one identical number of filters per layer," \
-                                             "but found %i in layer %s" % (len(set(this_out_filters)), layer)
+                                             "but found %i different number of filters in layer %s" % \
+                                             (len(set(this_out_filters)), layer)
             if len(out_filters) and this_out_filters[0] != out_filters[-1]:
                 pool_layers.append(layer_id - 1)
 
@@ -1206,7 +1214,9 @@ class EnasConv1dDAG:
 
     def _model(self, arc, **kwargs):
         if self.train_fixed_arc:
-            assert arc == self.fixed_arc or arc is None, "This DAG instance is built to train fixed arc, hence you can only provide arc=None or arc=self.fixed_arc; check the initialization of this instances"
+            assert arc == self.fixed_arc or arc is None, "This DAG instance is built to train fixed arc, hence you " \
+                                                         "can only provide arc=None or arc=self.fixed_arc; check the " \
+                                                         "initialization of this instances "
         if arc is None:
             if self.train_fixed_arc:
                 model = EnasCnnModel(inputs=self.fixed_model_input,

@@ -140,7 +140,8 @@ def sma(data, window=10):
 def plot_action_weights(working_dir):
     save_path = os.path.join(working_dir, 'weight_data.json')
     if os.path.exists(save_path):
-        df = json.load(open(save_path, 'r+'))
+        with open(save_path, 'r+') as f:
+            df = json.load(f)
         # plt.clf()
         for layer in df:
             reset_plot(width_in_inches=6, height_in_inches=4.5)
@@ -177,7 +178,8 @@ def plot_wiring_weights(working_dir, with_input_blocks, with_skip_connection):
         return
     save_path = os.path.join(working_dir, 'weight_data.json')
     if os.path.exists(save_path):
-        df = json.load(open(save_path, 'r+'))
+        with open(save_path, 'r+') as f:
+            df = json.load(f)
         for layer in df:
             # reset the plots, size and content
             reset_plot(width_in_inches=6, height_in_inches=4.5)
@@ -265,7 +267,8 @@ def plot_stats(working_dir):
 def plot_stats2(working_dir):
     save_path = os.path.join(working_dir, 'nas_training_stats.json')
     if os.path.exists(save_path):
-        df = json.load(open(save_path))
+        with open(save_path, 'r') as f:
+            df = json.load(f)
         # plt.clf()
         reset_plot()
         # ax = plt.subplot(111)

@@ -28,7 +28,8 @@ from .store import get_store_fn
 __all__ = [
     'BaseNetworkManager',
     'NetworkManager',
-    'GeneralManager'
+    'GeneralManager',
+    'DistributedGeneralManager'
 ]
 
 
@@ -147,6 +148,7 @@ class GeneralManager(BaseNetworkManager):
         self.fit_kwargs = fit_kwargs or {}
         self.predict_kwargs = predict_kwargs or {}
         self.evaluate_kwargs = evaluate_kwargs or {}
+        self._earlystop_patience = self.fit_kwargs.pop("earlystop_patience",5)
         if not os.path.exists(self.working_dir):
             os.makedirs(self.working_dir)
         self.model_compile_dict = kwargs.pop("model_compile_dict", None)
@@ -194,7 +196,9 @@ class GeneralManager(BaseNetworkManager):
                 pass
             model = self.model_fn(model_arc)  # a compiled keras Model
             if model is None:
-                assert hasattr(self.reward_fn, "min"), "model_fn of type %s returned a non-valid model, but the given reward_fn of type %s does not have .min() method" % (type(self.model_fn), type(self.reward_fn))
+                assert hasattr(self.reward_fn, "min"), "model_fn of type %s returned a non-valid model, but the given " \
+                                                       "reward_fn of type %s does not have .min() method" % (type(
+                    self.model_fn), type(self.reward_fn))
                 hist = None
                 this_reward, loss_and_metrics, reward_metrics = self.reward_fn.min(data=self.validation_data)
                 loss = loss_and_metrics.pop(0)
@@ -203,14 +207,14 @@ class GeneralManager(BaseNetworkManager):
                 loss_and_metrics['loss'] = loss
                 if reward_metrics:
                     loss_and_metrics.update(reward_metrics)
-
             else:
                 # train the model using Keras methods
-                print(" Trial %i: Start training model..." % trial)
+                if self.verbose:
+                    print(" Trial %i: Start training model..." % trial)
                 train_x, train_y = unpack_data(self.train_data)
                 hist = model.fit(x=train_x,
                                  y=train_y,
-                                 batch_size=self.batchsize if train_y else None,
+                                 batch_size=self.batchsize if train_y is not None else None,
                                  epochs=self.epochs,
                                  verbose=self.verbose,
                                  #shuffle=True,
@@ -244,7 +248,7 @@ class GeneralManager(BaseNetworkManager):
                 # do any post processing,
                 # e.g. save child net, plot training history, plot scattered prediction.
                 if self.store_fn:
-                    val_pred = model.predict(self.validation_data, **self.predict_kwargs)
+                    val_pred = model.predict(self.validation_data, verbose=self.verbos, **self.predict_kwargs)
                     self.store_fn(
                         trial=trial,
                         model=model,
@@ -265,7 +269,9 @@ class GeneralManager(BaseNetworkManager):
 
 
 class DistributedGeneralManager(GeneralManager):
-    def __init__(self, devices, train_data_kwargs, validate_data_kwargs, *args, **kwargs):
+    """Distributed manager will place all tensors of any child models to a pre-assigned GPU device
+    """
+    def __init__(self, devices, train_data_kwargs, validate_data_kwargs, do_resample=False, *args, **kwargs):
         self.devices = devices
         super().__init__(*args, **kwargs)
         assert devices is None or len(self.devices) == 1, "Only supports one GPU device currently"
@@ -277,17 +283,19 @@ class DistributedGeneralManager(GeneralManager):
         self.file_connected = False
         # For resampling; TODO: how to implement a Bayesian version of this?
         self.arc_records = defaultdict(dict)
+        self.do_resample = do_resample
 
     def close_handler(self):
         if self.file_connected:
             self.train_x.close()
             if self.train_y:
                 self.train_y.close()
+            self._validation_data_gen.close()
             self.train_x = None
             self.train_y = None
             self.file_connected = False
 
-    def get_rewards(self, trial, model_arc, **kwargs):
+    def get_rewards(self, trial, model_arc, remap_device=None, **kwargs):
         # TODO: use tensorflow distributed strategy
         #strategy = tf2.distribute.MirroredStrategy(devices=self.devices)
         #print('Number of devices: {} - {}'.format(strategy.num_replicas_in_sync, self.devices))
@@ -299,13 +307,16 @@ class DistributedGeneralManager(GeneralManager):
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         train_sess = tf.Session(graph=train_graph, config=config)
-        if self.devices is None:
+        # remap device will overwrite the manager device
+        if remap_device is not None:
+            target_device = remap_device
+        elif self.devices is None:
             from ..utils.gpu_query import get_idle_gpus
             idle_gpus = get_idle_gpus()
-            target_device = idle_gpus[0] 
+            target_device = idle_gpus[0]
             target_device = "/device:GPU:%i"%target_device
             self.devices = [target_device]
-            sys.stderr.write("[%s] Auto-assign device: %s"% (pid, target_device) )
+            sys.stderr.write("[%s] Auto-assign device: %s" % (pid, target_device) )
         else:
             target_device = self.devices[0]
         with train_graph.as_default(), train_sess.as_default():
@@ -321,17 +332,17 @@ class DistributedGeneralManager(GeneralManager):
                     X_train, y_train = unpack_data(self.train_data, callable_kwargs=self.train_data_kwargs)
                     self.train_x = X_train
                     self.train_y = y_train
-                    assert callable(self.validation_data)
-                    self.validation_data = self.validation_data(**self.validate_data_kwargs)
+                    assert callable(self.validation_data), "Expect validation_data to be callable, got %s" % type(self.validation_data)
+                    self._validation_data_gen = self.validation_data(**self.validate_data_kwargs)
                     self.file_connected = True
                 elapse_time = time.time() - start_time
                 sys.stderr.write("  %.3f sec\n"%elapse_time)
                 model_arc_ = tuple(model_arc)
-                if model_arc_ in self.arc_records:
-                    this_reward = self.arc_records[model_arc_]['reward'] 
-                    old_trial = self.arc_records[model_arc_]['trial'] 
-                    loss_and_metrics = self.arc_records[model_arc_]['loss_and_metrics'] 
-                    sys.stderr.write("[%s][%s] Trial %i: Re-sampled from history %i\n" % (pid, datetime.now().strftime("%H:%M:%S"), old_trial))
+                if model_arc_ in self.arc_records and self.do_resample is True:
+                    this_reward = self.arc_records[model_arc_]['reward']
+                    old_trial = self.arc_records[model_arc_]['trial']
+                    loss_and_metrics = self.arc_records[model_arc_]['loss_and_metrics']
+                    sys.stderr.write("[%s][%s] Trial %i: Re-sampled from history %i\n" % (pid, datetime.now().strftime("%H:%M:%S"), trial, old_trial))
                 else:
                     # train the model using Keras methods
                     start_time = time.time()
@@ -340,11 +351,11 @@ class DistributedGeneralManager(GeneralManager):
                                      batch_size=self.batchsize,
                                      epochs=self.epochs,
                                      verbose=self.verbose,
-                                     validation_data=self.validation_data,
+                                     validation_data=self._validation_data_gen,
                                      callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
                                                                 monitor='val_loss', verbose=self.verbose,
                                                                 save_best_only=True),
-                                                EarlyStopping(monitor='val_loss', patience=self.fit_kwargs.pop("earlystop_patience", 10), verbose=self.verbose)],
+                                                EarlyStopping(monitor='val_loss', patience=self._earlystop_patience, verbose=self.verbose)],
                                      **self.fit_kwargs
                                      )
 
@@ -357,7 +368,7 @@ class DistributedGeneralManager(GeneralManager):
                     sys.stderr.write("[%s] Postprocessing.."% pid )
                     # evaluate the model by `reward_fn`
                     this_reward, loss_and_metrics, reward_metrics = \
-                        self.reward_fn(model, self.validation_data,
+                        self.reward_fn(model, self._validation_data_gen,
                                        session=train_sess,
                                        )
                     loss = loss_and_metrics.pop(0)
@@ -370,12 +381,12 @@ class DistributedGeneralManager(GeneralManager):
                     # do any post processing,
                     # e.g. save child net, plot training history, plot scattered prediction.
                     if self.store_fn:
-                        val_pred = model.predict(self.validation_data)
+                        val_pred = model.predict(self.validation_data, verbose=self.verbose)
                         self.store_fn(
                             trial=trial,
                             model=model,
                             hist=hist,
-                            data=self.validation_data,
+                            data=self._validation_data_gen,
                             pred=val_pred,
                             loss_and_metrics=loss_and_metrics,
                             working_dir=self.working_dir,
@@ -393,10 +404,13 @@ class DistributedGeneralManager(GeneralManager):
         # clean up resources and GPU memory
         start_time = time.time()
         sys.stderr.write("[%s] Cleaning up.."%pid)
-        del model
-        del hist
-        del train_sess
-        del train_graph
+        try:
+            del train_sess
+            del train_graph
+            del model
+            del hist
+        except UnboundLocalError:
+            pass
         gc.collect()
         elapse_time = time.time() - start_time
         sys.stderr.write("  %.3f sec\n"%elapse_time)
@@ -520,7 +534,8 @@ class EnasManager(GeneralManager):
             X_val, y_val = self.validation_data[0:2]
             X_train, y_train = self.train_data
             # train the model using EnasModel methods
-            print(" Trial %i: Start training model with sample_arc..." % trial)
+            if self.verbose:
+                print(" Trial %i: Start training model with sample_arc..." % trial)
             hist = self.model.fit(X_train, y_train,
                                   batch_size=self.batchsize,
                                   nsteps=nsteps,
@@ -534,7 +549,7 @@ class EnasManager(GeneralManager):
             # do any post processing,
             # e.g. save child net, plot training history, plot scattered prediction.
             if self.store_fn:
-                val_pred = self.model.predict(X_val)
+                val_pred = self.model.predict(X_val, verbose=self.verbose)
                 self.store_fn(
                     trial=trial,
                     model=self.model,
@@ -564,212 +579,3 @@ class EnasManager(GeneralManager):
             # end
             return this_reward, loss_and_metrics
 
-
-class NetworkManager(BaseNetworkManager):
-    """
-    DEPRECATION WARNING: will be deprecated in the future; please `GeneralManager`
-    Helper class to manage the generation of subnetwork training given a dataset.
-
-    Manager creates subnetworks, training them on a dataset, and retrieving
-    rewards in the term of accuracy, which is passed to the controller RNN.
-
-    Parameters
-    ----------
-    input_state: tuple
-        specify the input shape to `model_fn`
-
-    output_state: str
-        parsed to `get_layer` for a fixed output layer
-
-    model_fn: callable
-        a function for creating Keras.Model; takes model_states, input_state, output_state, model_compile_dict
-
-    reward_fn: callable
-        a function for computing Reward; takes two arguments, model and data
-
-    store_fn: callable
-        a function for processing/plotting trained child model
-
-    epochs: int
-        number of epochs to train the subnetworks
-
-    child_batchsize: int
-        batchsize of training the subnetworks
-
-    acc_beta: float
-        exponential weight for the accuracy
-
-    clip_rewards: float
-        to clip rewards in [-range, range] to prevent large weight updates. Use when training is highly unstable.
-    """
-
-    def __init__(self,
-                 train_data,
-                 validation_data,
-                 input_state,
-                 output_state,
-                 model_compile_dict,
-                 model_fn,
-                 reward_fn,
-                 store_fn,
-                 working_dir='.',
-                 save_full_model=False,
-                 train_data_size=None,
-                 epochs=5,
-                 child_batchsize=128,
-                 tune_data_feeder=False,
-                 verbose=0):
-
-        super(NetworkManager, self).__init__()
-        warnings.warn("`NetworkManager` will be deprecated in the future; please `GeneralManager`")
-        self.train_data = train_data
-        self.validation_data = validation_data
-        self.working_dir = working_dir
-        if not os.path.exists(self.working_dir):
-            os.makedirs(self.working_dir)
-
-        self.save_full_model = save_full_model
-        self.train_data_size = len(train_data[0]) if train_data_size is None else train_data_size
-        self.epochs = epochs
-        self.batchsize = child_batchsize
-        self.tune_data_feeder = tune_data_feeder
-        self.verbose = verbose
-        self.input_state = input_state
-        self.output_state = output_state
-        self.model_compile_dict = model_compile_dict
-
-        self.model_fn = model_fn
-        self.reward_fn = reward_fn
-        self.store_fn = store_fn
-
-        self.entropy_record = []
-        # if tune data feeder, must NOT provide train data
-        assert self.tune_data_feeder == (self.train_data is None)
-
-    def get_rewards(self, trial, model_states):
-        """
-        Creates a subnetwork given the model_states predicted by the controller RNN,
-        trains it on the provided dataset, and then returns a reward.
-
-        Parameters
-        ----------
-        model_states : list
-            a list of parsed model_states obtained via an inverse mapping
-            from the StateSpace. It is in a specific order as given below.
-
-            Consider 4 states were added to the StateSpace via the `add_state`
-            method. Then the `model_states` array will be of length 4, with the
-            values of those states in the order that they were added.
-
-            If number of layers is greater than one, then the `model_states` array
-            will be of length `4 * number of layers` (in the above scenario).
-            The index from [0:4] will be for layer 0, from [4:8] for layer 1,
-            etc for the number of layers.
-
-            These action values are for direct use in the construction of models.
-
-        Returns
-        -------
-        this_reward : float
-            The reward signal as determined by ``reward_fn(model, val_data)``
-
-        loss_and_metrics : dict
-            A dictionary of auxillary information for this model, such as loss, and other metrics (as in ``tf.keras.metrics``)
-        """
-        train_graph = tf.Graph()
-        train_sess = tf.Session(graph=train_graph)
-        with train_graph.as_default(), train_sess.as_default():
-
-            if self.tune_data_feeder:
-                feeder_size = model_states[0].Layer_attributes['size']
-                if self.verbose: print("feeder_size", feeder_size)
-
-            if self.tune_data_feeder:
-                model, feeder = self.model_fn(model_states, self.input_state, self.output_state,
-                                              self.model_compile_dict)  # type: Model - compiled
-            else:
-                model = self.model_fn(model_states, self.input_state, self.output_state,
-                                      self.model_compile_dict)  # type: Model - compiled
-
-            # unpack the dataset
-            X_val, y_val = self.validation_data[0:2]
-
-            # model fitting
-            if self.tune_data_feeder:  # tuning data generator feeder
-                hist = model.fit_generator(feeder,
-                                           epochs=self.epochs,
-                                           steps_per_epoch=self.train_data_size // feeder_size,
-                                           verbose=self.verbose,
-                                           validation_data=(X_val, y_val),
-                                           callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
-                                                                      monitor='val_loss', verbose=self.verbose,
-                                                                      save_best_only=True),
-                                                      EarlyStopping(monitor='val_loss', patience=5,
-                                                                    verbose=self.verbose)],
-                                           use_multiprocessing=True,
-                                           max_queue_size=8)
-            else:
-                if type(self.train_data) == tuple or type(self.train_data) == list:
-                    # is a tuple/list of np array
-                    X_train, y_train = self.train_data
-
-                    # train the model using Keras methods
-                    print("	Start training model...")
-                    hist = model.fit(X_train, y_train,
-                                     batch_size=self.batchsize,
-                                     epochs=self.epochs,
-                                     verbose=self.verbose,
-                                     validation_data=(X_val, y_val),
-                                     callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
-                                                                monitor='val_loss', verbose=self.verbose,
-                                                                save_best_only=True),
-                                                EarlyStopping(monitor='val_loss', patience=5, verbose=self.verbose)]
-                                     )
-                else:
-                    # is a generator
-                    hist = model.fit_generator(self.train_data,
-                                               epochs=self.epochs,
-                                               steps_per_epoch=self.train_data_size // self.batchsize,
-                                               verbose=self.verbose,
-                                               validation_data=(X_val, y_val),
-                                               callbacks=[
-                                                   ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
-                                                                   monitor='val_loss',
-                                                                   verbose=self.verbose,
-                                                                   save_best_only=True),
-                                                   EarlyStopping(monitor='val_loss', patience=5, verbose=self.verbose)],
-                                               use_multiprocessing=True,
-                                               max_queue_size=8)
-
-            # load best performance epoch in this training session
-            model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
-
-            # evaluate the model by `reward_fn`
-            this_reward, loss_and_metrics, reward_metrics = self.reward_fn(model, (X_val, y_val), session=train_sess)
-            loss = loss_and_metrics.pop(0)
-            loss_and_metrics = {str(self.model_compile_dict['metrics'][i]): loss_and_metrics[i] for i in
-                                range(len(loss_and_metrics))}
-            loss_and_metrics['loss'] = loss
-            if reward_metrics:
-                loss_and_metrics.update(reward_metrics)
-
-            # do any post processing,
-            # e.g. save child net, plot training history, plot scattered prediction.
-            if self.store_fn:
-                val_pred = model.predict(X_val)
-                self.store_fn(
-                    trial=trial,
-                    model=model,
-                    hist=hist,
-                    data=self.validation_data,
-                    pred=val_pred,
-                    loss_and_metrics=loss_and_metrics,
-                    working_dir=self.working_dir,
-                    save_full_model=self.save_full_model
-                )
-
-        # clean up resources and GPU memory
-        del model
-        del hist
-        gc.collect()
-        return this_reward, loss_and_metrics

@@ -42,3 +42,11 @@ level idea is quite simple:
 With that in mind, now we start to look into what architects and modelers are currently available in AMBER, and what helpers
 they need to work together.
 
+How to Cite
+-------------
+If you find AMBER useful in your work, please cite our paper:
+
+1. Z Zhang, CY Park, CL Theesfeld, OG Troyanskaya (2021).
+"An automated framework for efficiently designing deep convolutional neural networks in genomics". Nature Machine Intelligence. Mar 15:1-9.
+[`Cover for Nature Machine Intelligence, Vol. 3, Issue 5 <https://www.nature.com/natmachintell/volumes/3/issues/5>`_]
+[`News&Views by Zhang et al. <https://www.nature.com/articles/s42256-021-00350-x>`_]

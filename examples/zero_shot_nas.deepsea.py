@@ -11,6 +11,7 @@ import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 import numpy as np
 import os
+import sys
 import copy
 import logging
 import pickle
@@ -43,8 +44,8 @@ def get_controller(model_space, session, data_description_len=3, layer_embedding
         controller = ZeroShotController(
             data_description_config={
                 "length": data_description_len,
-                "hidden_layer": {"units":8, "activation": "relu"},
-                "regularizer": {"l1":1e-8 }
+                #"hidden_layer": {"units":8, "activation": "relu"},
+                #"regularizer": {"l1":1e-8}
                 },
             share_embedding=layer_embedding_sharing,
             model_space=model_space,
@@ -57,12 +58,12 @@ def get_controller(model_space, session, data_description_len=3, layer_embedding
             kl_threshold=0.05,
             train_pi_iter=100,
             optim_algo='adam',
-            temperature=1.5,
+            temperature=0.5,
             tanh_constant=2,
             buffer_type="MultiManager",
             buffer_size=5,
-            batch_size=10,
-            use_ppo_loss=True,
+            batch_size=20,
+            use_ppo_loss=False,
             rescale_advantage_by_reward=False
         )
     return controller
@@ -76,17 +77,17 @@ def get_model_space_common():
                       "activation": "relu"}
     param_list = [
             # Block 1:
-            [
-                {"filters": 64, "kernel_size": 8},
-                {"filters": 64, "kernel_size": 14},
-                {"filters": 64, "kernel_size": 20}
-            ],
+            #[
+            #    {"filters": 64, "kernel_size": 8},
+            #    {"filters": 64, "kernel_size": 14},
+            #    {"filters": 64, "kernel_size": 20}
+            #],
             # Block 2:
-            [
-                {"filters": 128, "kernel_size": 8},
-                {"filters": 128, "kernel_size": 14},
-                {"filters": 128, "kernel_size": 20}
-            ],
+            #[
+            #    {"filters": 128, "kernel_size": 8},
+            #    {"filters": 128, "kernel_size": 14},
+            #    {"filters": 128, "kernel_size": 20}
+            #],
             # Block 3:
             [
                 {"filters": 256, "kernel_size": 8},
@@ -163,7 +164,7 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         train_data=train_data,
         validate_data_kwargs=validate_data_kwargs,
         validation_data=val_data,
-        epochs=1000,
+        epochs=50,
         child_batchsize=1000,
         reward_fn=reward_fn,
         model_fn=mb,
@@ -171,12 +172,12 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         model_compile_dict=model_compile_dict,
         working_dir=wd,
         verbose=verbose,
-        save_full_model=True,
+        save_full_model=False,
         model_space=model_space,
         fit_kwargs={
-            'steps_per_epoch': 50,
+            'steps_per_epoch': 100,
             'workers': 3, 'max_queue_size': 50,
-            'earlystop_patience': 10}
+            'earlystop_patience': 5}
     )
     return manager
 
@@ -260,6 +261,7 @@ def convert_to_dataframe(res, model_space, data_names):
 def reload_trained_controller(arg):
     wd = arg.wd #wd = "./outputs/zero_shot/"
     configs, config_keys, controller, model_space = read_configs(arg)
+    controller.load_weights(os.path.join(wd, "controller_weights.h5"))
     dfeatures = np.stack([configs[k]["dfeatures"] for k in config_keys])
     res = get_samples_controller(dfeatures, controller, model_space, T=1000)
    
@@ -280,6 +282,7 @@ def reload_trained_controller(arg):
         plt.legend(bbox_to_anchor=(1.05, 1.0), loc='upper left')
         plt.tight_layout()
         plt.savefig(os.path.join(wd, "layer_%i.png"%i), bbox_inches="tight")
+    df.to_csv(os.path.join(wd, "sampled_controller_arcs.tsv"), sep="\t")
     return res
 
 
@@ -317,6 +320,8 @@ def read_configs(arg):
     configs = configs.to_dict(orient='index')
     # Get available gpus for parsing to DistributedManager
     gpus = get_available_gpus()
+    if len(gpus) == 0:
+        gpus = [None]
     gpus_ = gpus * len(configs)
 
     manager_getter = get_manager_distributed if arg.parallel else get_manager_common
@@ -332,7 +337,7 @@ def read_configs(arg):
             d = {
                         'hdf5_fp':  arg.train_file if x=='train' else arg.val_file,
                         'y_selector': configs[k]['ds_col'],
-                        'batch_size': 512 if arg.parallel else 512*len(gpus),
+                        'batch_size': 1024 if arg.parallel else 1024*len(gpus),
                         'shuffle': x=='train',
                 }
             if arg.parallel is True:
@@ -380,9 +385,9 @@ def train_nas(arg):
                manager=[configs[k]["manager"] for k in config_keys],
                logger=logger,
                max_episode=200,
-               max_step_per_ep=3,
+               max_step_per_ep=5,
                working_dir=wd,
-               time_budget="150:00:00",
+               time_budget="72:00:00",
                with_input_blocks=False,
                with_skip_connection=False,
                save_controller_every=1,
@@ -404,19 +409,27 @@ def train_nas(arg):
     controller.save_weights(os.path.join(wd, "controller_weights.h5"))
 
 
-if __name__ == "__main__":
-    if not run_from_ipython():
-        parser = argparse.ArgumentParser(description="experimental zero-shot nas")
-        parser.add_argument("--analysis", type=str, choices=['train', 'reload'], required=True, help="analysis type")
-        parser.add_argument("--wd", type=str, default="./outputs/zero_shot/", help="working dir")
-        parser.add_argument("--parallel", default=False, action="store_true", help="Use parallel")
-        parser.add_argument("--resume", default=False, action="store_true", help="resume previous run")
-        parser.add_argument("--config-file", type=str, required=True, help="Path to the config file to use.")
-        parser.add_argument("--dfeature-name-file", type=str, required=True, help="Path to file with dataset feature names listed one per line.")
-        parser.add_argument("--train-file", type=str, required=True, help="Path to the hdf5 file of training data.")
-        parser.add_argument("--val-file", type=str, required=True, help="Path to the hdf5 file of validation data.")
-        parser.add_argument("--lockstep-sampling", default=False, action="store_true", help="Ensure same training samples used for all models.")
+def get_parser():
+    parser = argparse.ArgumentParser(description="experimental zero-shot nas")
+    parser.add_argument("--analysis", type=str, choices=['train', 'reload'], required=True, help="analysis type")
+    parser.add_argument("--wd", type=str, default="./outputs/zero_shot/", help="working dir")
+    parser.add_argument("--parallel", default=False, action="store_true", help="Use parallel")
+    parser.add_argument("--resume", default=False, action="store_true", help="resume previous run")
+    parser.add_argument("--config-file", type=str, required=True, help="Path to the config file to use.")
+    parser.add_argument("--dfeature-name-file", type=str, required=True, help="Path to file with dataset feature names listed one per line.")
+    parser.add_argument("--train-file", type=str, required=True, help="Path to the hdf5 file of training data.")
+    parser.add_argument("--val-file", type=str, required=True, help="Path to the hdf5 file of validation data.")
+    parser.add_argument("--lockstep-sampling", default=False, action="store_true", help="Ensure same training samples used for all models.")
+    return parser
 
+
+if __name__ == "__main__":
+    if run_from_ipython():
+        arg_str = """--analysis reload     --wd  ./outputs/zero_shot_deepsea/     --config-file ./data/zero_shot_deepsea/debug_feats.config.2_cats.tsv     --train-file ./data/zero_shot_deepsea/train.h5     --val-file ./data/zero_shot_deepsea/val.h5     --dfeature-name-file ./data/zero_shot_deepsea/dfeatures_ordered_list.txt     --parallel"""
+        arg_list = arg_str.split()
+        sys.argv = ['foo'] + arg_list
+    else:
+        arg = get_parser()
         arg = parser.parse_args()
 
         if arg.analysis == "train":
