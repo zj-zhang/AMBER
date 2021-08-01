@@ -74,7 +74,9 @@ class LossReward(Reward):
 
     def __call__(self, model, data, *args, **kwargs):
         X, y = unpack_data(data)
-        loss_and_metrics = model.evaluate(X, y, steps=self.validation_steps, verbose=0)
+        #loss_and_metrics = model.evaluate(X, y, steps=self.validation_steps, verbose=0)
+        # TODO: figure out what happened between Keras versions? FZZ 2021.8.1
+        loss_and_metrics = model.evaluate(X, y, verbose=0)
         # Loss function values will always be the first value
         if type(loss_and_metrics) is list:
             L = loss_and_metrics[0]
