@@ -15,7 +15,7 @@ import numpy as np
 import tensorflow.keras as keras
 from ..utils import corrected_tf as tf
 import tensorflow as tf2
-from keras import backend as K
+from tensorflow.keras import backend as K
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.models import Model
 import time
@@ -193,6 +193,7 @@ class GeneralManager(BaseNetworkManager):
             try:
                 K.set_session(train_sess)
             except RuntimeError: # keras 2.3.1 `set_session` not available for tf2.0
+                assert keras.__version__ > '2.2.5'
                 pass
             model = self.model_fn(model_arc)  # a compiled keras Model
             if model is None:

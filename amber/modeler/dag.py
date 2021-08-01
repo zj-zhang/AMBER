@@ -24,7 +24,7 @@ from .child import DenseAddOutputChild, EnasAnnModel, EnasCnnModel
 from ..architect.commonOps import get_tf_metrics, get_keras_train_ops, get_tf_layer, get_tf_loss, create_weight, \
     create_bias, batch_norm1d
 # for get layers
-from keras import backend as K
+from tensorflow.keras import backend as K
 from tensorflow.keras.layers import GlobalAveragePooling1D, GlobalMaxPooling1D, GaussianNoise
 from tensorflow.keras.layers import Dense, Dropout, Flatten
 from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
