@@ -69,15 +69,20 @@ def numpy_shuffle_in_unison(List):
 
 
 def get_tf_loss(loss, y_true, y_pred):
-    loss = loss.lower()
-    if loss == 'mse' or loss == 'mean_squared_error':
-        loss_ = tf.reduce_mean(tf.square(y_true - y_pred))
-    elif loss == 'categorical_crossentropy':
-        loss_ = tf.reduce_mean(tf.keras.losses.categorical_crossentropy(y_true, y_pred))
-    elif loss == 'binary_crossentropy':
-        loss_ = tf.reduce_mean(tf.keras.losses.binary_crossentropy(y_true, y_pred))
+    if type(loss) is str:
+        loss = loss.lower()
+        if loss == 'mse' or loss == 'mean_squared_error':
+            loss_ = tf.reduce_mean(tf.square(y_true - y_pred))
+        elif loss == 'categorical_crossentropy':
+            loss_ = tf.reduce_mean(tf.keras.losses.categorical_crossentropy(y_true, y_pred))
+        elif loss == 'binary_crossentropy':
+            loss_ = tf.reduce_mean(tf.keras.losses.binary_crossentropy(y_true, y_pred))
+        else:
+            raise Exception("cannot understand string loss: %s" % loss)
+    elif type(loss) is callable:
+        loss_ = loss(y_true, y_pred)
     else:
-        raise Exception("cannot understand string loss: %s" % loss)
+        raise TypeError("Expect loss argument to be str or callable, got %s" % type(loss))
     return loss_
 
 

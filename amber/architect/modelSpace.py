@@ -38,6 +38,9 @@ def get_layer_shortname(layer):
                                   layer.Layer_attributes['activation'])
         if 'dilation' in layer.Layer_attributes:
             sn += '_d%i' % layer.Layer_attributes['dilation']
+        if 'dilation_rate' in layer.Layer_attributes:
+            sn += '_d%i' % layer.Layer_attributes['dilation_rate']
+
     elif layer.Layer_type == 'denovo':
         sn = "%s_f%s_k%s" % ('regconv2d', layer.Layer_attributes['filters'], layer.Layer_attributes['kernel_size'])
         # sn = "%s_f%s_k%s"%('denovo', layer.Layer_attributes['filters'], layer.Layer_attributes['kernel_size'])
