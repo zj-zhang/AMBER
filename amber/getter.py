@@ -223,8 +223,8 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
         output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
         assert len(output_op)==1, "KerasModelBuilder only accepts one output; try KerasMultiIOModelBuilder for multiple outputs"
         model_fn = KerasModelBuilder(
-                inputs=inputs_op[0],
-                outputs=output_op[0],
+                inputs_op=inputs_op[0],
+                output_op=output_op[0],
                 model_space=model_space,
                 *args, **kwargs)
     elif model_fn_type == 'KerasMultiIOModelBuilder':

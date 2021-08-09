@@ -26,8 +26,10 @@ from ..architect.commonOps import get_tf_metrics, get_keras_train_ops, get_tf_la
 # for get layers
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import GlobalAveragePooling1D, GlobalMaxPooling1D, GaussianNoise
+from tensorflow.keras.layers import GlobalAveragePooling2D, GlobalMaxPooling2D
 from tensorflow.keras.layers import Dense, Dropout, Flatten
 from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, AveragePooling2D
 from tensorflow.keras.layers import Input, Lambda, Permute, BatchNormalization, Activation
 from tensorflow.keras.layers import LSTM
 from ._operators import Layer_deNovo, SeparableFC, sparsek_vec
@@ -116,6 +118,16 @@ def get_layer(x, state, with_bn=False):
         else:
             return Conv1D(**state.Layer_attributes)(x)
 
+    elif state.Layer_type == 'conv2d':
+        if with_bn is True:
+            actv_fn = state.Layer_attributes.pop('activation', 'linear')
+            x = Conv2D(**state.Layer_attributes)(x)
+            x = BatchNormalization()(x)
+            x = Activation(actv_fn)(x)
+            return x
+        else:
+            return Conv2D(**state.Layer_attributes)(x)
+
     elif state.Layer_type == 'denovo':
         x = Lambda(lambda t: K.expand_dims(t))(x)
         x = Permute(dims=(2, 1, 3))(x)
@@ -130,8 +142,14 @@ def get_layer(x, state, with_bn=False):
     elif state.Layer_type == 'maxpool1d':
         return MaxPooling1D(**state.Layer_attributes)(x)
 
+    elif state.Layer_type == 'maxpool2d':
+        return MaxPooling2D(**state.Layer_attributes)(x)
+
     elif state.Layer_type == 'avgpool1d':
         return AveragePooling1D(**state.Layer_attributes)(x)
+
+    elif state.Layer_type == 'avgpool2d':
+        return AveragePooling2D(**state.Layer_attributes)(x)
 
     elif state.Layer_type == 'lstm':
         return LSTM(**state.Layer_attributes)(x)
@@ -141,6 +159,9 @@ def get_layer(x, state, with_bn=False):
 
     elif state.Layer_type == 'globalavgpool1d':
         return GlobalAveragePooling1D()(x)
+
+    elif state.Layer_type == 'globalavgpool2d':
+        return GlobalAveragePooling2D()(x)
 
     elif state.Layer_type == 'globalmaxpool1d':
         return GlobalMaxPooling1D()(x)
