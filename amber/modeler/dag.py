@@ -166,6 +166,9 @@ def get_layer(x, state, with_bn=False):
     elif state.Layer_type == 'globalmaxpool1d':
         return GlobalMaxPooling1D()(x)
 
+    elif state.Layer_type == 'globalmaxpool2d':
+        return GlobalMaxPooling2D()(x)
+
     elif state.Layer_type == 'dropout':
         return Dropout(**state.Layer_attributes)(x)
 
