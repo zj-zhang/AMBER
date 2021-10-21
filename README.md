@@ -40,6 +40,8 @@ Genomics and Bioinformatics. For more details, please read our
 preprint [here](https://www.biorxiv.org/content/10.1101/2020.08.18.251561v1).
 
 **What's new?**
+- July 2021: We employed AMBER to automate an end-to-end, SOTA predictor for CRISPR/Cas9 editing outcomes. Check it out here: [OA Paper](https://academic.oup.com/bioinformatics/article/37/Supplement_1/i342/6319668). [GitHub code](https://github.com/vli31/CROTON/).
+- May 2021: AMBER is selected as the [Cover Art](https://www.nature.com/natmachintell/volumes/3/issues/5) for the May Issue in Nature Machine Intelligence.
 - Mar. 7, 2021: Initial testing coverage added; covered test paths include RL-NAS and ENAS to build Conv1D resnets. See [here](https://github.com/zj-zhang/AMBER/blob/master/amber/tests/integration_bionas_test.py)
 for a quick mock controller training test.
 - Nov. 24, 2020: Evan Cofer ([@evan_cofer](https://twitter.com/evan_cofer)) gave a great talk at *MLCB 2020* about a zero-shot version of AMBER, tentatively under the
