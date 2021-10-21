@@ -15,21 +15,22 @@ def get_controller(state_space, sess):
     layer given the previous layer and all previous layers (as stored in the hidden cell states). The
     controller model is trained by policy gradients as in reinforcement learning.
     """
-    with tf.device("/cpu:0"):
-        controller = GeneralController(
-            model_space=state_space,
-            lstm_size=32,
-            lstm_num_layers=1,
-            with_skip_connection=False,
-            kl_threshold=0.1,
-            train_pi_iter=100,
-            optim_algo='adam',
-            # tanh_constant=1.5,
-            buffer_size=5,  ## num of episodes saved
-            batch_size=5,
-            session=sess,
-            use_ppo_loss=True
-        )
+    use_ppo_loss = True
+    #with tf.device("/cpu:0"):
+    controller = GeneralController(
+        model_space=state_space,
+        lstm_size=32,
+        lstm_num_layers=1,
+        with_skip_connection=False,
+        kl_threshold=0.5 if use_ppo_loss else 0.01,
+        train_pi_iter=200 if use_ppo_loss else 10,
+        optim_algo='adam',
+        # tanh_constant=1.5,
+        buffer_size=5,  ## num of episodes saved
+        batch_size=5,
+        session=sess,
+        use_ppo_loss=use_ppo_loss
+    )
     return controller
 
 
@@ -63,7 +64,7 @@ def get_environment(controller, manager, should_plot, logger=None, wd='./tmp_moc
     env = ControllerTrainEnvironment(
         controller,
         manager,
-        max_episode=50,
+        max_episode=100,
         max_step_per_ep=3,
         logger=logger,
         resume_prev_run=False,

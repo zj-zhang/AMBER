@@ -41,32 +41,32 @@ from amber.bootstrap.gold_standard import get_gold_standard
 manager_replica = 1
 
 def get_controller(model_space, session, layer_embedding_sharing, data_description_len=3, is_enas=True, config_dict={}):
-    with tf.device("/cpu:0"):
-        controller = ZeroShotController(
-            data_description_config={
-                "length": data_description_len,
-                "hidden_layer": {"units":config_dict.pop("descriptor_h", 8), "activation": "relu"},
-                "regularizer": {"l1": config_dict.pop("descriptor_l1", 1e-8) }
-                },
-            model_space=model_space,
-            session=session,
-            share_embedding=layer_embedding_sharing,
-            with_skip_connection=False,
-            skip_weight=None,
-            lstm_size=config_dict.pop("lstm_size", 32),
-            lstm_num_layers=config_dict.pop("lstm_num_layers", 1),
-            kl_threshold=config_dict.pop("kl_threshold", 0.05),
-            train_pi_iter=100,
-            optim_algo='adam',
-            temperature=config_dict.pop("temperature", 1.5),
-            tanh_constant=config_dict.pop("tanh_constant", 2),
-            buffer_type="MultiManager",
-            buffer_size=1 if is_enas else 5,
-            batch_size=config_dict.pop("batch_size", 20),
-            use_ppo_loss=config_dict.pop("use_ppo_loss", True),
-            rescale_advantage_by_reward=False,
-            verbose=False
-        )
+    use_ppo_loss = config_dict.pop("use_ppo_loss", False)
+    controller = ZeroShotController(
+        data_description_config={
+            "length": data_description_len,
+            "hidden_layer": {"units":config_dict.pop("descriptor_h", 8), "activation": "relu"},
+            "regularizer": {"l1": config_dict.pop("descriptor_l1", 1e-8) }
+            },
+        model_space=model_space,
+        session=session,
+        share_embedding=layer_embedding_sharing,
+        with_skip_connection=False,
+        skip_weight=None,
+        lstm_size=config_dict.pop("lstm_size", 128),
+        lstm_num_layers=config_dict.pop("lstm_num_layers", 1),
+        kl_threshold=config_dict.pop("kl_threshold", 0.1 if use_ppo_loss else 0.01),
+        train_pi_iter=100 if use_ppo_loss else 10,
+        optim_algo='adam',
+        temperature=config_dict.pop("temperature", 2),
+        tanh_constant=config_dict.pop("tanh_constant", 2),
+        buffer_type="MultiManager",
+        buffer_size=1 if is_enas else 5,
+        batch_size=config_dict.pop("batch_size", 20),
+        use_ppo_loss=use_ppo_loss,
+        rescale_advantage_by_reward=False,
+        verbose=False
+    )
     return controller
 
 
@@ -364,7 +364,7 @@ def reload(arg, controller=None):
     return probs, actions
 
 
-def train(arg, config_dict=None, session=None, logger=None):
+def train(arg, config_dict=None, session=None, logger=None, dryrun=False):
     wd = arg.wd
     config_dict = config_dict or {}
     is_enas = arg.mode == "enas"
@@ -388,7 +388,6 @@ def train(arg, config_dict=None, session=None, logger=None):
             data_description_len=dfeatures.shape[0],
             is_enas=is_enas,
             config_dict=config_dict)
-
     if arg.mode == 'enas':
         dataset1, dataset2 = read_data()
         manager1 = get_manager_enas(train_data=dataset1['train'], val_data=dataset1['val'], controller=controller,
@@ -421,34 +420,38 @@ def train(arg, config_dict=None, session=None, logger=None):
         raise Exception("Cannot understand mode: %s"% arg.mode)
 
 
-    env = MultiManagerEnvironment(
-        data_descriptive_features= dfeatures,
-        controller=controller,
-        manager=[manager1, manager2]*manager_replica,
-        logger=logger,
-        max_episode=config_dict.pop("max_episode", 200),
-        max_step_per_ep=config_dict.pop("max_step_per_ep", 15),
-        working_dir=wd,
-        time_budget="8:00:00",
-        with_input_blocks=False,
-        with_skip_connection=False,
-        child_warm_up_epochs=2 if is_enas else 0
-    )
+    if dryrun is True:
+        print('dryrun, reload weights from %s' % wd)
+        controller.load_weights(os.path.join(wd, "controller_weights.h5"))
+        return session, controller, [manager1, manager2]
+    else:
+        env = MultiManagerEnvironment(
+            data_descriptive_features= dfeatures,
+            controller=controller,
+            manager=[manager1, manager2]*manager_replica,
+            logger=logger,
+            max_episode=config_dict.pop("max_episode", 200),
+            max_step_per_ep=config_dict.pop("max_step_per_ep", 15),
+            working_dir=wd,
+            time_budget="8:00:00",
+            with_input_blocks=False,
+            with_skip_connection=False,
+            child_warm_up_epochs=2 if is_enas else 0,
+        )
+        try:
+            env.train()
+        except KeyboardInterrupt:
+            print("user interrupted training")
+            pass
+        controller.save_weights(os.path.join(wd, "controller_weights.h5"))
+        return session, controller, [manager1, manager2]
 
-    try:
-        env.train()
-    except KeyboardInterrupt:
-        print("user interrupted training")
-        pass
-    controller.save_weights(os.path.join(wd, "controller_weights.h5"))
-    return session, controller, [manager1, manager2]
 
-
-def train_and_reload(arg):
-    B = 50
+def train_and_reload(arg, keep_exist=True):
+    B = 10
     par_wd = arg.wd
     logger = setup_logger(par_wd, verbose_level=logging.CRITICAL)
-    from zs_configs import get_zs_controller_configs
+    from zs_config import get_zs_controller_configs, analyze_sim_data
     configs_all = get_zs_controller_configs()
     gs1, gs2, arch2id = get_bootstrap_gold_standard()
     gs_list = [gs1, gs2]
@@ -461,6 +464,11 @@ def train_and_reload(arg):
         for b in range(B):
             print('-'*20 + str(b) + '-'*20)
             arg.wd = os.path.join(par_wd, "config_%i"%c, "run_%i"%b)
+            # check if has previous run data; if true, enables dry-run
+            if os.path.isdir(arg.wd) and keep_exist is True:
+                enable_dryrun = True
+            else:
+                enable_dryrun = False
             os.makedirs(arg.wd, exist_ok=True)
             graph = tf.Graph()
             session = tf.Session(graph=graph)
@@ -468,7 +476,8 @@ def train_and_reload(arg):
                 session, controller, manager_list = train(arg,
                         config_dict=configs,
                         session=session,
-                        logger=logger)
+                        logger=logger,
+                        dryrun=enable_dryrun)
                 print("-"*20 + "finish training" + "-"*20)
                 probs, actions = reload(arg, controller=controller)
                 print("-"*20 + "finish reloading" + "-"*20)
@@ -505,6 +514,7 @@ def train_and_reload(arg):
 
 
     sum_df.to_csv(os.path.join(par_wd, "sum_df.tsv"), sep="\t", index=False, float_format="%.4f")
+    analyze_sim_data(par_wd)
 
 
 

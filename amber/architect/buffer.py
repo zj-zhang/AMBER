@@ -399,7 +399,8 @@ class ReplayBuffer(Buffer):
 
 class MultiManagerBuffer:
     def __init__(self, max_size,
-                 ewa_beta=0.5,   # for multimanager, shorten the average period
+                 #ewa_beta=0.5,   # for multimanager, shorten the average period
+                 ewa_beta=None,
                  is_squeeze_dim=False,
                  rescale_advantage_by_reward=False,
                  clip_advantage=3.,

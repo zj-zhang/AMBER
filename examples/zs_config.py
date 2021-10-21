@@ -266,10 +266,10 @@ def read_metadata():
 def get_zs_controller_configs():
     _holder = OrderedDict({
             'lstm_size': [32, 128],
-            'temperature': [0.5, 1, 2],
+            'temperature': [0.5, 2],
             #'descriptor_l1': [1e-1, 1e-8],
             'use_ppo_loss': [True, False],
-            #'kl_threshold': [0.05, 0.1],
+            'kl_threshold': [0.05, 0.1],
             #'max_episodes': [200, 400],
             #'max_step_per_ep': [15, 30],
             #'batch_size': [5, 15]
