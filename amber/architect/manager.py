@@ -382,7 +382,7 @@ class DistributedGeneralManager(GeneralManager):
                     # do any post processing,
                     # e.g. save child net, plot training history, plot scattered prediction.
                     if self.store_fn:
-                        val_pred = model.predict(self.validation_data, verbose=self.verbose)
+                        val_pred = model.predict(self._validation_data_gen, verbose=self.verbose)
                         self.store_fn(
                             trial=trial,
                             model=model,

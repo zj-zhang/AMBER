@@ -526,7 +526,7 @@ class BatchedHDF5Generator(tf.keras.utils.Sequence):
         self.in_memory = in_memory
         if self.in_memory is True:
             with h5py.File(hdf5_fp, "r") as f:
-                self.h5py_store = (self.x_selector(f)[:], self.y_selector(f)[:])
+                self.hdf5_store = (self.x_selector(f)[:], self.y_selector(f)[:])
         else:
             self.hdf5_store = h5py.File(hdf5_fp, "r")
         self.batch_size = batch_size
