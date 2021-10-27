@@ -361,6 +361,15 @@ def reload(arg, controller=None):
             data=sub_df)
         ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
         plt.savefig(os.path.join(wd, "layer_%i.png"%i), bbox_inches="tight")
+
+    from amber.plots import sankey
+    token_lookup = {0:'MYC_known10', 1:'CTCF_known1'}
+    actions_df = {}
+    for i in range(len(dfeatures)):
+        actions_df[token_lookup[i]] = sankey.plot_sankey(controller, model_space, save_fn=os.path.join(wd, "sankey_%s.png"%token_lookup[i],),
+                B=500,
+                get_kwargs={'description_feature': dfeatures[[i]]})
+    sankey.plot_grouped_sankey(actions_df, model_space=model_space, save_fn=os.path.join(wd, "sankey.png"))
     return probs, actions
 
 
