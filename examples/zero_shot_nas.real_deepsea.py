@@ -19,15 +19,15 @@ import pandas as pd
 import argparse
 
 from amber.architect.controller import ZeroShotController
-from amber.architect.model_space import State, ModelSpace
+from amber.architect.modelSpace import State, ModelSpace
 
-from amber.architect.train_env import ParallelMultiManagerEnvironment
+from amber.architect.trainEnv import ParallelMultiManagerEnvironment
 from amber.architect.reward import LossAucReward, LossReward
 from amber.utils import run_from_ipython, get_available_gpus
 from amber.utils.logging import setup_logger
 
 from amber.architect.manager import GeneralManager, DistributedGeneralManager
-from amber.architect.model_space import get_layer_shortname
+from amber.architect.modelSpace import get_layer_shortname
 from amber.modeler import KerasModelBuilder
 
 from amber.utils.sampler import BatchedHDF5Generator, Selector
@@ -76,7 +76,7 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         'optimizer': 'adam',
         'metrics': ['acc']
     }
-    mb = KerasModelBuilder(inputs=input_node, outputs=output_node, model_compile_dict=model_compile_dict, model_space=model_space)
+    mb = KerasModelBuilder(inputs_op=input_node, output_op=output_node, model_compile_dict=model_compile_dict, model_space=model_space)
     manager = DistributedGeneralManager(
         devices=devices,
         train_data_kwargs=train_data_kwargs,
@@ -84,7 +84,7 @@ def get_manager_distributed(train_data, val_data, controller, model_space, wd, d
         validate_data_kwargs=validate_data_kwargs,
         validation_data=val_data,
         epochs=100,
-        child_batchsize=1000,
+        child_batchsize=None,
         reward_fn=reward_fn,
         model_fn=mb,
         store_fn='model_plot',
