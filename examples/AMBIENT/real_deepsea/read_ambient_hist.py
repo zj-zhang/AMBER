@@ -1,3 +1,6 @@
+"""read in previous train histories for 
+"""
+
 import pandas as pd
 
 
@@ -42,7 +45,7 @@ fp_dict = {
 ds = [read_single_hist(v,k) for k,v in fp_dict.items()]
 data = pd.concat(ds)
 
-data.to_csv('merged_ambient_hist.tsv', sep="\t")
+data.to_csv('./data/merged_ambient_hist.tsv', sep="\t")
 
 
 
