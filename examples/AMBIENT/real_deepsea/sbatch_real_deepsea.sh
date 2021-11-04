@@ -6,6 +6,7 @@
 #SBATCH -c 32
 
 INDEX=$1
+PARDIR="final_20211101"
 echo 'Just plain run for INDEX='"${INDEX}"
 
 if [ "$SLURM_JOB_ID" == "" ]; then
@@ -36,7 +37,7 @@ fi
 # Change directories.
 SRC_DIR='.'
 cd "${SRC_DIR}"
-mkdir -p "${SRC_DIR}"'/outputs/new_20211030/long_and_dilation.rl.'"${INDEX}"
+mkdir -p "${SRC_DIR}"'/outputs/'${PARDIR}'/long_and_dilation.rl.'"${INDEX}"
 if [ $? != 0 ]; then
     echo 'Failed changing directories to '"${SRC_DIR}"
     exit 1
@@ -82,11 +83,12 @@ fi
 # Run train script.
 /usr/bin/time -v python -u "${SRC_DIR}"'/zero_shot_nas.real_deepsea.py' \
     --model-space long_and_dilation \
-    --wd "${SRC_DIR}"'/outputs/new_20211030/long_and_dilation.rl.'"${INDEX}" \
+    --wd "${SRC_DIR}"'/outputs/'${PARDIR}'/long_and_dilation.rl.'"${INDEX}" \
     --config-file "${SRC_DIR}"'/data/zero_shot_deepsea/train_feats.config_file.tsv' \
     --train-file '/dev/shm/'"${SLURM_JOB_ID}"'/train.h5' \
     --val-file '/dev/shm/'"${SLURM_JOB_ID}"'/val.h5' \
-    --dfeature-name-file "${SRC_DIR}"'/data/zero_shot_deepsea/dfeatures_ordered_list.txt'
+    --dfeature-name-file "${SRC_DIR}"'/data/zero_shot_deepsea/dfeatures_ordered_list.txt' #\
+    #--ppo
 echo $?
 
 # Deactivate conda.
