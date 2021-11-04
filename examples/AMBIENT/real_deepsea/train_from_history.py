@@ -6,7 +6,7 @@ how much does the amount of history data influence?
 # FZZ, 2021.11.01
 
 from zs_config import read_metadata, get_model_space_long_and_dilation
-from ambient_nas import get_controller
+from ambient_nas import get_controller, read_configs
 from amber.plots import sankey
 
 import pandas as pd
@@ -124,7 +124,23 @@ def plot_sankey(controller, model_space, dfeatures, meta, wd):
     sankey.plot_grouped_sankey(actions_dict, model_space, save_fn=os.path.join(wd, "Sankey.byTarget.png"), palette=['lightcoral', 'cornflowerblue', 'khaki', 'forestgreen'])
 
 
-def test(controller, model_space, dfeatures, meta, wd, n_rep=10):
+def run_test_feats(args, n_rep=10):
+    wd = args.wd
+    outdir = os.path.join(wd, "test_feats")
+    os.makedirs(outdir, exist_ok=True)
+    test_args = argparse.Namespace(
+        train_file="data/zero_shot_deepsea/train.h5",
+        val_file="data/zero_shot_deepsea/val.h5",
+        model_space="long_and_dilation",
+        ppo=False,
+        wd=outdir,
+        config_file="data/zero_shot_deepsea/test_feats.representative_4.config_file.tsv",
+        dfeature_name_file="data/zero_shot_deepsea/dfeatures_ordered_list.txt",
+        lockstep_sampling=False
+    )
+    configs, config_keys, controller, model_space=read_configs(test_args, is_training=False)
+    controller.load_weights(os.path.join(wd, 'ambient.trainedFromHist.hdf5'))
+
     test_feats = [
         'FEAT480',  # "YY1"   "H1-hESC"
         'FEAT282',  # "DNase" "WI-38"
@@ -169,7 +185,7 @@ def test(controller, model_space, dfeatures, meta, wd, n_rep=10):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--wd', type=str, required=True)
-    ap.add_argument('--analysis', choices=['train', 'reload'], type=str, required=True)
+    ap.add_argument('--analysis', choices=['train', 'reload', 'test'], type=str, required=True)
     ap.add_argument('--downsample', default=None, type=float, required=False)
     args = ap.parse_args()
     os.makedirs(args.wd, exist_ok=True)
@@ -177,10 +193,14 @@ def main():
     if args.analysis == "train":
         meta, dfeatures, model_space, controller = prep(args.wd, is_training=True, downsample_history=args.downsample)
         custom_train(controller, args.wd)
-    else:
+    elif args.analysis == "reload":
         meta, dfeatures, model_space, controller = prep(args.wd, is_training=False, downsample_history=args.downsample)
         plot_sankey(controller=controller, model_space=model_space,
                 dfeatures=dfeatures, meta=meta, wd=args.wd)
+    elif args.analysis == "test":
+        run_test_feats(args)
+    else:
+        raise Exception("Unknown analysis arg: %s" % args.analysis)
 
 
 if __name__ == "__main__":
