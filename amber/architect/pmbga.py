@@ -97,11 +97,15 @@ class BayesProb:
 
 
 class EmpiricalGaussianKDE(BayesProb):
-    def __init__(self, integerize=False, **kwargs):
+    def __init__(self, integerize=False, lb=None, ub=None, **kwargs):
         super().__init__(**kwargs)
         self.integerize = integerize
+        self.lb = lb if lb is not None else -np.inf
+        self.ub = ub if ub is not None else np.inf
         self.data = []
         self.kernel = None
+        #center = 0 if (lb is None or ub is None) else (lb+ub)/2
+        self.update(ss.uniform.rvs(loc=self.lb, scale=self.ub-self.lb, size=1000))
 
     def update(self, data, reset=True):
         if reset is True:
@@ -115,17 +119,15 @@ class EmpiricalGaussianKDE(BayesProb):
 
     def sample(self, size=1):
         a = self.kernel.resample(size=size)
-        if self.integerize: a = int(a)
-        if size == 1:
-            return a[0]
-        else:
-            return a
-
+        a = np.clip(a, self.lb, self.ub)
+        if self.integerize is True:
+            a = int(a) if size == 1 else np.array(a, dtype=int)
+        return a
 
 class Binomial(BayesProb):
     def __init__(self, alpha, beta, n=1, **kwargs):
         super().__init__(alpha=alpha, beta=beta, **kwargs)
-        self.x = 0
+        self.x = []
         self.n = n
 
     def update(self, data):
@@ -135,11 +137,11 @@ class Binomial(BayesProb):
 
     @property
     def post_a(self):
-        return self.alpha + self.x.sum()
+        return self.alpha + sum(self.x)
 
     @property
     def post_b(self):
-        return self.beta + len(self.x)*self.n - self.x.sum()
+        return self.beta + len(self.x)*self.n - sum(self.x)
 
     def sample(self, size=1):
         a = ss.betabinom.rvs(n=self.n, a=self.post_a, b=self.post_b, size=size)
@@ -202,6 +204,22 @@ class Poisson(BayesProb):
             return a
 
 
+class ZeroTruncatedNegativeBinomial(Poisson):
+    """TODO: this is for sure to be slow...; there should be a closed-form solution to this
+    """
+    def _sample_one(self):
+        a = 0
+        while a == 0:
+            a = super().sample(size=1)
+        return a
+
+    def sample(self, size=1):
+        if size == 1:
+            return self._sample_one()
+        else:
+            return [self._sample_one() for _ in range(size)]
+
+
 class ProbaModelBuildGeneticAlgo(object):
     def __init__(self, model_space, buffer_type, buffer_size=1, batch_size=100):
         """the workhorse for building model hyperparameters using Bayesian genetic algorithms
@@ -247,7 +265,7 @@ class ProbaModelBuildGeneticAlgo(object):
                 else:
                     tmp[k] = v
             arcs_tokens.append(Operation(op.Layer_type, **tmp))
-        return arcs_tokens
+        return arcs_tokens, None
 
     def store(self, action, reward):
         """
@@ -333,8 +351,8 @@ Data:
         rate = {
             'name': rate_id,
             'state_list': [op.Layer_attributes['SOURCE'], op.Layer_attributes['TARGET']],
-            'input_range': [op.Layer_attributes['RANGE_ST'],
-                            op.Layer_attributes['RANGE_ST']+op.Layer_attributes['RANGE_D']],
+            'input_range': [int(op.Layer_attributes['RANGE_ST']),
+                            int(op.Layer_attributes['RANGE_ST']+op.Layer_attributes['RANGE_D'])],
             'weight_distr': 'nuc_distr(length, ind_scale=[0,0,0,0,])'
         }
         config['Rates'].append(rate)
@@ -345,7 +363,7 @@ Data:
     s = yaml.dump(config)
     with open(fp, 'w') as f:
         f.write(s)
-    return s
+    return config
 
 
 
