@@ -151,18 +151,22 @@ class Binomial(BayesProb):
             return a
 
 
-class TruncatedIntegerNormal(BayesProb):
+class TruncatedNormal(BayesProb):
     """TODO: this needs some better theoretic grounds; right now it seems off"""
-    def __init__(self, mu_0, sigma2_0, **kwargs):
+    def __init__(self, mu_0, sigma2_0, integerize=False, lb=None, ub=None, **kwargs):
         super().__init__(mu_0=mu_0, sigma2_0=sigma2_0, **kwargs)
         self.mu = 0
         self.n = 0
         self.sigma2 = 1
+        self.lb = lb if lb is not None else -np.inf
+        self.ub = ub if ub is not None else np.inf
+        self.integerize = integerize
 
     def update(self, data):
         self.mu = np.mean(data)
         self.n = len(data)
         self.sigma2 = np.var(data)
+        self.sigma2 = np.max(self.sigma2, 0.001)
         return self
 
     @property
@@ -172,10 +176,14 @@ class TruncatedIntegerNormal(BayesProb):
 
     @property
     def post_scale(self):
-        return np.sqrt(1 / (1/self.sigma2_0 + self.n/self.sigma2))
+        return np.sqrt(1/(1/self.sigma2_0 + self.n/self.sigma2))
 
     def sample(self, n=1, size=1):
-        return int(ss.norm.rvs(loc=self.post_loc, scale=self.post_scale, size=size))
+        a = ss.norm.rvs(loc=self.post_loc, scale=self.post_scale, size=size)
+        a = np.clip(a, self.lb, self.ub)
+        if self.integerize is True:
+            a = int(a) if size == 1 else np.array(a, dtype=int)
+        return a
 
 
 class Poisson(BayesProb):

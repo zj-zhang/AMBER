@@ -12,7 +12,7 @@ except Exception as e:
 from .wrapper import Amber
 from . import architect, modeler
 
-__version__ = "0.1.1"
+__version__ = "0.1.1-ga"
 
 __all__ = [
     'Amber',
