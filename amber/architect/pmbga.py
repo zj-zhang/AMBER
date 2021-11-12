@@ -178,8 +178,14 @@ class TruncatedNormal(BayesProb):
     def post_scale(self):
         return np.sqrt(1/(1/self.sigma2_0 + self.n/self.sigma2))
 
+    def _sample_one(self):
+        a = self.ub + 1
+        while self.lb < a < self.ub:
+            a = ss.norm.rvs(loc=self.post_loc, scale=self.post_scale, size=1)
+        return a
+
     def sample(self, n=1, size=1):
-        a = ss.norm.rvs(loc=self.post_loc, scale=self.post_scale, size=size)
+        a = self._sample_one() if size == 1 else [self._sample_one() for _ in range(size)]
         a = np.clip(a, self.lb, self.ub)
         if self.integerize is True:
             a = int(a) if size == 1 else np.array(a, dtype=int)
