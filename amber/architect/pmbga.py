@@ -29,6 +29,8 @@ class PopulationBuffer(Buffer):
     TODO: move to amber.architect.buffer
     """
     def finish_path(self, state_space, global_ep, working_dir, *args, **kwargs):
+        # TODO: handle ewa_beta in __init__
+        self.ewa_beta = 0
         # sort acts by reward
         act_reward_pairs = [(a, r) for a,r in zip(*[self.action_buffer, self.reward_buffer])]
         act_reward_pairs = sorted(act_reward_pairs, key=lambda x: x[1], reverse=True)
@@ -83,8 +85,12 @@ class PopulationBuffer(Buffer):
 
 
 class BayesProb:
-    def __init__(self, **kwargs):
+    def __init__(self, store_prior=True, **kwargs):
         self.__dict__.update(kwargs)
+        if store_prior is True:
+            self.prior_dist = self.sample(size=2000)
+        else:
+            self.prior_dict = []
 
     def update(self, data, **kwargs):
         """
@@ -96,9 +102,33 @@ class BayesProb:
         pass
 
 
+class Categorical(BayesProb):
+    def __init__(self, choices, prior_cnt, **kwargs):
+        self.obs_cnt = np.array([0]*len(choices))
+        super().__init__(choices=choices, prior_cnt=prior_cnt, **kwargs)
+        self.choice_lookup = {c:i for i,c in enumerate(self.choices)}
+
+    def update(self, data, reset=True):
+        assert all([c in self.choice_lookup for c in data]), "invalid category choices in data"
+        if reset is True:
+            self.obs_cnt = np.array([0]*len(self.choices))
+        for c in data:
+            self.obs_cnt[self.choice_lookup[c]] += 1
+        return self
+
+    def sample(self, size=1):
+        cnt = (self.obs_cnt + self.prior_cnt)
+        p = cnt/np.sum(cnt)
+        onehots = ss.multinomial.rvs(n=1, p=p, size=size)
+        cats = [self.choices[np.argmax(x)] for x in onehots]
+        if size == 1:
+            return cats[0]
+        else:
+            return cats
+
+
 class EmpiricalGaussianKDE(BayesProb):
     def __init__(self, integerize=False, lb=None, ub=None, **kwargs):
-        super().__init__(**kwargs)
         self.integerize = integerize
         self.lb = lb if lb is not None else -np.inf
         self.ub = ub if ub is not None else np.inf
@@ -106,6 +136,7 @@ class EmpiricalGaussianKDE(BayesProb):
         self.kernel = None
         #center = 0 if (lb is None or ub is None) else (lb+ub)/2
         self.update(ss.uniform.rvs(loc=self.lb, scale=self.ub-self.lb, size=1000))
+        super().__init__(**kwargs)
 
     def update(self, data, reset=True):
         if reset is True:
@@ -126,9 +157,9 @@ class EmpiricalGaussianKDE(BayesProb):
 
 class Binomial(BayesProb):
     def __init__(self, alpha, beta, n=1, **kwargs):
-        super().__init__(alpha=alpha, beta=beta, **kwargs)
         self.x = []
         self.n = n
+        super().__init__(alpha=alpha, beta=beta, **kwargs)
 
     def update(self, data):
         assert all(self.n >= np.asarray(data))
@@ -152,51 +183,98 @@ class Binomial(BayesProb):
 
 
 class TruncatedNormal(BayesProb):
-    """TODO: this needs some better theoretic grounds; right now it seems off"""
-    def __init__(self, mu_0, sigma2_0, integerize=False, lb=None, ub=None, **kwargs):
-        super().__init__(mu_0=mu_0, sigma2_0=sigma2_0, **kwargs)
+    def __init__(self, mu_0, k0, sigma2_0, v0, integerize=False, lb=None, ub=None, **kwargs):
+        """truncated normal with unknown mean and variance.
+        Conjugate prior is inverse gamma
+
+        Parameters
+        ----------
+        mu_0 : prior guess of where the mean is
+        k0 : certainty about mu_0; compare with number of data samples.
+        sigma2_0 : prior guess of variance.
+        v0 : cerntainty of sigma2 parameter; compare with number of data samples.
+
+        See Also
+        ----------
+        This code has a small typo that will mess up the variance
+        https://richrelevance.com/2013/07/31/bayesian-analysis-of-normal-distributions-with-python/
+        """
         self.mu = 0
         self.n = 0
-        self.sigma2 = 1
+        self.sigma2 = 0
         self.lb = lb if lb is not None else -np.inf
         self.ub = ub if ub is not None else np.inf
         self.integerize = integerize
+        super().__init__(mu_0=mu_0, k0=k0, sigma2_0=sigma2_0, v0=v0, **kwargs)
 
     def update(self, data):
         self.mu = np.mean(data)
         self.n = len(data)
         self.sigma2 = np.var(data)
-        self.sigma2 = np.max(self.sigma2, 0.001)
+        self.sigma2 = np.max([self.sigma2, 0.001])
         return self
 
-    @property
-    def post_loc(self):
-        return 1 / (1 / self.sigma2_0 + self.n / self.sigma2) * (
-                    self.mu_0 / self.sigma2_0 + self.mu * self.n / self.sigma2)
-
-    @property
-    def post_scale(self):
-        return np.sqrt(1/(1/self.sigma2_0 + self.n/self.sigma2))
-
     def _sample_one(self):
-        a = self.ub + 1
-        while self.lb < a < self.ub:
-            a = ss.norm.rvs(loc=self.post_loc, scale=self.post_scale, size=1)
+        kN = self.k0 + self.n
+        mN = (self.k0/kN)*self.mu_0 + (self.n/kN)*self.mu
+        vN = self.v0 + self.n
+        vN_times_sigma2N = self.v0*self.sigma2_0 + self.sigma2*self.n + (self.n*self.k0*(self.mu_0-self.mu)**2)/kN
+        alpha = vN/2
+        beta = vN_times_sigma2N/2
+        self.post_alpha = alpha
+        self.post_beta = beta
+        # heirarhical sampling
+        while 1:
+            sig_sq_samples = beta * ss.invgamma.rvs(alpha, size=1)
+            mean_norm = mN
+            #var_norm = np.sqrt(sig_sq_samples) / kN # DO NOT DIVIDE kN HERE; fzz, 2021.11.13
+            var_norm = np.sqrt(sig_sq_samples)
+            a = ss.norm.rvs(mean_norm, scale=var_norm, size=1)[0]
+            #a = ss.norm.rvs(loc=self.post_loc, scale=self.post_scale, size=1)
+            if a > self.lb and a < self.ub:
+                break
         return a
 
-    def sample(self, n=1, size=1):
+    def sample(self, size=1):
         a = self._sample_one() if size == 1 else [self._sample_one() for _ in range(size)]
-        a = np.clip(a, self.lb, self.ub)
         if self.integerize is True:
             a = int(a) if size == 1 else np.array(a, dtype=int)
         return a
 
+    @property
+    def post_loc(self):
+        kN = self.k0 + self.n
+        mN = (self.k0/kN)*self.mu_0 + (self.n/kN)*self.mu
+        return mN
+ 
+    @property
+    def post_scale(self):
+        kN = self.k0 + self.n
+        vN = self.v0 + self.n
+        vN_times_sigma2N = self.v0*self.sigma2_0 + self.sigma2*self.n + (self.n*self.k0*(self.mu_0-self.mu)**2)/kN
+        alpha = vN/2
+        beta = vN_times_sigma2N/2
+        return alpha, beta
+ 
+    #@property
+    #def post_scale(self):
+    #    return np.sqrt(1/(1/self.sigma2_0 + self.n/self.sigma2))
+
+
 
 class Poisson(BayesProb):
     def __init__(self, alpha, beta, **kwargs):
-        super().__init__(alpha=alpha, beta=beta, **kwargs)
+        """
+        Parameters
+        ----------
+        alpha : float
+            number of total occurences
+        beta : float
+            size of interval
+        """
         self.x_sum = 0
         self.n = 0
+        super().__init__(alpha=alpha, beta=beta, **kwargs)
 
     def update(self, data):
         self.x_sum = np.sum(data)
@@ -331,14 +409,15 @@ class ProbaModelBuildGeneticAlgo(object):
         # update posterior with data
         for k, v in update_dict.items():
             k.update(data=v)
+        print("datapoints: ", len(v), "/ total: ", len(np.concatenate(self.buffer.lt_nrbuffer, axis=0)))
 
-
-def convert_model_arc_to_param_file(arc, fp):
+def convert_model_arc_to_param_file(arc, fp, seqlen=50):
     """
     A temporary solution for lack of general-purpose KINN model builder;
-    save param yaml files for each configuration
+    save param yaml files for each configuration.
+    This will go to a `special` module in the future
     """
-    # SP_ATTR = ['SOURCE', 'TARGET', 'EDGE', 'CONTRIB', 'RANGE_ST', 'RANGE_D']
+    # SP_ATTR = ['SOURCE', 'TARGET', 'EDGE', 'RANGE_ST', 'RANGE_D', 'CONTRIB']
     EXP_CONFIG = """# Example of a parameter file 
 Title: 'test_1'
 Input:
@@ -356,6 +435,7 @@ Data:
     """
     config = yaml.safe_load(EXP_CONFIG)
     config['Rates'] = []
+    config['Input']['seq_length'] = seqlen
     k = 0
     contribs = []
     for op in arc:
@@ -366,11 +446,12 @@ Data:
             'name': rate_id,
             'state_list': [op.Layer_attributes['SOURCE'], op.Layer_attributes['TARGET']],
             'input_range': [int(op.Layer_attributes['RANGE_ST']),
-                            int(op.Layer_attributes['RANGE_ST']+op.Layer_attributes['RANGE_D'])],
+                            min([seqlen, int(op.Layer_attributes['RANGE_ST']+op.Layer_attributes['RANGE_D'])])
+                            ],
             'weight_distr': 'nuc_distr(length, ind_scale=[0,0,0,0,])'
         }
         config['Rates'].append(rate)
-        if op.Layer_attributes['CONTRIB'] == 1:
+        if op.Layer_attributes['TARGET'] == '0' and op.Layer_attributes.get('CONTRIB',0) == 1:
             contribs.append(rate_id)
         k += 1
     config['Data']['contrib_rate_names'] = contribs
