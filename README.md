@@ -82,7 +82,7 @@ The easiest way to install AMBER is by ``Anaconda``. It is recommended to create
 environment for AMBER:
 
 ```
-conda create --file ./templates/conda_amber.linux_env.yml
+conda env create -f=examples/DeepSEA/conda_amber.linux_env.yml 
 python setup.py develop
 ```
 
