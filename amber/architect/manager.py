@@ -187,6 +187,7 @@ class GeneralManager(BaseNetworkManager):
             A dictionary of auxillary information for this model, such as loss, and other metrics (as in ``tf.keras.metrics``)
         """
         # print('-'*80, model_arc, '-'*80)
+        tf.reset_default_graph()
         train_graph = tf.Graph()
         train_sess = tf.Session(graph=train_graph)
         with train_graph.as_default(), train_sess.as_default():
@@ -265,6 +266,12 @@ class GeneralManager(BaseNetworkManager):
         # clean up resources and GPU memory
         del model
         del hist
+        try:
+            K.clear_session()
+        except RuntimeError: # keras 2.3.1 `set_session` not available for tf2.0
+            assert keras.__version__ > '2.2.5'
+            pass
+
         gc.collect()
         return this_reward, loss_and_metrics
 
@@ -348,8 +355,8 @@ class DistributedGeneralManager(GeneralManager):
                     # train the model using Keras methods
                     start_time = time.time()
                     sys.stderr.write("[%s][%s] Trial %i: Start training model.." % (pid, datetime.now().strftime("%H:%M:%S"), trial))
-                    hist = model.fit(self.train_x, self.train_y,
-                                     batch_size=self.batchsize,
+                    hist = model.fit(x=self.train_x, y=self.train_y,
+                                     batch_size=self.batchsize if self.train_y is not None else None,
                                      epochs=self.epochs,
                                      verbose=self.verbose,
                                      validation_data=self._validation_data_gen,
@@ -537,8 +544,8 @@ class EnasManager(GeneralManager):
             # train the model using EnasModel methods
             if self.verbose:
                 print(" Trial %i: Start training model with sample_arc..." % trial)
-            hist = self.model.fit(X_train, y_train,
-                                  batch_size=self.batchsize,
+            hist = self.model.fit(x=X_train, y=y_train,
+                                  batch_size=self.batchsize if y_train is not None else None,
                                   nsteps=nsteps,
                                   epochs=self.epochs,
                                   verbose=self.verbose,
