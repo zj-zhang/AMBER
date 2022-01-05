@@ -42,11 +42,15 @@ def get_layer_shortname(layer):
             sn += '_d%i' % layer.Layer_attributes['dilation_rate']
 
     elif layer.Layer_type == 'denovo':
-        sn = "%s_f%s_k%s" % ('regconv2d', layer.Layer_attributes['filters'], layer.Layer_attributes['kernel_size'])
+        sn = "%s_f%s_k%s" % ('regconv2d',
+                             layer.Layer_attributes['filters'],
+                             layer.Layer_attributes['kernel_size'])
         # sn = "%s_f%s_k%s"%('denovo', layer.Layer_attributes['filters'], layer.Layer_attributes['kernel_size'])
 
     elif layer.Layer_type == 'dense':
-        sn = "%s_u%s_%s" % (layer.Layer_type, layer.Layer_attributes['units'], layer.Layer_attributes['activation'])
+        sn = "%s_u%s_%s" % (layer.Layer_type,
+                            layer.Layer_attributes['units'],
+                            layer.Layer_attributes['activation'])
 
     elif layer.Layer_type == 'maxpool1d' or layer.Layer_type == 'avgpool1d':
         sn = layer.Layer_type
@@ -106,7 +110,7 @@ class State(object):
         #    'flatten', 'globalavgpool1d', 'globalavgpool2d', 'globalmaxpool1d', 'globalmaxpool1d',
         #    'data', 'denovo', 'sfc',
         #    'concatenate'
-        #]
+        # ]
 
         self.Layer_type = Layer_type
         self.Layer_attributes = kwargs
@@ -118,7 +122,8 @@ class State(object):
         return self.Layer_type == other.Layer_type and self.Layer_attributes == other.Layer_attributes
 
     def __hash__(self):
-        unroll_attr = ((x, self.Layer_attributes[x]) for x in self.Layer_attributes)
+        unroll_attr = ((x, self.Layer_attributes[x])
+                       for x in self.Layer_attributes)
         return hash((self.Layer_type, unroll_attr))
 
 
@@ -304,10 +309,11 @@ class ModelSpace:
         ms = ModelSpace()
         for i in range(num_layers):
             for j in range(len(d[i])):
-                if 'shape' in d[i][j] and type(d[i][j]['shape']) is str:
+                if 'shape' in d[i][j] and isinstance(d[i][j]['shape'], str):
                     d[i][j] = ast.literal_eval(d[i][j]['shape'])
 
-            ms.add_layer(layer_id=i, layer_states=[State(**d[i][j]) for j in range(len(d[i]))])
+            ms.add_layer(layer_id=i, layer_states=[
+                         State(**d[i][j]) for j in range(len(d[i]))])
         return ms
 
 
@@ -321,13 +327,15 @@ class BranchedModelSpace(ModelSpace):
         string identifier for how to concatenate different input branches
 
     """
+
     def __init__(self, subspaces, concat_op='concatenate', **kwargs):
         super().__init__(**kwargs)
         self.subspaces = subspaces
         self.concat_op = concat_op
         # layer id to branch; expects a tuple of two elements
         # first element is type index, 0=input branch, 1=stem
-        # second element is branch index, int=index of list, None=only one space present
+        # second element is branch index, int=index of list, None=only one
+        # space present
         self._layer_to_branch = {}
         self._branch_to_layer = {}
         # delineate subspaces
