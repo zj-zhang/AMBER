@@ -1,10 +1,8 @@
-amber.plots package
+amber.plots
 ===================
 
-Submodules
-----------
 
-amber.plots.heatmap2 module
+amber.plots.heatmap2
 ---------------------------
 
 .. automodule:: amber.plots.heatmap2
@@ -12,7 +10,7 @@ amber.plots.heatmap2 module
    :undoc-members:
    :show-inheritance:
 
-amber.plots.ontology module
+amber.plots.ontology
 ---------------------------
 
 .. automodule:: amber.plots.ontology
@@ -20,7 +18,7 @@ amber.plots.ontology module
    :undoc-members:
    :show-inheritance:
 
-amber.plots.plot\_all\_stats module
+amber.plots.plot\_all\_stats
 -----------------------------------
 
 .. automodule:: amber.plots.plot_all_stats
@@ -28,7 +26,7 @@ amber.plots.plot\_all\_stats module
    :undoc-members:
    :show-inheritance:
 
-amber.plots.plotsV1 module
+amber.plots.plotsV1
 --------------------------
 
 .. automodule:: amber.plots.plotsV1

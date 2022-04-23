@@ -1,4 +1,4 @@
-amber.resources package
+amber.resources
 =======================
 
 Module contents

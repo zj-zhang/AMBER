@@ -18,8 +18,8 @@
 # -- Project information -----------------------------------------------------
 
 project = 'AMBER'
-copyright = '2020, Zijun Zhang'
-author = 'Zijun Zhang'
+copyright = '2020-2022, Frank Zijun Zhang'
+author = 'zzjfrank'
 
 
 # -- FOR compatibility with RTD
@@ -31,6 +31,7 @@ master_doc = 'index'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
     'sphinx.ext.doctest',
     'sphinx.ext.todo',
     'sphinx.ext.coverage',

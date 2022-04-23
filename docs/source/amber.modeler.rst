@@ -1,10 +1,8 @@
-amber.modeler package
+amber.modeler
 =====================
 
-Submodules
-----------
 
-amber.modeler.architectureDecoder module
+amber.modeler.architectureDecoder
 ----------------------------------------
 
 .. automodule:: amber.modeler.architectureDecoder
@@ -12,7 +10,7 @@ amber.modeler.architectureDecoder module
    :undoc-members:
    :show-inheritance:
 
-amber.modeler.child module
+amber.modeler.child
 --------------------------
 
 .. automodule:: amber.modeler.child
@@ -20,7 +18,7 @@ amber.modeler.child module
    :undoc-members:
    :show-inheritance:
 
-amber.modeler.dag module
+amber.modeler.dag
 ------------------------
 
 .. automodule:: amber.modeler.dag
@@ -28,7 +26,7 @@ amber.modeler.dag module
    :undoc-members:
    :show-inheritance:
 
-amber.modeler.enasModeler module
+amber.modeler.enasModeler
 --------------------------------
 
 .. automodule:: amber.modeler.enasModeler
@@ -36,7 +34,7 @@ amber.modeler.enasModeler module
    :undoc-members:
    :show-inheritance:
 
-amber.modeler.kerasModeler module
+amber.modeler.kerasModeler
 ---------------------------------
 
 .. automodule:: amber.modeler.kerasModeler

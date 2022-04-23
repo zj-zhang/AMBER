@@ -1,6 +1,5 @@
 """
-The :mod:`architect` module provides neural architecture search implementations and its related helpers
-
+provides search algorithms and helpers for neural network architecture
 """
 
 
@@ -33,5 +32,4 @@ __all__ = [
     'controller',
     # For legacy use
     'OperationController',
-    'NetworkManager'
 ]

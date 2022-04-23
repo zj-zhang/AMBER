@@ -1,4 +1,4 @@
-amber.bootstrap package
+amber.bootstrap
 =======================
 
 Submodules

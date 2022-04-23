@@ -1,4 +1,4 @@
-"""Module docstring: plots, todo"""
+"""Plots and visualizations commonly used in AMBER"""
 
 from .plotsV1 import sma, plot_hessian, plot_training_history
 from .plotsV1 import plot_action_weights, plot_controller_hidden_states, plot_controller_performance, \

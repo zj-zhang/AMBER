@@ -1,10 +1,8 @@
-amber.objective package
+amber.objective
 =======================
 
-Submodules
-----------
 
-amber.objective.generalObjFunc module
+amber.objective.generalObjFunc
 -------------------------------------
 
 .. automodule:: amber.objective.generalObjFunc
@@ -12,7 +10,7 @@ amber.objective.generalObjFunc module
    :undoc-members:
    :show-inheritance:
 
-amber.objective.generalObjMath module
+amber.objective.generalObjMath
 -------------------------------------
 
 .. automodule:: amber.objective.generalObjMath
@@ -20,7 +18,7 @@ amber.objective.generalObjMath module
    :undoc-members:
    :show-inheritance:
 
-amber.objective.graph module
+amber.objective.graph
 ----------------------------
 
 .. automodule:: amber.objective.graph
@@ -28,7 +26,7 @@ amber.objective.graph module
    :undoc-members:
    :show-inheritance:
 
-amber.objective.motif module
+amber.objective.motif
 ----------------------------
 
 .. automodule:: amber.objective.motif
@@ -36,7 +34,7 @@ amber.objective.motif module
    :undoc-members:
    :show-inheritance:
 
-amber.objective.motifUtils module
+amber.objective.motifUtils
 ---------------------------------
 
 .. automodule:: amber.objective.motifUtils

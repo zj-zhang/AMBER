@@ -1,4 +1,5 @@
-"""Docstring"""
+"""Main entry for AMBER"""
+
 from .wrapper import Amber
 import tensorflow as tf
 import os

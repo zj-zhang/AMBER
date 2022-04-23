@@ -1,10 +1,8 @@
-amber.architect package
+amber.architect
 =======================
 
-Submodules
-----------
 
-amber.architect.buffer module
+amber.architect.buffer
 -----------------------------
 
 .. automodule:: amber.architect.buffer
@@ -12,7 +10,7 @@ amber.architect.buffer module
    :undoc-members:
    :show-inheritance:
 
-amber.architect.commonOps module
+amber.architect.commonOps
 --------------------------------
 
 .. automodule:: amber.architect.commonOps
@@ -20,7 +18,7 @@ amber.architect.commonOps module
    :undoc-members:
    :show-inheritance:
 
-amber.architect.controller module
+amber.architect.controller
 ---------------------------------
 
 .. automodule:: amber.architect.controller
@@ -28,7 +26,7 @@ amber.architect.controller module
    :undoc-members:
    :show-inheritance:
 
-amber.architect.generalController module
+amber.architect.generalController
 ----------------------------------------
 
 .. automodule:: amber.architect.generalController
@@ -36,7 +34,7 @@ amber.architect.generalController module
    :undoc-members:
    :show-inheritance:
 
-amber.architect.manager module
+amber.architect.manager
 ------------------------------
 
 .. automodule:: amber.architect.manager

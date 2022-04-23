@@ -1,4 +1,4 @@
-amber.interpret package
+amber.interpret
 =======================
 
 Submodules

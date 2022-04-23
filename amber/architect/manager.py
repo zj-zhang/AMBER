@@ -27,7 +27,6 @@ from .store import get_store_fn
 
 __all__ = [
     'BaseNetworkManager',
-    'NetworkManager',
     'GeneralManager',
     'DistributedGeneralManager'
 ]

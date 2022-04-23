@@ -1,4 +1,4 @@
-"""modeler Module Docstring
+"""takes in an architecture, returns the machine learning model
 """
 
 from .modeler import DAGModelBuilder, EnasAnnModelBuilder, EnasCnnModelBuilder
