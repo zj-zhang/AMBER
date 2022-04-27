@@ -1,6 +1,7 @@
 """Main entry for AMBER"""
 
-from .wrapper import Amber
+from .wrapper import Amber, AmberSpecifications
+from .getter import DataToParse
 import tensorflow as tf
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -17,6 +18,8 @@ __version__ = "0.1.1"
 
 __all__ = [
     'Amber',
+    'AmberSpecifications',
+    'DataToParse',
     'architect',
     'modeler',
 ]

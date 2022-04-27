@@ -104,6 +104,7 @@ class TestEnvDryRun(testing_utils.TestCase):
 
     def tearDown(self):
         super(TestEnvDryRun, self).tearDown()
+        self.session.close()
         self.tempdir.cleanup()
 
     def test_build(self):

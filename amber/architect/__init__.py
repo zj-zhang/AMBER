@@ -3,7 +3,7 @@ provides search algorithms and helpers for neural network architecture
 """
 
 
-from .controller import GeneralController, MultiInputController, MultiIOController, OperationController
+from .controller import BaseController, GeneralController, MultiInputController, MultiIOController, OperationController
 from .modelSpace import State, ModelSpace
 from .manager import GeneralManager, EnasManager
 from .trainEnv import ControllerTrainEnvironment, EnasTrainEnv
@@ -15,6 +15,7 @@ Operation = State
 # TODO: Do not include MultiIO until its tested in multiio branch
 __all__ = [
     # funcs
+    'BaseController',
     'GeneralController',
     'Operation',
     'State',

@@ -1,6 +1,17 @@
 API Reference
 ====================
 
+.. _figure_2:
+.. figure:: /_static/img/package_layout.png
+    :align: center
+    :alt: AMBER package layout
+    :figclass: align-center
+
+    **Figure 2**
+
+Layout of essential components in AMBER.
+
+
 CommandLine Interface
 ---------------------
 If you get quick started on using AMBER, the fastest way is to
@@ -29,7 +40,7 @@ These include:
 
 
 List of Modules
--------------
+----------------
 
 .. autosummary::
     :nosignatures:

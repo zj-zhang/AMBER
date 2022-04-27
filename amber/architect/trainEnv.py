@@ -151,6 +151,15 @@ class ControllerTrainEnvironment:
         self.continuous_run = continuous_run
         self.verbose = verbose
 
+        self.time_budget = kwargs.pop('time_budget', "72:00:00")
+        if self.time_budget is None:
+            pass
+        elif type(self.time_budget) is str:
+            print("time budget set to: %s" % self.time_budget)
+            self.time_budget = sum(x * int(t) for x, t in zip([3600, 60, 1], self.time_budget.split(":")))
+        else:
+            raise Exception("time budget should be in format HH:mm:ss; cannot understand : %s" % (self.time_budget))
+
         # FOR DEPRECATED USE
         try:
             self.last_actionState_size = len(self.controller.state_space[-1])
@@ -246,6 +255,7 @@ class ControllerTrainEnvironment:
         else:
             f = open(os.path.join(self.working_dir, 'train_history.csv'), mode='w')
         writer = csv.writer(f)
+        starttime = datetime.datetime.now()
         for ep in range(self.start_ep, self.max_episode):
             try:
                 # reset env
@@ -336,6 +346,12 @@ class ControllerTrainEnvironment:
                 LOGGER.info("User disrupted training")
                 break
 
+            consumed_time = (datetime.datetime.now() - starttime).total_seconds()
+            LOGGER.info("used time: %.2f %%" % (consumed_time / self.time_budget * 100))
+            if consumed_time >= self.time_budget:
+                LOGGER.info("training ceased because run out of time budget")
+                break
+
         LOGGER.debug("Total Reward : %s" % self.total_reward)
 
         f.close()
@@ -372,7 +388,7 @@ class EnasTrainEnv(ControllerTrainEnvironment):
     """
 
     def __init__(self, *args, **kwargs):
-        self.time_budget = kwargs.pop('time_budget', "72:00:00")
+        self.time_budget = kwargs.pop('time_budget', None)
         self.child_train_steps = kwargs.pop('child_train_steps', None)
         self.child_warm_up_epochs = kwargs.pop('child_warm_up_epochs', 0)
         self.save_controller_every = kwargs.pop('save_controller_every', None)
@@ -384,13 +400,6 @@ class EnasTrainEnv(ControllerTrainEnvironment):
         else:
             warnings.warn("EnasTrainEnv: input manager is not a subclass of BaseNetworkManager; "
                           "make sure this is intended", stacklevel=2)
-        if self.time_budget is None:
-            pass
-        elif type(self.time_budget) is str:
-            print("time budget set to: %s" % self.time_budget)
-            self.time_budget = sum(x * int(t) for x, t in zip([3600, 60, 1], self.time_budget.split(":")))
-        else:
-            raise Exception("time budget should be in format HH:mm:ss; cannot understand : %s" % (self.time_budget))
         self.action_probs_record = None
 
     def train(self):

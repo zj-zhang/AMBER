@@ -1,13 +1,6 @@
 CommandLine Interface (CLI)
 =================================
 
-amber.getter
--------------
-
-.. automodule:: amber.getter
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 amber.wrapper
 --------------
@@ -16,5 +9,14 @@ amber.wrapper
    :members:
    :undoc-members:
    :show-inheritance:
+
+amber.getter
+-------------
+
+.. automodule:: amber.getter
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 
 
