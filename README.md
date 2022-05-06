@@ -1,5 +1,5 @@
 [![Documentation Status](https://readthedocs.org/projects/amber-automl/badge/?version=latest)](https://amber-automl.readthedocs.io/en/latest/?badge=latest)
-[![Coverage](https://raw.githubusercontent.com/zj-zhang/AMBER/master/amber/tests/coverage-badge.svg)]()
+[![Coverage](https://raw.githubusercontent.com/zj-zhang/AMBER/master/amber/tests/coverage.svg)]()
 [![Latest Release](https://img.shields.io/github/release/zj-zhang/AMBER.svg?label=Release)](https://github.com/zj-zhang/AMBER/releases/latest)
 [![Downloads](https://pepy.tech/badge/amber-automl)](https://pepy.tech/project/amber-automl)
 [![DOI](https://zenodo.org/badge/260604309.svg)](https://zenodo.org/badge/latestdoi/260604309)
