@@ -1,8 +1,27 @@
 amber.modeler
 =====================
 
+.. contents:: Contents
+    :local:
 
-amber.modeler.architectureDecoder
+
+Child Models: Training Interface
+--------------------------------
+
+.. automodule:: amber.modeler.child
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+DAG: Computation Graph for Child Models
+----------------------------------------
+
+.. automodule:: amber.modeler.dag
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Architecture Decoder
 ----------------------------------------
 
 .. automodule:: amber.modeler.architectureDecoder
@@ -10,51 +29,22 @@ amber.modeler.architectureDecoder
    :undoc-members:
    :show-inheritance:
 
-amber.modeler.child
---------------------------
-
-.. automodule:: amber.modeler.child
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-amber.modeler.dag
-------------------------
-
-.. automodule:: amber.modeler.dag
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-amber.modeler.enasModeler
+Model Builders
 --------------------------------
+
+enasModeler
+~~~~~~~~~~~
 
 .. automodule:: amber.modeler.enasModeler
    :members:
    :undoc-members:
    :show-inheritance:
 
-amber.modeler.kerasModeler
----------------------------------
+kerasModeler
+~~~~~~~~~~~~
 
 .. automodule:: amber.modeler.kerasModeler
    :members:
    :undoc-members:
    :show-inheritance:
 
-amber.modeler.modeler module
-----------------------------
-
-.. automodule:: amber.modeler.modeler
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-Module contents
----------------
-
-.. automodule:: amber.modeler
-   :members:
-   :undoc-members:
-   :show-inheritance:

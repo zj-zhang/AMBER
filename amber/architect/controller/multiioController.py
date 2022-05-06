@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from .generalController import GeneralController, stack_lstm
+from amber.architect.controller.generalController import GeneralController, stack_lstm
 
 
 class MultiInputController(GeneralController):
@@ -494,27 +494,31 @@ class MultiIOController(MultiInputController):
     """
     Example
     ----------
-    >>> from BioNAS.MockBlackBox.dense_skipcon_space import get_model_space
-    >>> from BioNAS.Controller.multiio_controller import MultiIOController
-    >>> import numpy as np
-    >>> model_space = get_model_space(5)
-    >>> controller = MultiIOController(model_space, output_block_unique_connection=True)
-    >>> s = controller.session
-    >>> a1, p1 = controller.get_action()
-    >>> a2, p2 = controller.get_action()
-    >>> a_batch = np.array([a1,a2])
-    >>> p_batch = [np.concatenate(x) for x in zip(*[p1,p2])]
-    >>> feed_dict = {controller.input_arc[i]: a_batch[:, [i]]
-    >>>              for i in range(a_batch.shape[1])}
-    >>> feed_dict.update({controller.advantage: np.array([1., -1.]).reshape((2,1))})
-    >>> feed_dict.update({controller.old_probs[i]: p_batch[i]
-    >>>                   for i in range(len(controller.old_probs))})
-    >>> feed_dict.update({controller.reward: np.array([1., 1.]).reshape((2,1))})
-    >>> print(s.run(controller.onehot_log_prob, feed_dict))
-    >>> for _ in range(100):
-    >>>     s.run(controller.train_op, feed_dict=feed_dict)
-    >>>     if _%20==0: print(s.run(controller.loss, feed_dict))
-    >>> print(s.run(controller.onehot_log_prob, feed_dict))
+
+    .. code-block:: python
+
+        from amber.bootstrap.dense_skipcon_space import get_model_space
+        from amber.architect.controller.multiioController import MultiIOController
+        import numpy as np
+        import tensorflow as tf
+        s = tf.Session()
+        model_space = get_model_space(5)
+        controller = MultiIOController(model_space=model_space, output_block_unique_connection=True, session=s)
+        a1, p1 = controller.get_action()
+        a2, p2 = controller.get_action()
+        a_batch = np.array([a1,a2])
+        p_batch = [np.concatenate(x) for x in zip(*[p1,p2])]
+        feed_dict = {controller.input_arc[i]: a_batch[:, [i]]
+                     for i in range(a_batch.shape[1])}
+        feed_dict.update({controller.advantage: np.array([1., -1.]).reshape((2,1))})
+        feed_dict.update({controller.old_probs[i]: p_batch[i]
+                          for i in range(len(controller.old_probs))})
+        feed_dict.update({controller.reward: np.array([1., 1.]).reshape((2,1))})
+        print(s.run(controller.onehot_log_prob, feed_dict))
+        for _ in range(100):
+            s.run(controller.train_op, feed_dict=feed_dict)
+            if _%20==0: print(s.run(controller.loss, feed_dict))
+        print(s.run(controller.onehot_log_prob, feed_dict))
 
     Notes
     ----------

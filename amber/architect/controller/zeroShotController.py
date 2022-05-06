@@ -6,16 +6,15 @@ features for the new task.
 ZZ, May 13, 2020
 """
 
-from .generalController import GeneralController
-from .commonOps import create_bias, create_weight
-from .buffer import MultiManagerBuffer
+from amber.architect.controller.generalController import GeneralController
+from amber.architect.commonOps import create_bias, create_weight
+from amber.architect.buffer import MultiManagerBuffer
 import tensorflow as tf
 from tensorflow.keras.regularizers import L1L2
 if tf.__version__.startswith('2'):
     tf.compat.v1.disable_eager_execution()
     import tensorflow.compat.v1 as tf
-import sys
-from .commonOps import get_tf_layer
+from amber.architect.commonOps import get_tf_layer
 
 
 class ZeroShotController(GeneralController):

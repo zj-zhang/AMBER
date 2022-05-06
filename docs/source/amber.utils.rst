@@ -1,6 +1,8 @@
 amber.utils
 ===================
 
+.. contents:: Contents
+    :local:
 
 amber.utils.data\_parser
 -------------------------------
@@ -74,11 +76,3 @@ amber.utils.tensorflowMem module
    :undoc-members:
    :show-inheritance:
 
-
-Module contents
----------------
-
-.. automodule:: amber.utils
-   :members:
-   :undoc-members:
-   :show-inheritance:

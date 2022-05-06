@@ -54,7 +54,7 @@ autodoc_inherit_docstrings = False
 napoleon_google_docstring = False
 napoleon_use_param = False
 napoleon_use_ivar = True
-
+add_module_names = False
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:

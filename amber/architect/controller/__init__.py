@@ -20,6 +20,7 @@ from .zeroShotController import ZeroShotController
 
 
 __all__ = [
+    'BaseController',
     'GeneralController',
     'MultiInputController',
     'MultiIOController',

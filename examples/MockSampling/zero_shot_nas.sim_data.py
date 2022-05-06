@@ -27,7 +27,7 @@ from amber.utils import run_from_ipython
 from amber.utils.logging import setup_logger
 from amber.utils.data_parser import get_data_from_simdata
 
-from amber.modeler.modeler import build_sequential_model
+from amber.modeler import build_sequential_model
 from amber.architect.manager import GeneralManager
 from amber.architect.modelSpace import get_layer_shortname
 

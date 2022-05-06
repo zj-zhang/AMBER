@@ -5,21 +5,22 @@ Training environment provides interactions between several components within arc
 """
 
 
-import os, sys
 import csv
-import datetime, time
+import datetime
 import shutil
+import sys
+import time
 import warnings
 from collections import defaultdict
 
+from amber.architect.controller.operationController import *
 from .buffer import parse_action_str, parse_action_str_squeezed
-from .operationController import *
-from ..utils.io import save_action_weights, save_stats
+from .manager import BaseNetworkManager, EnasManager
 from ..plots import plot_stats2, plot_environment_entropy, plot_controller_performance, \
     plot_action_weights, plot_wiring_weights
-from ..utils.logging import setup_logger
-from .manager import BaseNetworkManager, EnasManager
 from ..utils import get_available_gpus
+from ..utils.io import save_action_weights, save_stats
+from ..utils.logging import setup_logger
 
 
 def get_controller_states(model):

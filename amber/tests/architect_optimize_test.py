@@ -5,7 +5,10 @@ import numpy as np
 import copy
 import tempfile
 from amber.utils import testing_utils
+from parameterized import parameterized_class
 from amber import architect
+# need to test for seamlessly connecting to manager's architectureDecoder as well. FZZ 2022.5.4
+from amber.modeler import architectureDecoder
 
 
 class TestModelSpace(testing_utils.TestCase):
@@ -120,6 +123,72 @@ class TestOperationController(testing_utils.TestCase):
     def tearDown(self):
         super(TestOperationController, self).tearDown()
         self.tempdir.cleanup()
+
+
+@parameterized_class(attrs=('controller_getter', 'decoder_getter'), input_values=[
+    (architect.MultiInputController, architectureDecoder.MultiIOArchitecture),
+    (architect.MultiIOController, architectureDecoder.MultiIOArchitecture)
+])
+class TestMultiIOController(testing_utils.TestCase):
+    def setUp(self):
+        super(TestMultiIOController, self).setUp()
+        num_layers = 5
+        self.model_space, _ = testing_utils.get_example_conv1d_space(num_layers=num_layers)
+        self.sess = tf.Session()
+        self.controller = self.controller_getter(
+            model_space=self.model_space,
+            output_block_unique_connection=True,
+            session=self.sess
+        )
+        self.decoder = self.decoder_getter(
+            num_layers=len(self.model_space),
+            num_inputs=self.controller.num_input_blocks,
+            num_outputs=getattr(self.controller, 'num_output_blocks', 1)
+        )
+        self.tempdir = tempfile.TemporaryDirectory()
+
+    def test_arc_decode(self):
+        arc, prob = self.controller.get_action()
+        operations, inputs, skips, outputs = self.decoder.decode(arc)
+        self.assertLen(operations, len(self.model_space))
+        self.assertLen(inputs, len(self.model_space))
+        self.assertLen(skips, len(self.model_space)-1)
+        if self.controller.input_block_unique_connection is True:
+            self.assertEqual(np.sum(inputs), self.controller.num_input_blocks)
+        if getattr(self.controller, "output_block_unique_connection", False) is True:
+            self.assertEqual(np.sum(outputs), self.controller.num_output_blocks)
+
+    def test_optimize(self):
+        a1, p1 = self.controller.get_action()
+        a2, p2 = self.controller.get_action()
+        a_batch = np.array([a1, a2])
+        p_batch = [np.concatenate(x) for x in zip(*[p1, p2])]
+        feed_dict = {self.controller.input_arc[i]: a_batch[:, [i]]
+                     for i in range(a_batch.shape[1])}
+        # add a pseudo reward - the first arc is 1. ; second arc is -1.
+        feed_dict.update({self.controller.advantage: np.array([1., -1.]).reshape((2, 1))})
+        feed_dict.update({self.controller.old_probs[i]: p_batch[i]
+                          for i in range(len(self.controller.old_probs))})
+        feed_dict.update({self.controller.reward: np.array([1., 1.]).reshape((2, 1))})
+        old_loss = self.sess.run(self.controller.onehot_log_prob, feed_dict)
+        losses = []
+        max_iter = 100
+        for i in range(max_iter):
+            self.sess.run(self.controller.train_op, feed_dict=feed_dict)
+            if i % (max_iter//5) == 0:
+                losses.append(self.sess.run(self.controller.loss, feed_dict))
+        new_loss = self.sess.run(self.controller.onehot_log_prob, feed_dict)
+        # loss should decrease over time
+        self.assertLess(losses[-1], losses[0])
+        # 1st index positive reward should decrease/minimize its loss
+        self.assertLess(new_loss[0], old_loss[0])
+        # 2nd index negative reward should increase/increase the loss
+        self.assertLess(old_loss[1], new_loss[1])
+
+    def tearDown(self):
+        super(TestMultiIOController, self).tearDown()
+        self.tempdir.cleanup()
+        self.sess.close()
 
 
 if __name__ == '__main__':

@@ -1,6 +1,8 @@
 amber.plots
 ===================
 
+.. contents:: Contents
+    :local:
 
 amber.plots.heatmap2
 ---------------------------
@@ -35,10 +37,3 @@ amber.plots.plotsV1
    :show-inheritance:
 
 
-Module contents
----------------
-
-.. automodule:: amber.plots
-   :members:
-   :undoc-members:
-   :show-inheritance:
