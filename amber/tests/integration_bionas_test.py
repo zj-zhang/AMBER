@@ -6,8 +6,12 @@ from amber.bootstrap.simple_conv1d_space import get_state_space
 import tensorflow as tf
 import numpy as np
 import os
+
 import tempfile
 import platform
+import logging, sys
+logging.disable(sys.maxsize)
+
 if platform.system() == 'Darwin':
     os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 

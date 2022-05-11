@@ -1,50 +1,37 @@
-amber.architect package
+amber.architect
 =======================
 
-Submodules
+.. contents:: Contents
+    :local:
+
+Rationale
 ----------
 
-amber.architect.buffer module
------------------------------
+This module :mod:`amber.architect` can be devided into four major components. It's easy to imagine
+a model space to sample models from, and a training environment as a placeholder for
+different components to interact. Currently the model space is pre-defined, but we can make it
+dynamic and evolving in the future.
 
-.. automodule:: amber.architect.buffer
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The remaining two components do the most of the heavy-lifting. Search algorithms, such as a controller
+recurrent neural network vs a genetic algorithm, are separated by sub-packages (a folder with ``__init__.py``)
+and each variant of a search algorithm is a separate file. This makes it easy to re-use code within
+a search algorithm, relatively independent across different searchers, and let them share the same
+configurations of model space and training environments (although it's possible only certain combinations
+of searcher - model space - train env are viable).
 
-amber.architect.commonOps module
---------------------------------
+The manager is perhaps the most tedious. The general workflow is:
 
-.. automodule:: amber.architect.commonOps
-   :members:
-   :undoc-members:
-   :show-inheritance:
+    1. takes a model architecture :obj:`arch` as input,
+    2. passes :obj:`arch` to the modeler :obj:`model=amber.modeler.model_fn(arch)`,
+    3. trains the model :obj:`model.fit(train_data)`,
+    4. evaluates the model's reward :obj:`reward=reward_fn(model)`,
+    5. stores the model in a buffer :obj:`buffer_fn.store(model, reward)`,
+    6. returns the reward signal to the search algorithm.
 
-amber.architect.controller module
----------------------------------
+Each of the steps has variantions, but the overall layout should almost always stay as described above.
 
-.. automodule:: amber.architect.controller
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
-amber.architect.generalController module
-----------------------------------------
-
-.. automodule:: amber.architect.generalController
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-amber.architect.manager module
-------------------------------
-
-.. automodule:: amber.architect.manager
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-amber.architect.modelSpace module
+Model Space
 ---------------------------------
 
 .. automodule:: amber.architect.modelSpace
@@ -52,39 +39,8 @@ amber.architect.modelSpace module
    :undoc-members:
    :show-inheritance:
 
-amber.architect.multiioController module
-----------------------------------------
 
-.. automodule:: amber.architect.multiioController
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-amber.architect.operationController module
-------------------------------------------
-
-.. automodule:: amber.architect.operationController
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-amber.architect.reward module
------------------------------
-
-.. automodule:: amber.architect.reward
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-amber.architect.store module
-----------------------------
-
-.. automodule:: amber.architect.store
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-amber.architect.trainEnv module
+Train Environment
 -------------------------------
 
 .. automodule:: amber.architect.trainEnv
@@ -92,19 +48,85 @@ amber.architect.trainEnv module
    :undoc-members:
    :show-inheritance:
 
-amber.architect.zeroShotController module
------------------------------------------
 
-.. automodule:: amber.architect.zeroShotController
+Controller(s)
+---------------------------------
+
+.. automodule:: amber.architect.controller
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+General Controller
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: amber.architect.controller.generalController
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+MultiIO Controller
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: amber.architect.controller.multiioController
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Operation Controller
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: amber.architect.controller.operationController
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Zero-Shot Controller (AMBIENT)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: amber.architect.controller.zeroShotController
    :members:
    :undoc-members:
    :show-inheritance:
 
 
-Module contents
----------------
+Manager
+------------------------------
 
-.. automodule:: amber.architect
+.. automodule:: amber.architect.manager
    :members:
    :undoc-members:
    :show-inheritance:
+
+Buffer
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: amber.architect.buffer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Reward
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: amber.architect.reward
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Store
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: amber.architect.store
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Common Operations
+--------------------------------
+
+.. automodule:: amber.architect.commonOps
+   :members:
+   :undoc-members:
+   :show-inheritance:
+

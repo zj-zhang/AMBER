@@ -5,21 +5,22 @@ Training environment provides interactions between several components within arc
 """
 
 
-import os, sys
 import csv
-import datetime, time
+import datetime
 import shutil
+import sys
+import time
 import warnings
 from collections import defaultdict
 
+from amber.architect.controller.operationController import *
 from .buffer import parse_action_str, parse_action_str_squeezed
-from .operationController import *
-from ..utils.io import save_action_weights, save_stats
+from .manager import BaseNetworkManager, EnasManager
 from ..plots import plot_stats2, plot_environment_entropy, plot_controller_performance, \
     plot_action_weights, plot_wiring_weights
-from ..utils.logging import setup_logger
-from .manager import BaseNetworkManager, EnasManager
 from ..utils import get_available_gpus
+from ..utils.io import save_action_weights, save_stats
+from ..utils.logging import setup_logger
 
 
 def get_controller_states(model):
@@ -150,6 +151,16 @@ class ControllerTrainEnvironment:
         self.initial_buffering_queue = min(initial_buffering_queue, controller.buffer.max_size)
         self.continuous_run = continuous_run
         self.verbose = verbose
+        self.logger = logger if logger else setup_logger(working_dir)
+
+        self.time_budget = kwargs.pop('time_budget', "72:00:00")
+        if self.time_budget is None:
+            pass
+        elif type(self.time_budget) is str:
+            self.logger.info("time budget set to: %s" % self.time_budget)
+            self.time_budget = sum(x * int(t) for x, t in zip([3600, 60, 1], self.time_budget.split(":")))
+        else:
+            raise Exception("time budget should be in format HH:mm:ss; cannot understand : %s" % (self.time_budget))
 
         # FOR DEPRECATED USE
         try:
@@ -159,10 +170,12 @@ class ControllerTrainEnvironment:
             self.last_actionState_size = 1
 
         self.resume_prev_run = resume_prev_run
-        self.logger = logger if logger else setup_logger(working_dir)
         if issubclass(type(manager), BaseNetworkManager):
             if os.path.realpath(manager.working_dir) != os.path.realpath(self.working_dir):
                 warnings.warn("manager working dir and environment working dir are different.", stacklevel=2)
+        elif type(self.manager) in (tuple, list):
+            assert all([issubclass(type(x), BaseNetworkManager) for x in self.manager]), \
+                TypeError("One or more managers in the lists are not BaseNetworkManager subclass")
         else:
             warnings.warn("ControllerTrainEnvironment: input manager is not a subclass of BaseNetworkManager; "
                           "make sure this is intended", stacklevel=2)
@@ -246,6 +259,7 @@ class ControllerTrainEnvironment:
         else:
             f = open(os.path.join(self.working_dir, 'train_history.csv'), mode='w')
         writer = csv.writer(f)
+        starttime = datetime.datetime.now()
         for ep in range(self.start_ep, self.max_episode):
             try:
                 # reset env
@@ -336,6 +350,12 @@ class ControllerTrainEnvironment:
                 LOGGER.info("User disrupted training")
                 break
 
+            consumed_time = (datetime.datetime.now() - starttime).total_seconds()
+            LOGGER.info("used time: %.2f %%" % (consumed_time / self.time_budget * 100))
+            if consumed_time >= self.time_budget:
+                LOGGER.info("training ceased because run out of time budget")
+                break
+
         LOGGER.debug("Total Reward : %s" % self.total_reward)
 
         f.close()
@@ -372,7 +392,7 @@ class EnasTrainEnv(ControllerTrainEnvironment):
     """
 
     def __init__(self, *args, **kwargs):
-        self.time_budget = kwargs.pop('time_budget', "72:00:00")
+        self.time_budget = kwargs.pop('time_budget', None)
         self.child_train_steps = kwargs.pop('child_train_steps', None)
         self.child_warm_up_epochs = kwargs.pop('child_warm_up_epochs', 0)
         self.save_controller_every = kwargs.pop('save_controller_every', None)
@@ -381,16 +401,12 @@ class EnasTrainEnv(ControllerTrainEnvironment):
         if issubclass(type(self.manager), BaseNetworkManager):
             if self.manager.model_fn.controller is None:
                 self.manager.model_fn.set_controller(self.controller)
+        elif type(self.manager) in (tuple, list):
+            assert all([issubclass(type(x), BaseNetworkManager) for x in self.manager]), \
+                TypeError("One or more managers in the lists are not BaseNetworkManager subclass")
         else:
             warnings.warn("EnasTrainEnv: input manager is not a subclass of BaseNetworkManager; "
                           "make sure this is intended", stacklevel=2)
-        if self.time_budget is None:
-            pass
-        elif type(self.time_budget) is str:
-            print("time budget set to: %s" % self.time_budget)
-            self.time_budget = sum(x * int(t) for x, t in zip([3600, 60, 1], self.time_budget.split(":")))
-        else:
-            raise Exception("time budget should be in format HH:mm:ss; cannot understand : %s" % (self.time_budget))
         self.action_probs_record = None
 
     def train(self):
@@ -647,6 +663,10 @@ class MultiManagerEnvironment(EnasTrainEnv):
                 break
 
         self.logger.debug("Total Reward : %s" % self.total_reward)
+        # save the controller states and weights
+        if self.save_controller:
+            self.controller.save_weights(
+                os.path.join(self.working_dir, "controller_weights.h5"))
         f.close()
         return action_probs_record, loss_and_metrics_list
 
@@ -672,6 +692,7 @@ class MultiManagerEnvironment(EnasTrainEnv):
                             **save_kwargs)
         save_stats(loss_and_metrics_list, self.working_dir)
 
+        # MultiManagerEnv actually needs some specialized plotters.. but fine for now. FZZ 2022.5.10
         if self.should_plot:
             plot_action_weights(self.working_dir)
             plot_wiring_weights(self.working_dir, self.with_input_blocks, self.with_skip_connection)
@@ -885,6 +906,9 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
 
         self.logger.debug("Total Reward : %s" % self.total_reward)
         f.close()
+        if self.save_controller:
+            self.controller.save_weights(
+                os.path.join(self.working_dir, "controller_weights.h5"))
         return action_probs_record, loss_and_metrics_list
 
     def restore(self):

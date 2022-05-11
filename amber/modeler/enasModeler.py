@@ -5,6 +5,7 @@ from .dag import get_dag, get_layer
 from .dag import ComputationNode
 from .dag import EnasConv1dDAG
 
+
 class ModelBuilder:
     """Scaffold of Model Builder
     """
@@ -17,6 +18,9 @@ class ModelBuilder:
 
 
 class DAGModelBuilder(ModelBuilder):
+    """
+
+    """
     def __init__(self, inputs_op, output_op,
                  model_space, model_compile_dict,
                  num_layers=None,
@@ -65,6 +69,7 @@ class DAGModelBuilder(ModelBuilder):
         return model
 
     def _get_input_nodes(self):
+        """Convert input Operation to a list of ComputationNode"""
         input_nodes = []
         for node_op in self.inputs_op:
             node = ComputationNode(node_op, node_name=node_op.Layer_attributes['name'])
@@ -72,6 +77,7 @@ class DAGModelBuilder(ModelBuilder):
         return input_nodes
 
     def _get_output_node(self):
+        """Convert output Operation to ComputationNode"""
         if type(self.output_op) is list:
             raise Exception("DAG currently does not accept output_op in List")
         output_node = ComputationNode(self.output_op, node_name='output')
@@ -79,24 +85,32 @@ class DAGModelBuilder(ModelBuilder):
 
 
 class EnasAnnModelBuilder(DAGModelBuilder):
-    """This function builds an Artificial Neural net.
+    """This function builds a feed-forward neural net (FFNN).
 
     It uses tensorflow low-level API to define a big graph, where
     each child network architecture is a subgraph in this big DAG.
 
     Parameters
     ----------
-    session
-    controller
-    dag_func
-    l1_reg
-    l2_reg
-    with_output_blocks
-    use_node_dag
-    feature_model
-    dag_kwargs
-    args
-    kwargs
+    session : tf.Session
+        tensorflow session for building enas DAG
+    controller : amber.architect.MultiIOController
+        controller instance
+    dag_func : str
+        string name for DAG to use
+    l1_reg : float
+        regularizer strength for L1
+    l2_reg : float
+        regularizaer strength for L2
+    with_output_blocks : bool
+        if True, add another architecture representation vector, to connect intermediate layers to output blocks.
+    use_node_dag : bool
+        if True, use another :class:`amber.modeler.InputBlockDAG` to represent the computation graph
+    feature_model : tf.keras.Model, or None
+        If specified, use the provided upstream model for pre-transformations of inputs,
+        instead of taking the raw input features.
+    dag_kwargs : dict, or None
+        keyword arugments passed to initializing DAG
     """
     def __init__(self, session=None, controller=None, dag_func='EnasAnnDAG', l1_reg=0.0, l2_reg=0.0,
                  with_output_blocks=False,
@@ -119,7 +133,8 @@ class EnasAnnModelBuilder(DAGModelBuilder):
         self.dag_kwargs = dag_kwargs or {}
         self.with_output_blocks = with_output_blocks
         assert not (
-                    self.with_output_blocks and self.use_node_dag), "Currently `use_node_dag` is incompatible with `with_output_blocks`"
+                    self.with_output_blocks and self.use_node_dag), \
+            "Currently `use_node_dag` is incompatible with `with_output_blocks`"
         # END NEW ARGS
         # -----
         self._build_dag()

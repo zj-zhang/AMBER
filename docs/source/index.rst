@@ -42,14 +42,15 @@ or `Contact Me <https://zj-zhang.github.io>`_ directly.
 
 .. toctree::
    :maxdepth: 1
-   :caption: Packages
+   :caption: Package
 
    modules
+   amber-cli
    amber.architect
    amber.modeler
-   amber.interpret
    amber.utils
    amber.plots
+   under-dev
 
 
 Indices and tables

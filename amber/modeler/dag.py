@@ -2,22 +2,14 @@
 as a directed-acyclic graph from a list of 
 architecture selections
 
-Notes
------
-this is an upgrade of the `NetworkManager` class
 """
-
-# Author: ZZJ
-# Initial Date: June 12, 2019
-# Last update:  Aug. 18, 2020
 
 import numpy as np
 import warnings
 from ..utils import corrected_tf as tf
 from tensorflow.keras.layers import Concatenate
 from tensorflow.keras.models import Model
-# TODO: need to clean up `State` as `Operation`
-from ..architect.modelSpace import State
+from ..architect.modelSpace import State, ModelSpace
 
 # for general child
 from .child import DenseAddOutputChild, EnasAnnModel, EnasCnnModel
@@ -184,10 +176,31 @@ def get_layer(x, state, with_bn=False):
         return Concatenate(**state.Layer_attributes)(x)
 
     else:
-        raise Exception('Layer_type "%s" is not understood' % state.Layer_type)
+        raise ValueError('Layer_type "%s" is not understood' % state.Layer_type)
 
 
 class ComputationNode:
+    """Computation Node is an analog to :class:`tf.keras.layers.Layer` to make branching and multiple input/output
+    feed-forward neural network (FFNN) models, represented by a directed-acyclic graph (DAG) in AMBER.
+
+    The reason we need ComputationNode is that an :class:`amber.architect.Operation` focus on token-level computations,
+    but does not represent the connectivity patterns well enough. When it comes to building DAG-represented FFNNs, we need
+    more fine-grained control over the graph connectivities and validities.
+
+    This is a helper that provides building blocks for :class:`amber.modeler.DAG` to use, and is not intended to be
+    used by itself.
+
+    See also :class:`amber.modeler.dag.DAG`.
+
+    Parameters
+    ----------
+    operation: amber.architect.Operation
+        defines the operation in current layer
+    node_name: str
+        name of the node
+    merge_op: tf.keras.layers.merge, optional
+        operation for merging multiple inputs
+    """
     def __init__(self, operation, node_name, merge_op=Concatenate):
         assert type(operation) is State, "Expect operation is of type amber.architect.State, got %s" % type(
             operation)
@@ -203,9 +216,7 @@ class ComputationNode:
     def build(self):
         """Build the keras layer with merge operations if applicable
 
-        Notes
-        -----
-        when building a node, its parents must all be built already
+        when building a node, its parents must all be built already.
         """
         if self.parent:
             if len(self.parent) > 1:
@@ -218,26 +229,53 @@ class ComputationNode:
 
 
 class DAG:
-    def __init__(self, arc_seq, num_layers, model_space, input_node, output_node,
+    """Construct a feed-forward neural network (FFNN) represented by a directed acyclic graph (DAG).
+
+    While a simple, linear and sequential neural network model is also a DAG, here we are trying to build more flexible,
+    generalizable branching models. In other words, the primary use is to construct a block-sparse FFNN, to create an
+    specific inductive bias for a specific question; although one may use it in conv nets or other architectures stronger with
+    inductive biases as well.
+
+    Note that we are re-using the skip connection searching algorithms designed for building residual connections,
+    but instead use it to build inter-layer connections without the "stem" connections in a ResNet. That is, the residual
+    connections summed to the output of the currenct layer is now concatenated as input to the layer. By construction,
+    it is possible that a node has no input, and these nodes will be removed in :func:`_remove_disconnected_nodes`.
+
+    Parameters
+    ----------
+    arc_seq : list, or numpy.array
+        a list of integers, each is a token for neural network architecture specific to a model space
+    model_space : amber.architect.ModelSpace
+        model space to sample model architectures from. Necessary for mapping token integers to operations.
+    input_node : amber.modeler.ComputationNode, or list
+        a list of input layers/nodes; in case of a single input node, use a single element list
+    output_node : amber.modeler.ComputationNode, or list
+        output node configuration
+    with_skip_connection : bool
+        if False, disable inter-layers connections (i.e. skip-layer connections). Default is True.
+    with_input_blocks : bool
+        if False, disable connecting partial inputs to intermediate layers. Default is True.
+
+    Returns
+    --------
+    model : tf.keras.models.Model
+        a constructed model using keras Model API
+    """
+    def __init__(self, arc_seq, model_space, input_node, output_node,
                  with_skip_connection=True,
-                 with_input_blocks=True):
-        assert all([not x.is_built for x in input_node]), "input_node must not have been built"
-        if type(output_node) is list:
-            assert all([not x.is_built for x in output_node]), "output_node must not have been built"
-
-            # seems this Base Class only handles a single output node.. so need to update here
-            # TODO: for muliple input/output nodes, implement a new Class for graphing
-            # ZZ, 2020.3.2
-            assert len(output_node) == 1
-            output_node = output_node[0]
-
-        else:
-            assert not output_node.is_built, "output_node must not have been built"
+                 with_input_blocks=True, *args, **kwargs):
         self.arc_seq = np.array(arc_seq)
-        self.num_layers = num_layers
         self.model_space = model_space
+        assert isinstance(self.model_space, ModelSpace), \
+            TypeError(f"model_space must be of Type amber.architect.ModelSpace; got {type(self.model_space)}")
+        self.num_layers = len(self.model_space)
         self.input_node = input_node
+        if isinstance(self.input_node, ComputationNode): self.input_node = [self.input_node]
+        assert all([not x.is_built for x in self.input_node]), ValueError("input_node must not have been built")
         self.output_node = output_node
+        assert isinstance(self.output_node, ComputationNode), \
+            TypeError(f"output_node must be of Type amber.architect.State; got {type(self.output_node)}")
+        assert not output_node.is_built, ValueError("output_node must not have been built")
         self.with_skip_connection = with_skip_connection
         self.with_input_blocks = with_input_blocks
         self.model = None
@@ -254,18 +292,13 @@ class DAG:
         assert type(self.output_node) is ComputationNode
 
         nodes = self._init_nodes()
-        nodes = self._prune_nodes(nodes)
+        nodes = self._remove_disconnected_nodes(nodes)
 
         # build order is essential here
         node_list = self.input_node + nodes + [self.output_node]
         for node in node_list:
-            try:
-                node.build()
-            except Exception as e:
-                print(node.node_name)
-                print([x.node_name for x in node.parent])
-                print([x.node_name for x in node.child])
-                raise e
+            node.build()
+
         self.model = Model(inputs=[x.operation_layer for x in self.input_node],
                            outputs=[self.output_node.operation_layer])
         self.nodes = nodes
@@ -311,7 +344,7 @@ class DAG:
         # print('initial', nodes)
         return nodes
 
-    def _prune_nodes(self, nodes):
+    def _remove_disconnected_nodes(self, nodes):
         """now need to deal with loose-ends: node with no parent, or no child
         """
         # CHANGE: add regularization to default input
@@ -368,7 +401,37 @@ class DAG:
         return nodes
 
 
+# these names are very confusing... FZZ 2022.5.8
 class InputBlockDAG(DAG):
+    """Add intermediate outputs to each level of network hidden layers. Based on DAG
+
+    Compared to DAG, the difference is best illustrated by an example::
+
+        |Input_A  Input_B   Input_C  Input_D      |
+        |-------  -------   -------  -------      |
+        |    |      |           |      |          |
+        |   Hidden_AB          Hidden_CD          |
+        |    /       |         |      \\           |
+        |   /        Hidden_ABCD       \\          |
+        | add_out1      |             add_out2    |
+        |            Hidden_2                     |
+        |               |                         |
+        |             Output                      |
+
+    In :class:`amber.modeler.dag.DAG`, *add_out1* and *add_out2* will NOT be added. The loss and out1 and out2 will be
+    the same as output, but with a lower weight of 0.1.
+
+    See also
+    ----------
+    :class:`amber.modeler.dag.DAG`: the base class.
+    :class:`amber.modeler.dag.InputBlockAuxLossDAG`: add more auxillary outputs whenever two inputs meet.
+
+
+    Returns
+    -------
+    model : amber.modeler.child.DenseAddOutputChild
+        a subclass of keras Model API with multiple intermediate outputs predicting the same label
+    """
     def __init__(self, add_output=True, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert self.with_input_blocks, "`InputBlockDAG` class only handles `with_input_blocks=True`"
@@ -385,18 +448,13 @@ class InputBlockDAG(DAG):
         assert type(self.output_node) is ComputationNode
 
         nodes = self._init_nodes()
-        nodes = self._prune_nodes(nodes)
+        nodes = self._remove_disconnected_nodes(nodes)
 
         # build order is essential here
         node_list = self.input_node + nodes + self.added_output_nodes + [self.output_node]
         for node in node_list:
-            try:
-                node.build()
-            except:
-                print(node.node_name)
-                print([x.node_name for x in node.parent])
-                print([x.node_name for x in node.child])
-                raise Exception('above')
+            node.build()
+
         self.nodes = nodes
         self.model = DenseAddOutputChild(
             inputs=[x.operation_layer for x in self.input_node],
@@ -455,7 +513,36 @@ class InputBlockDAG(DAG):
         return nodes
 
 
+# these names are very confusing... FZZ 2022.5.8
 class InputBlockAuxLossDAG(InputBlockDAG):
+    """Add intermediate outputs whenever two input blocks first meet and merge.
+
+    Compared to InputBlockDAG, the difference is best illustrated by an example::
+
+        |Input_A  Input_B   Input_C  Input_D      |
+        |-------  -------   -------  -------      |
+        |    |      |           |      |          |
+        |   Hidden_AB          Hidden_CD          |
+        |    /       |         |      \\           |
+        |   /        Hidden_ABCD       \\          |
+        | add_out1      |    \\        add_out2    |
+        |           Hidden_2  add_out3            |
+        |               |                         |
+        |             Output                      |
+
+    In :class:`amber.modeler.dag.InputBlockDAG`, *add_out3* will NOT be added, since only immediate layers to input blocks
+    (i.e. Hidden_AB and Hidden_CD) will be added output.
+
+    See also
+    ---------
+    :class:`amber.modeler.dag.DAG`.
+    :class:`amber.modeler.dag.InputBlockDAG`.
+
+    Returns
+    -------
+    model : amber.modeler.child.DenseAddOutputChild
+        a subclass of keras Model API with multiple intermediate outputs predicting the same label
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert self.add_output, "InputBlockAuxLossDAG must have `add_output=True`"
@@ -471,18 +558,13 @@ class InputBlockAuxLossDAG(InputBlockDAG):
         assert type(self.output_node) is ComputationNode
 
         nodes = self._init_nodes()
-        nodes = self._prune_nodes(nodes)
+        nodes = self._remove_disconnected_nodes(nodes)
 
         # build order is essential here
         node_list = self.input_node + nodes + self.added_output_nodes + [self.output_node]
         for node in node_list:
-            try:
-                node.build()
-            except Exception as e:
-                print(node.node_name)
-                print([x.node_name for x in node.parent])
-                print([x.node_name for x in node.child])
-                raise e
+            node.build()
+
         self.nodes = nodes
         self.model = DenseAddOutputChild(
             inputs=[x.operation_layer for x in self.input_node],
@@ -582,6 +664,44 @@ class InputBlockAuxLossDAG(InputBlockDAG):
 
 
 class EnasAnnDAG:
+    """EnasAnnDAG is a DAG model builder for using the weight sharing method for child models.
+
+    This class deals with the feed-forward neural network (FFNN). The weight sharing is between all Ws for
+    different hidden units sizes - that is, a larger hidden size always includes the smaller ones.
+
+    Parameters
+    -----------
+    model_space: amber.architect.ModelSpace
+        model space to search architectures from
+    input_node: amber.architect.Operation, or list
+        one or more input layers, each is a block of input features
+    output_node: amber.architect.Operation, or list
+        one or more output layers, each is a block of output labels
+    model_compile_dict: dict
+        compile dict for child models
+    session: tf.Session
+        tensorflow session that hosts the computation graph; should use the same session as controller for
+        sampling architectures
+    with_skip_connection: bool
+        if False, disable inter-layer connections. Default is True.
+    with_input_blocks: bool
+        if False, disable connecting input layers to hidden layers. Default is True.
+    with_output_blocks: bool
+        if True, add another architecture representation vector, to connect intermediate layers to output
+        blocks.
+    controller: amber.architect.MultiIOController, or None
+        connect a controller to enable architecture sampling; if None, can only train fixed architecture manually
+        provided
+    feature_model : tf.keras.Model, or None
+        If specified, use the provided upstream model for pre-transformations of inputs, instead of taking
+        the raw input features.
+    feature_model_trainable: bool, or None
+        Boolean of whether pass gradients to the feature model.
+    child_train_op_kwargs: dict, or None
+        Keyword arguments passed to :func:`model.fit`.
+    name: str
+        a string name for this instance
+    """
     def __init__(self,
                  model_space,
                  input_node,
@@ -598,20 +718,7 @@ class EnasAnnDAG:
                  feature_model_trainable=None,
                  child_train_op_kwargs=None,
                  name='EnasDAG'):
-        """
-        EnasAnnDAG is a DAG model builder for using the weight sharing framework. This class deals with the vanilla
-        Artificial neural network. The weight sharing is between all Ws for different hidden units sizes - that is,
-        a larger hidden size always includes the smaller ones.
-        Args:
-            model_space:
-            input_node:
-            output_node:
-            model_compile_dict: compile dict for child models
-            session: tf.Session
-            with_skip_connection:
-            with_input_blocks:
-            name:
-        """
+
         #assert with_skip_connection == with_input_blocks == True, \
         #    "EnasAnnDAG must have with_input_blocks and with_skip_connection"
         self.model_space = model_space
@@ -663,7 +770,7 @@ class EnasAnnDAG:
         if node_builder is not None and arc_seq is not None:
             nb = node_builder(arc_seq)
             nodes = nb._init_nodes()
-            nodes = nb._prune_nodes(nodes)
+            nodes = nb._remove_disconnected_nodes(nodes)
             nodes = nb.input_node + nodes + [nb.output_node]
             model.nodes = nodes
         return model
@@ -681,7 +788,9 @@ class EnasAnnDAG:
          and configure internal attr. like masking steps"""
         # check the consistency of with_output_blocks and output_op
         if not self.with_output_blocks and len(self.output_node)>1:
-            warnings.warn("You specified `with_output_blocks=False`, but gave a List of output operations of length %i"%len(self.output_node), stacklevel=2)
+            warnings.warn(
+                "You specified `with_output_blocks=False`, but gave a List of output operations of length %i" %
+                len(self.output_node), stacklevel=2)
         # model space
         assert len(set([tuple(self.model_space[i]) for i in
                         range(self.num_layers)])) == 1, "model_space for EnasDAG must be identical for all layers"
@@ -1120,8 +1229,11 @@ class EnasConv1dDAG:
         Parameters
         ----------
         model_space: amber.architect.ModelSpace
+            model space to search network architectures from
         input_node: amber.architect.Operation, or list
+            defines the input shapes and activations
         output_node: amber.architect.Operation, or list
+            defines the output shapes and activations
         model_compile_dict: dict
             compile dict for child models
         session: tf.Session
@@ -1132,6 +1244,7 @@ class EnasConv1dDAG:
         fixed_arc: list-like
             the architecture for final stage training
         name: str
+            a name identifier for this instance
         """
         assert type(input_node) in (State, tf.Tensor) or len(
             input_node) == 1, "EnasCnnDAG currently does not accept List type of inputs"
@@ -1162,7 +1275,7 @@ class EnasConv1dDAG:
         self.branches = []
         self.is_initialized = False
 
-        self.add_conv1_under_pool = kwargs.pop("add_conv1_under_pool", True)
+        self.add_conv1_under_pool = kwargs.get("add_conv1_under_pool", True)
 
         self.train_fixed_arc = train_fixed_arc
         self.fixed_arc = fixed_arc
@@ -1337,7 +1450,7 @@ class EnasConv1dDAG:
         if self.train_fixed_arc:
             is_training = True
         else:
-            is_training = kwargs.pop('is_training', False)
+            is_training = kwargs.get('is_training', False)
         reuse = kwargs.pop('reuse', tf.AUTO_REUSE)
         with tf.compat.v1.variable_scope(var_scope, reuse=reuse):
             input_tensor = self.input_ph if input_tensor is None else input_tensor
@@ -1479,10 +1592,10 @@ class EnasConv1dDAG:
             # input = self.input_node
             input = self.input_ph if input_tensor is None else input_tensor
             layers = []
-            has_stem_conv = self.stem_config['has_stem_conv'] if 'has_stem_conv' in self.stem_config else True
+            has_stem_conv = self.stem_config.get('has_stem_conv', True)
             if has_stem_conv:
                 with tf.variable_scope("stem_conv"):
-                    stem_kernel_size = self.stem_config.pop('stem_kernel_size', 8)
+                    stem_kernel_size = self.stem_config.get('stem_kernel_size', 8)
                     stem_filters = out_filters[0]
                     w = create_weight("w", [stem_kernel_size, 4, stem_filters])
                     x = tf.nn.conv1d(input, w, 1, "SAME", data_format=self.data_format)
@@ -1744,9 +1857,9 @@ class EnasConv1dDAG:
         return lambda: inputs
 
 
+# Initial Date: 2020.5.17
 class EnasConv1DwDataDescrption(EnasConv1dDAG):
     """This is a modeler that specifiied for convolution network with data description features
-    Date: 2020.5.17
     """
     def __init__(self, data_description, *args, **kwargs):
         self.data_description = data_description
@@ -1754,7 +1867,6 @@ class EnasConv1DwDataDescrption(EnasConv1dDAG):
         if len(self.data_description.shape) < 2:
             self.data_description = np.expand_dims(self.data_description, axis=0)
 
-    # overwrite
     def _model(self, arc, **kwargs):
         """
         Overwrite the parent `_model` method to feed the description to controller when sampling architectures
@@ -1777,6 +1889,8 @@ class EnasConv1DwDataDescrption(EnasConv1dDAG):
                                      name=self.name)
 
             else:
+                assert len(self.data_description) == 1, \
+                    ValueError(f"data_descriptor to EnasCnnModel must be a single row vector, shape {self.data_description.shape}")
                 model = EnasCnnModel(inputs=self.sample_model_input,
                                      outputs=self.sample_model_output,
                                      labels=self.sample_model_label,

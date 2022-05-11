@@ -1,7 +1,7 @@
-import keras.backend as K
-from keras.constraints import Constraint
-from keras.initializers import normal
-from keras.layers import Conv2D, Layer
+import tensorflow.keras.backend as K
+from tensorflow.keras.constraints import Constraint
+from tensorflow.keras.initializers import normal
+from tensorflow.keras.layers import Conv2D, Layer
 
 
 class InfoConstraint(Constraint):

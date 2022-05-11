@@ -18,8 +18,8 @@
 # -- Project information -----------------------------------------------------
 
 project = 'AMBER'
-copyright = '2020, Zijun Zhang'
-author = 'Zijun Zhang'
+copyright = '2020-2022, Frank Zijun Zhang'
+author = 'zzjfrank'
 
 
 # -- FOR compatibility with RTD
@@ -31,6 +31,7 @@ master_doc = 'index'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
     'sphinx.ext.doctest',
     'sphinx.ext.todo',
     'sphinx.ext.coverage',
@@ -53,7 +54,7 @@ autodoc_inherit_docstrings = False
 napoleon_google_docstring = False
 napoleon_use_param = False
 napoleon_use_ivar = True
-
+add_module_names = False
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:

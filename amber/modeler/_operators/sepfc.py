@@ -3,7 +3,7 @@
 """Separable fully-connected layer, as described in https://www.biorxiv.org/content/10.1101/146431v3
 """
 
-from keras import backend as K
+from tensorflow.keras import backend as K
 
 
 try:
@@ -12,9 +12,9 @@ except Exception as e:
     print(e)
     from keras import initializations
 
-from keras.layers import Layer
-from keras.constraints import Constraint
-from keras.regularizers import Regularizer
+from tensorflow.keras.layers import Layer
+from tensorflow.keras.constraints import Constraint
+from tensorflow.keras.regularizers import Regularizer
 
 
 class SepFCSmoothnessRegularizer(Regularizer):
@@ -181,7 +181,7 @@ class SeparableFC(Layer):
         )
 
         self.W_pos = self.add_weight(
-            shape=(self.output_dim, self.length),
+            shape=(int(self.output_dim), int(self.length)),
             name='{}_W_pos'.format(self.name),
             # initializer=self.init,
             initializer='random_uniform',
@@ -194,7 +194,7 @@ class SeparableFC(Layer):
                              self.smoothness_l1,
                              self.smoothness_second_diff)))
         self.W_chan = self.add_weight(
-            shape=(self.output_dim, self.num_channels),
+            shape=(int(self.output_dim), int(self.num_channels)),
             name='{}_W_chan'.format(self.name),
             # initializer=self.init,
             initializer='random_uniform',

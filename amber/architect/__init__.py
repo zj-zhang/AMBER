@@ -1,13 +1,13 @@
 """
-The :mod:`architect` module provides neural architecture search implementations and its related helpers
-
+provides search algorithms and helpers for neural network architecture
 """
 
 
-from .controller import GeneralController, MultiInputController, MultiIOController, OperationController
+from .controller import BaseController, GeneralController, MultiInputController, MultiIOController, OperationController, \
+    ZeroShotController
 from .modelSpace import State, ModelSpace
-from .manager import GeneralManager, EnasManager
-from .trainEnv import ControllerTrainEnvironment, EnasTrainEnv
+from .manager import GeneralManager, EnasManager, DistributedGeneralManager
+from .trainEnv import ControllerTrainEnvironment, EnasTrainEnv, MultiManagerEnvironment, ParallelMultiManagerEnvironment
 from . import buffer, store, reward, trainEnv, modelSpace, controller, pmbga
 
 # alias
@@ -16,6 +16,7 @@ Operation = State
 # TODO: Do not include MultiIO until its tested in multiio branch
 __all__ = [
     # funcs
+    'BaseController',
     'GeneralController',
     'Operation',
     'State',
@@ -34,5 +35,4 @@ __all__ = [
     'pmbga',
     # For legacy use
     'OperationController',
-    # 'NetworkManager'
 ]

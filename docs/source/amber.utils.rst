@@ -1,10 +1,10 @@
-amber.utils package
+amber.utils
 ===================
 
-Submodules
-----------
+.. contents:: Contents
+    :local:
 
-amber.utils.data\_parser module
+amber.utils.data\_parser
 -------------------------------
 
 .. automodule:: amber.utils.data_parser
@@ -12,7 +12,7 @@ amber.utils.data\_parser module
    :undoc-members:
    :show-inheritance:
 
-amber.utils.io module
+amber.utils.io
 ---------------------
 
 .. automodule:: amber.utils.io
@@ -20,7 +20,7 @@ amber.utils.io module
    :undoc-members:
    :show-inheritance:
 
-amber.utils.logging module
+amber.utils.logging
 --------------------------
 
 .. automodule:: amber.utils.logging
@@ -28,7 +28,7 @@ amber.utils.logging module
    :undoc-members:
    :show-inheritance:
 
-amber.utils.motif module
+amber.utils.motif
 ------------------------
 
 .. automodule:: amber.utils.motif
@@ -36,7 +36,7 @@ amber.utils.motif module
    :undoc-members:
    :show-inheritance:
 
-amber.utils.saliency module
+amber.utils.saliency
 ---------------------------
 
 .. automodule:: amber.utils.saliency
@@ -76,11 +76,3 @@ amber.utils.tensorflowMem module
    :undoc-members:
    :show-inheritance:
 
-
-Module contents
----------------
-
-.. automodule:: amber.utils
-   :members:
-   :undoc-members:
-   :show-inheritance:

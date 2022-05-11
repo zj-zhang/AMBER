@@ -205,6 +205,46 @@ class LossAucReward(Reward):
         return reward, loss_and_metrics, reward_metrics
 
 
+class SparseCategoricalReward(LossAucReward):
+    def __call__(self, model, data, *args, **kwargs):
+        X, y = unpack_data(data, unroll_generator_y=True)
+        if self.pred is None:
+            pred = model.predict(X)
+        else:
+            pred = self.pred
+        auc_list = []
+        if type(y) is not list:
+            y = [y]
+        if type(pred) is not list:
+            pred = [pred]
+        for i in range(len(y)):
+            tmp = []
+            try:
+                score = self.scorer(y_true=y[i], y_score=pred[i])
+                tmp.append(score)
+            except ValueError:  # only one-class present
+                pass
+            auc_list.append(tmp)
+        L = np.nanmean(np.concatenate(auc_list, axis=0))
+        self.auc_list = auc_list
+        # metrics = [np.median(x) for x in auc_list]
+        # loss_and_metrics = [L] + metrics
+        if self.knowledge_function is not None:
+            K = self.knowledge_function(model, data)
+            if self.knowledge_c is not None:
+                old_K = K
+                K = old_K / self.knowledge_c
+        else:
+            K = 0
+        if self.loss_c is not None:
+            old_L = L
+            L = old_L / self.loss_c
+        reward = L + self.Lambda * K
+        loss_and_metrics = [L]
+        reward_metrics = {'knowledge': K}
+        return reward, loss_and_metrics, reward_metrics
+
+
 def MockReward(train_history_list, metric, stringify_states, metric_name_dict, Lambda=1.):
     """MockReward is a resampler from a train history
 

@@ -16,9 +16,9 @@ from keras.layers import Input, Lambda, Dense, Activation
 from keras.layers.recurrent import LSTM
 from keras.models import Model
 
-from .buffer import Buffer
-from .generalController import BaseController
-from .commonOps import get_kl_divergence_n_entropy, proximal_policy_optimization_loss
+from amber.architect.buffer import Buffer
+from amber.architect.controller.generalController import BaseController
+from amber.architect.commonOps import get_kl_divergence_n_entropy, proximal_policy_optimization_loss
 
 
 def get_optimizer(name: str, lr: float, decay: float = 0.995):

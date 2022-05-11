@@ -1,5 +1,7 @@
-"""Docstring"""
-from .wrapper import Amber
+"""Main entry for AMBER"""
+
+from .wrapper import Amber, AmberSpecifications
+from .getter import DataToParse
 import tensorflow as tf
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -10,12 +12,16 @@ except Exception as e:
     tf.logging.set_verbosity(tf.logging.ERROR)
 
 from .wrapper import Amber
-from . import architect, modeler
+from . import architect, modeler, utils, plots
 
-__version__ = "0.1.1-ga"
+__version__ = "0.1.2"
 
 __all__ = [
     'Amber',
+    'AmberSpecifications',
+    'DataToParse',
     'architect',
     'modeler',
+    'utils',
+    'plots'
 ]

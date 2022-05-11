@@ -14,11 +14,11 @@ if tf.__version__.startswith("2"):
     tf.compat.v1.disable_eager_execution()
     import tensorflow.compat.v1 as tf
 
-from .buffer import get_buffer
-from .commonOps import get_keras_train_ops
-from .commonOps import get_kl_divergence_n_entropy
-from .commonOps import proximal_policy_optimization_loss
-from .commonOps import stack_lstm
+from amber.architect.buffer import get_buffer
+from amber.architect.commonOps import get_keras_train_ops
+from amber.architect.commonOps import get_kl_divergence_n_entropy
+from amber.architect.commonOps import proximal_policy_optimization_loss
+from amber.architect.commonOps import stack_lstm
 
 
 class BaseController(object):

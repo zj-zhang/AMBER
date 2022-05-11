@@ -27,7 +27,7 @@ from amber.utils import run_from_ipython
 from amber.utils.logging import setup_logger
 from amber.utils.data_parser import get_data_from_simdata
 
-from amber.modeler.modeler import build_sequential_model
+from amber.modeler import build_sequential_model
 from amber.architect.manager import GeneralManager
 from amber.architect.modelSpace import get_layer_shortname
 
@@ -156,7 +156,7 @@ def get_manager_enas(train_data, val_data, controller, model_space, wd, data_des
         'loss': 'binary_crossentropy',
         'optimizer': SGD(lr=0.01, momentum=0.9, decay=1e-5),
     }
-    session = controller.session
+    session = controller.sess
 
     reward_fn = LossAucReward(method='auc')
     

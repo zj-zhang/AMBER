@@ -16,7 +16,7 @@ import h5py
 import numpy as np
 import tensorflow as tf
 from keras.callbacks import CallbackList, BaseLogger, History
-from keras.models import Model
+from tensorflow.keras.models import Model
 from keras.utils.data_utils import GeneratorEnqueuer
 from tqdm import trange
 
@@ -92,14 +92,14 @@ class EnasAnnModel:
         """
         Parameters
         ----------
-            inputs: tf.Tensor
-                input tensors/placeholders
-            outputs: tf.Tensor
-                output tensors
-            session: tf.Session
-                tensorflow Session for use
-            name: str
-                name for tf.variable_scope; default is "EnasDAG"
+        inputs: tf.Tensor
+            input tensors/placeholders
+        outputs: tf.Tensor
+            output tensors
+        session: tf.Session
+            tensorflow Session for use
+        name: str
+            name for tf.variable_scope; default is "EnasDAG"
         """
         assert type(inputs) in (tf.Tensor, list), "get unexpected inputs types: %s" % type(inputs)
         assert type(outputs) in (tf.Tensor, list), "get unexpected outputs types: %s" % type(outputs)
@@ -807,7 +807,7 @@ class EnasCnnModel:
         """
         TODO
         ------
-            save model architectures
+        save model architectures
         """
         warnings.warn("Not implemented yet; rolling back to `save_weights`", stacklevel=2)
         self.save_weights(*args, **kwargs)
