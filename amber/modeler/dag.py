@@ -74,7 +74,7 @@ def get_layer(x, state, with_bn=False):
     ----------
     x : tf.keras.layers or None
         The input Keras layer
-    state : amber.architect.Operation
+    state : amber.architect.Operation, or callable
         The target layer to be built
     with_bn : bool, optional
         If true, add batch normalization layers before activation
@@ -84,7 +84,9 @@ def get_layer(x, state, with_bn=False):
     x : tf.keras.layers
         The built target layer connected to input x
     """
-    if state.Layer_type == 'dense':
+    if callable(state):
+        return state()(x)
+    elif state.Layer_type == 'dense':
         if with_bn is True:
             actv_fn = state.Layer_attributes.pop('activation', 'linear')
             x = Dense(**state.Layer_attributes)(x)
