@@ -1,6 +1,9 @@
 import tensorflow.keras.backend as K
 from tensorflow.keras.constraints import Constraint
-from tensorflow.keras.initializers import normal
+try:
+    from tensorflow.keras.initializers import normal
+except ImportError:
+    from tensorflow import random_normal_initializer as normal
 from tensorflow.keras.layers import Conv2D, Layer
 
 

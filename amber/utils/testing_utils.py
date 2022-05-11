@@ -13,7 +13,10 @@ from .. import architect
 class TestCase(tf.test.TestCase):
     def tearDown(self):
         tf.keras.backend.clear_session()
-        keras.backend.clear_session()
+        try:
+            keras.backend.clear_session()
+        except AttributeError:
+            pass
         super(TestCase, self).tearDown()
 
 

@@ -14,7 +14,10 @@ logging.disable(sys.maxsize)
 
 class TestEnasConvModeler(testing_utils.TestCase):
     def setUp(self):
-        self.session = tf.Session()
+        try:
+            self.session = tf.Session()
+        except AttributeError:
+            self.session = tf.compat.v1.Session()
         self.input_op = [architect.Operation('input', shape=(10, 4), name="input")]
         self.output_op = architect.Operation('dense', units=1, activation='sigmoid', name="output")
         self.x = np.random.choice(2, 40).reshape((1, 10, 4))

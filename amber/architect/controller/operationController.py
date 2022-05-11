@@ -8,9 +8,9 @@ Aug. 7, 2018
 
 import os
 
+from ...utils import corrected_tf as tf
 import keras.backend as K
 import numpy as np
-import tensorflow as tf
 from keras import optimizers
 from keras.layers import Input, Lambda, Dense, Activation
 from keras.layers.recurrent import LSTM

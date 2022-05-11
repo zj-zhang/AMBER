@@ -3,7 +3,7 @@ from amber.architect.controller import GeneralController
 from amber.architect.trainEnv import ControllerTrainEnvironment
 from amber.bootstrap.mock_manager import MockManager
 from amber.bootstrap.simple_conv1d_space import get_state_space
-import tensorflow as tf
+from amber.utils import corrected_tf as tf
 import numpy as np
 import os
 

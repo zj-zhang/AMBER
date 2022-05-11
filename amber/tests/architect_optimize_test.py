@@ -1,15 +1,16 @@
 """Test architect optimizer"""
 
-import tensorflow as tf
 import numpy as np
 import copy
 import tempfile
 from amber.utils import testing_utils
+from amber.utils import corrected_tf as tf
 import unittest
 from parameterized import parameterized_class
 from amber import architect
 # need to test for seamlessly connecting to manager's architectureDecoder as well. FZZ 2022.5.4
 from amber.modeler import architectureDecoder
+import unittest
 import logging, sys
 logging.disable(sys.maxsize)
 

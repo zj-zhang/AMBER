@@ -835,14 +835,14 @@ class EnasAnnDAG:
         self.w = []
         self.b = []
         input_max_size = self._input_block_map[-1][-1]
-        with tf.compat.v1.variable_scope(self.name):
+        with tf.variable_scope(self.name):
             self.train_step = tf.Variable(0, dtype=tf.int32, trainable=False, name="train_step")
             for layer_id in range(self.num_layers):
                 with tf.variable_scope("layer_{}".format(layer_id)):
                     self.w.append(tf.compat.v1.get_variable("Weight/w", shape=(
                     input_max_size + layer_id * self._weight_max_units, self._weight_max_units),
                                                             dtype=tf.float32,
-                                                            initializer=tf.contrib.layers.variance_scaling_initializer()))
+                                                            initializer=tf.keras.initializers.VarianceScaling()))
                     self.b.append(tf.compat.v1.get_variable("Bias/b", shape=(self._weight_max_units,),
                                                             initializer=tf.initializers.zeros(),
                                                             dtype=tf.float32))
@@ -863,7 +863,7 @@ class EnasAnnDAG:
                 if self.with_output_blocks:
                     self.w_out = [tf.compat.v1.get_variable("w_out_%i" % i, shape=(
                     self._weight_max_units * self.num_layers, self._child_output_size[i]), dtype=tf.float32,
-                                                            initializer=tf.contrib.layers.variance_scaling_initializer())
+                                                            initializer=tf.keras.initializers.VarianceScaling())
                                   for i in range(len(self.output_node))]
                     self.b_out = [
                         tf.compat.v1.get_variable("b_out_%i" % i, shape=(self._child_output_size[i]), dtype=tf.float32,
@@ -874,7 +874,7 @@ class EnasAnnDAG:
                     self.w_out = [tf.compat.v1.get_variable("w_out_%i" % i,
                                                             shape=(self._weight_max_units, self._child_output_size[i]),
                                                             dtype=tf.float32,
-                                                            initializer=tf.contrib.layers.variance_scaling_initializer())
+                                                            initializer=tf.keras.initializers.VarianceScaling())
                                   for i in range(len(self.output_node))]
                     self.b_out = [
                         tf.compat.v1.get_variable("b_out_%i" % i, shape=(self._child_output_size[i]), dtype=tf.float32,
@@ -1016,7 +1016,7 @@ class EnasAnnDAG:
             if type(output_arcs) is list:
                 output_arcs_len = len(output_arcs)
             else:  # is tensor
-                output_arcs_len = output_arcs.shape[0].value
+                output_arcs_len = int(output_arcs.shape[0])
             assert output_arcs_len == self.num_output_blocks * self.num_layers, "model builder was specified to build output" \
                                                                                 " connections, but the input architecture did" \
                                                                                 "n't match output info; expected arc of length" \
@@ -1137,21 +1137,27 @@ class EnasAnnDAG:
                 trainable_var += feature_model_trainable_var
             regularization_penalty = 0.
             if self.l1_reg > 0:
-                l1_regularizer = tf.contrib.layers.l1_regularizer(
-                    scale=self.l1_reg, scope=self.name
-                )
-                l1_regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer,
+                try: # tf1
+                    l1_regularizer = tf.contrib.layers.l1_regularizer(
+                        scale=self.l1_reg, scope=self.name
+                    )
+                    l1_regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer,
                                                                                    [var[0] for var in w_masks])
+                except AttributeError:
+                    l1_regularization_penalty = self.l1_reg * tf.reduce_mean([tf.reduce_mean(tf.abs(var[0])) for var in w_masks])
                 loss_ += l1_regularization_penalty
             else:
                 l1_regularization_penalty = 0.
 
             if self.l2_reg > 0:
-                l2_regularizer = tf.contrib.layers.l2_regularizer(
-                    scale=self.l2_reg, scope=self.name
-                )
-                l2_regularization_penalty = tf.contrib.layers.apply_regularization(l2_regularizer,
-                                                                                   [var[0] for var in w_masks])
+                try: # tf1
+                    l2_regularizer = tf.contrib.layers.l2_regularizer(
+                        scale=self.l2_reg, scope=self.name
+                    )
+                    l2_regularization_penalty = tf.contrib.layers.apply_regularization(l2_regularizer,
+                                                                                       [var[0] for var in w_masks])
+                except AttributeError:
+                    l2_regularization_penalty = self.l2_reg * tf.reduce_mean([tf.reduce_mean(tf.square(var[0])) for var in w_masks ])
                 loss_ += l2_regularization_penalty
             else:
                 l2_regularization_penalty = 0.
