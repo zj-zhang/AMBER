@@ -5,12 +5,16 @@ expected behaviors
 
 import os
 import tensorflow as tf
+import keras.backend as K
 import numpy as np
 import tempfile
 from parameterized import parameterized_class
 from amber.utils import testing_utils
 from amber import modeler
 from amber import architect
+import unittest
+import logging, sys
+logging.disable(sys.maxsize)
 
 
 def get_random_data(num_samps=1000):
@@ -51,7 +55,7 @@ class TestEnvDryRun(testing_utils.TestCase):
 
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
-        self.session = tf.Session()
+        self.sess = tf.Session()
         self.controller = self.controller_getter(
             model_space=self.model_space,
             buffer_type='ordinal',
@@ -59,7 +63,7 @@ class TestEnvDryRun(testing_utils.TestCase):
             kl_threshold=0.05,
             buffer_size=1,
             batch_size=3,
-            session=self.session,
+            session=self.sess,
             train_pi_iter=10,
             lstm_size=16,
             lstm_num_layers=1,
@@ -75,7 +79,7 @@ class TestEnvDryRun(testing_utils.TestCase):
             flatten_mode='gap',
             model_compile_dict={'optimizer': 'adam', 'loss': 'mse'},
             batch_size=10,
-            session=self.session,
+            session=self.sess,
             controller=self.controller,
             verbose=0
         )
@@ -93,7 +97,7 @@ class TestEnvDryRun(testing_utils.TestCase):
         self.env = self.trainenv_getter(
             self.controller,
             self.manager,
-            max_episode=20,
+            max_episode=5,
             max_step_per_ep=1,
             logger=None,
             resume_prev_run=False,
@@ -104,13 +108,143 @@ class TestEnvDryRun(testing_utils.TestCase):
 
     def tearDown(self):
         super(TestEnvDryRun, self).tearDown()
-        self.session.close()
+        self.sess.close()
         self.tempdir.cleanup()
 
     def test_build(self):
         self.env.train()
         self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'controller_weights.h5')))
         self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'train_history.csv')))
+
+
+# https://github.com/zj-zhang/AMBER/blob/89cdd45f8803014cadb131159d8bea804bfefcbc/examples/AMBIENT/sim_data/zero_shot_nas.sim_data.py
+@parameterized_class(attrs=('manager_getter', 'controller_getter', 'modeler_getter', 'trainenv_getter'), input_values=[
+    (architect.GeneralManager, architect.ZeroShotController, modeler.KerasResidualCnnBuilder, architect.MultiManagerEnvironment),
+    (architect.EnasManager, architect.ZeroShotController, modeler.EnasCnnModelBuilder, architect.MultiManagerEnvironment),
+    #(architect.GeneralManager, architect.ZeroShotController, modeler.KerasResidualCnnBuilder, architect.ParallelMultiManagerEnvironment),
+])
+class TestMultiManagerEnv(TestEnvDryRun):
+    manager_getter = architect.GeneralManager
+    controller_getter = architect.ZeroShotController
+    modeler_getter = modeler.KerasResidualCnnBuilder
+    trainenv_getter = architect.MultiManagerEnvironment
+    data_description = np.eye(2)
+    data_description_len = 2
+
+    def __init__(self, *args, **kwargs):
+        super(TestEnvDryRun, self).__init__(*args, **kwargs)
+        self.model_space, _ = testing_utils.get_example_conv1d_space(out_filters=8, num_layers=2)
+        self.datasets ={
+            'dataset1':
+                {'descriptor': np.array([[1,0]]), 'train': get_random_data(50), 'valid': get_random_data(10), 'test': get_random_data(10)},
+            'dataset2':
+                {'descriptor': np.array([[0,1]]), 'train': get_random_data(50), 'valid': get_random_data(10), 'test': get_random_data(10)}
+        }
+
+    # controller should have been tested elsewhere; e.g. architect_optimize_test.py
+    def get_controller(self, sess):
+        controller = self.controller_getter(
+            data_description_config={
+                "length": self.data_description_len,
+                "hidden_layer": {"units": 4, "activation": "relu"},
+                "regularizer": {"l1":  1e-8}
+            },
+            model_space=self.model_space,
+            buffer_type='MultiManager',
+            with_skip_connection=True,
+            kl_threshold=0.05,
+            buffer_size=1,
+            batch_size=3,
+            session=sess,
+            train_pi_iter=10,
+            lstm_size=16,
+            lstm_num_layers=1,
+            optim_algo="adam",
+        )
+        return controller
+
+    # manager should have been tested elsewhere; e.g. architect_helper_test.py
+    def get_manager(self, sess, controller, dataset_key):
+        model_fn = self.modeler_getter(
+            # specific to EnasCnnModelBuilder; will be ignored by KerasResidualCnnModelBuilder
+            dag_func='EnasConv1DwDataDescrption',
+            dag_kwargs={
+                'with_skip_connection': True,
+                'add_conv1_under_pool': False,
+                'stem_config': {
+                    'has_stem_conv': True,
+                    'flatten_op': 'flatten',
+                    'fc_units': 30
+                },
+                'data_description': self.datasets[dataset_key]['descriptor'],
+                'name': dataset_key
+            },
+            # End
+            model_space=self.model_space,
+            inputs_op=architect.Operation('input', shape=(10, 4)),
+            output_op=architect.Operation('dense', units=1, activation='sigmoid'),
+            fc_units=5,
+            flatten_mode='gap',
+            model_compile_dict={'optimizer': 'adam', 'loss': 'mse'},
+            batch_size=10,
+            session=sess,
+            controller=controller,
+            verbose=0
+        )
+        reward_fn = architect.reward.LossReward()
+        store_fn = 'minimal'
+        manager = self.manager_getter(
+            train_data=self.datasets[dataset_key]['train'],
+            validation_data=self.datasets[dataset_key]['valid'],
+            model_fn=model_fn,
+            reward_fn=reward_fn,
+            store_fn=store_fn,
+            working_dir=os.path.join(self.tempdir.name, dataset_key),
+            child_batchsize=10,
+            epochs=1,
+            verbose=0,
+            devices=None,
+            train_data_kwargs=None,
+            validate_data_kwargs=None
+        )
+        return manager
+
+    def test_build(self):
+        is_enas = self.modeler_getter in (modeler.EnasAnnModelBuilder, modeler.EnasCnnModelBuilder)
+        sess = tf.Session()
+        K.set_session(sess)
+        controller = self.get_controller(sess=sess)
+        managers = []
+        for dataset_key in self.datasets:
+            managers.append(self.get_manager(
+                sess=sess,
+                controller=controller,
+                dataset_key=dataset_key
+            ))
+        env = self.trainenv_getter(
+            data_descriptive_features=self.data_description,
+            controller=controller,
+            manager=managers,
+            max_episode=5,
+            max_step_per_ep=1,
+            working_dir=self.tempdir.name,
+            time_budget="0:03:00",
+            with_input_blocks=False,
+            with_skip_connection=False,
+            child_warm_up_epochs=2 if is_enas else 0,
+            should_plot=False,
+            save_controller=True
+        )
+        env.train()
+        sess.close()
+        self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'controller_weights.h5')))
+        self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'train_history.csv')))
+
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self.tempdir.cleanup()
 
 
 if __name__ == '__main__':

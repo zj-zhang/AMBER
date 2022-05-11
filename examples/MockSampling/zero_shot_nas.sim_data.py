@@ -156,7 +156,7 @@ def get_manager_enas(train_data, val_data, controller, model_space, wd, data_des
         'loss': 'binary_crossentropy',
         'optimizer': SGD(lr=0.01, momentum=0.9, decay=1e-5),
     }
-    session = controller.session
+    session = controller.sess
 
     reward_fn = LossAucReward(method='auc')
     

@@ -1,10 +1,34 @@
 amber.architect
 =======================
 
-
-
 .. contents:: Contents
     :local:
+
+Rationale
+----------
+
+This module :mod:`amber.architect` can be devided into four major components. It's easy to imagine
+a model space to sample models from, and a training environment as a placeholder for
+different components to interact. Currently the model space is pre-defined, but we can make it
+dynamic and evolving in the future.
+
+The remaining two components do the most of the heavy-lifting. Search algorithms, such as a controller
+recurrent neural network vs a genetic algorithm, are separated by sub-packages (a folder with ``__init__.py``)
+and each variant of a search algorithm is a separate file. This makes it easy to re-use code within
+a search algorithm, relatively independent across different searchers, and let them share the same
+configurations of model space and training environments (although it's possible only certain combinations
+of searcher - model space - train env are viable).
+
+The manager is perhaps the most tedious. The general workflow is:
+
+    1. takes a model architecture :obj:`arch` as input,
+    2. passes :obj:`arch` to the modeler :obj:`model=amber.modeler.model_fn(arch)`,
+    3. trains the model :obj:`model.fit(train_data)`,
+    4. evaluates the model's reward :obj:`reward=reward_fn(model)`,
+    5. stores the model in a buffer :obj:`buffer_fn.store(model, reward)`,
+    6. returns the reward signal to the search algorithm.
+
+Each of the steps has variantions, but the overall layout should almost always stay as described above.
 
 
 Model Space

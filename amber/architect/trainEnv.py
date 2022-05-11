@@ -151,12 +151,13 @@ class ControllerTrainEnvironment:
         self.initial_buffering_queue = min(initial_buffering_queue, controller.buffer.max_size)
         self.continuous_run = continuous_run
         self.verbose = verbose
+        self.logger = logger if logger else setup_logger(working_dir)
 
         self.time_budget = kwargs.pop('time_budget', "72:00:00")
         if self.time_budget is None:
             pass
         elif type(self.time_budget) is str:
-            print("time budget set to: %s" % self.time_budget)
+            self.logger.info("time budget set to: %s" % self.time_budget)
             self.time_budget = sum(x * int(t) for x, t in zip([3600, 60, 1], self.time_budget.split(":")))
         else:
             raise Exception("time budget should be in format HH:mm:ss; cannot understand : %s" % (self.time_budget))
@@ -169,10 +170,12 @@ class ControllerTrainEnvironment:
             self.last_actionState_size = 1
 
         self.resume_prev_run = resume_prev_run
-        self.logger = logger if logger else setup_logger(working_dir)
         if issubclass(type(manager), BaseNetworkManager):
             if os.path.realpath(manager.working_dir) != os.path.realpath(self.working_dir):
                 warnings.warn("manager working dir and environment working dir are different.", stacklevel=2)
+        elif type(self.manager) in (tuple, list):
+            assert all([issubclass(type(x), BaseNetworkManager) for x in self.manager]), \
+                TypeError("One or more managers in the lists are not BaseNetworkManager subclass")
         else:
             warnings.warn("ControllerTrainEnvironment: input manager is not a subclass of BaseNetworkManager; "
                           "make sure this is intended", stacklevel=2)
@@ -398,6 +401,9 @@ class EnasTrainEnv(ControllerTrainEnvironment):
         if issubclass(type(self.manager), BaseNetworkManager):
             if self.manager.model_fn.controller is None:
                 self.manager.model_fn.set_controller(self.controller)
+        elif type(self.manager) in (tuple, list):
+            assert all([issubclass(type(x), BaseNetworkManager) for x in self.manager]), \
+                TypeError("One or more managers in the lists are not BaseNetworkManager subclass")
         else:
             warnings.warn("EnasTrainEnv: input manager is not a subclass of BaseNetworkManager; "
                           "make sure this is intended", stacklevel=2)
@@ -657,6 +663,10 @@ class MultiManagerEnvironment(EnasTrainEnv):
                 break
 
         self.logger.debug("Total Reward : %s" % self.total_reward)
+        # save the controller states and weights
+        if self.save_controller:
+            self.controller.save_weights(
+                os.path.join(self.working_dir, "controller_weights.h5"))
         f.close()
         return action_probs_record, loss_and_metrics_list
 
@@ -682,6 +692,7 @@ class MultiManagerEnvironment(EnasTrainEnv):
                             **save_kwargs)
         save_stats(loss_and_metrics_list, self.working_dir)
 
+        # MultiManagerEnv actually needs some specialized plotters.. but fine for now. FZZ 2022.5.10
         if self.should_plot:
             plot_action_weights(self.working_dir)
             plot_wiring_weights(self.working_dir, self.with_input_blocks, self.with_skip_connection)
@@ -895,6 +906,9 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
 
         self.logger.debug("Total Reward : %s" % self.total_reward)
         f.close()
+        if self.save_controller:
+            self.controller.save_weights(
+                os.path.join(self.working_dir, "controller_weights.h5"))
         return action_probs_record, loss_and_metrics_list
 
     def restore(self):

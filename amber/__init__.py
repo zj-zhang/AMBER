@@ -12,7 +12,7 @@ except Exception as e:
     tf.logging.set_verbosity(tf.logging.ERROR)
 
 from .wrapper import Amber
-from . import architect, modeler
+from . import architect, modeler, utils, plots
 
 __version__ = "0.1.1"
 
@@ -22,4 +22,6 @@ __all__ = [
     'DataToParse',
     'architect',
     'modeler',
+    'utils',
+    'plots'
 ]

@@ -197,7 +197,10 @@ def save_stats(loss_and_metrics_list, working_dir):
     keys = list(loss_and_metrics_list[0].keys())
     data = [list(loss_and_metrics.values()) for loss_and_metrics in loss_and_metrics_list]
     data_per_cat = list(zip(*data))
-    k_data = data_per_cat[keys.index('knowledge')]
+    if 'knowledge' in keys:
+        k_data = data_per_cat[keys.index('knowledge')]
+    else:
+        k_data = []
     loss_data = data_per_cat[keys.index('loss')]
     df['Knowledge'].append(list(k_data))
     df['Loss'].append(list(loss_data))

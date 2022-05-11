@@ -77,6 +77,7 @@ class PseudoReward(PseudoCaller):
 
 
 def get_example_conv1d_space(out_filters=8, num_layers=2):
+    """Model space for stacking the same conv-pool-id layers"""
     model_space = architect.ModelSpace()
     num_pool = 1
     expand_layers = [num_layers//k-1 for k in range(1, num_pool)]
@@ -93,3 +94,13 @@ def get_example_conv1d_space(out_filters=8, num_layers=2):
             layer_sharing[i] = 0
     return model_space, layer_sharing
 
+
+def get_example_sparse_model_space(num_layers):
+    """Model space for multi-input/output sparse feed-forward nets"""
+    state_space = architect.ModelSpace()
+    for i in range(num_layers):
+        state_space.add_layer(i, [
+            architect.Operation('Dense', units=3, activation='relu'),
+            architect.Operation('Dense', units=10, activation='relu'),
+        ])
+    return state_space

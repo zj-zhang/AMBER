@@ -88,16 +88,18 @@ def plot_training_history(history, par_dir):
 
 
 def plot_controller_performance(controller_hist_file, metrics_dict, save_fn=None, N_sma=10):
-    '''
+    """
     Example:
         controller_hist_file = 'train_history.csv'
         metrics_dict = {'acc': 0, 'loss': 1, 'knowledge': 2}
-    '''
+    """
     # plt.clf()
     reset_plot()
     plt.grid(b=True, linestyle='--', linewidth=0.8)
     df = pd.read_csv(controller_hist_file, header=None)
-    assert df.shape[0] > N_sma
+    #assert df.shape[0] > N_sma
+    if df.shape[0] <= N_sma:
+        N_sma = 1
     df.columns = ['trial', 'loss_and_metrics', 'reward'] + ['layer_%i' % i for i in range(df.shape[1] - 3)]
     # N_sma = 20
 
@@ -133,7 +135,10 @@ def plot_environment_entropy(entropy_record, save_fn):
 
 
 def sma(data, window=10):
-    return np.concatenate([np.cumsum(data[:window - 1]) / np.arange(1, window),
+    if len(data) < window:
+        return np.array(data)
+    else:
+        return np.concatenate([np.cumsum(data[:window - 1]) / np.arange(1, window),
                            np.convolve(data, np.ones((window,)) / window, mode='valid')])
 
 
@@ -350,7 +355,7 @@ def violin_sns(data, x, y, hue, save_fn=None, split=True, **kwargs):
 
 
 def plot_controller_hidden_states(controller, save_fn='controller_hidden_states.png'):
-    s = controller.session
+    s = controller.sess
     hidden_states, arc = s.run([controller.sample_hidden_states, controller.sample_arc])
     hidden_states_map = pd.DataFrame(np.concatenate([hidden_states[i][-1] for i in range(len(hidden_states))], axis=0))
 

@@ -8,6 +8,8 @@ import numpy as np
 from amber.utils import testing_utils
 from amber import modeler
 from amber import architect
+import logging, sys
+logging.disable(sys.maxsize)
 
 
 class TestEnasConvModeler(testing_utils.TestCase):

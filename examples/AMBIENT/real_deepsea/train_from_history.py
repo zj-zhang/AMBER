@@ -83,8 +83,8 @@ def custom_train(controller, wd, delta_thresh=0.001):
             feed_dict.update({controller.reward: nr_batch})
             feed_dict.update({controller.data_descriptive_feature: desc_batch})
             # train
-            _ = controller.session.run(controller.train_op, feed_dict=feed_dict)
-            curr_loss = controller.session.run([controller.loss], feed_dict=feed_dict)
+            _ = controller.sess.run(controller.train_op, feed_dict=feed_dict)
+            curr_loss = controller.sess.run([controller.loss], feed_dict=feed_dict)
             loss += curr_loss[0] / batch_size
             t += 1
 

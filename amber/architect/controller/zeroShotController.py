@@ -72,7 +72,9 @@ class ZeroShotController(GeneralController):
 
     # overwrite
     def train(self, episode, working_dir):
-        self.buffer.finish_path(self.model_space, episode, working_dir)
+        # only finish path if short-term buffer is non-zero
+        if len(self.buffer.action_buffer) > 0:
+            self.buffer.finish_path(self.model_space, episode, working_dir)
         aloss = 0
         g_t = 0
 
