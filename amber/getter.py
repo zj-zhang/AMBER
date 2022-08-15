@@ -113,6 +113,8 @@ def load_data_dict(d):
         elif type(v) is str:
             assert os.path.isfile(v), "cannot find file: %s" % v
             d_u[k] = DataToParse(v).unpack()
+        else:
+            d_u[k] = v
     return d_u
 
 
