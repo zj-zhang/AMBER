@@ -1,51 +1,51 @@
-Name                                                                                             Stmts   Miss  Cover   Missing
-------------------------------------------------------------------------------------------------------------------------------
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/__init__.py                                      14      3    79%   10-12
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/__init__.py                             7      0   100%
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/buffer.py                             291     22    92%   36, 44-47, 242, 356, 373, 383, 393, 490, 525-528, 537, 553-557, 597, 608, 619
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/commonOps.py                          204     65    68%   7-8, 17-31, 33-39, 50, 65-68, 77, 81-85, 91, 94-105, 115, 118-125, 132-133, 149-154, 213-214, 217-218, 223-226, 258
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/controller/__init__.py                  6      0   100%
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/controller/generalController.py       397     40    90%   29, 32, 35, 38, 41, 44, 47, 212-213, 348-351, 354, 356, 502-506, 510, 512, 588, 665-667, 693-694, 697, 757, 788-793, 822-825
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/controller/multiioController.py       348     32    91%   129, 131, 172, 174, 209-212, 219, 221, 321, 323, 363, 365, 413-417, 424, 426, 433, 540-541, 571, 573, 616, 618, 643-646
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/controller/operationController.py     131     23    82%   26, 28, 31-34, 38-46, 50, 55, 229-234, 237-240
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/controller/zeroShotController.py       84      5    94%   15-16, 45-46, 111
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/manager.py                            217    114    47%   41, 195-197, 200-210, 214, 235, 247, 270-272, 282-293, 296-303, 310-424, 502, 545, 582, 585
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/modelSpace.py                         117     41    65%   40, 42, 65, 163, 177, 188-191, 244, 272-276, 286-289, 313, 332-356, 360, 364
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/pmbga.py                              269    125    54%   39-40, 48, 66-67, 93, 99, 102, 107-109, 112-117, 120-127, 132-139, 142-145, 148-149, 152-156, 160-162, 165-167, 171, 175, 178-182, 202-208, 211-215, 218-236, 239-242, 246-248, 252-257, 303-306, 309-312, 394-396, 421-461
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/reward.py                             164     75    54%   20, 23, 48, 58, 62, 82, 90, 148, 160, 174-175, 182-185, 189-190, 198-205, 210-245, 283-306
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/store.py                               85     22    74%   34, 38, 40, 46, 86-105, 124, 151, 154, 164-165, 167, 174-175, 180
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/architect/trainEnv.py                           545    204    63%   27, 31-32, 36-40, 158, 163, 168-170, 175, 180, 183, 188-189, 192-198, 204, 228, 258, 285, 313, 349-351, 356-357, 370, 403, 408, 415, 423, 429-434, 440, 474, 493-494, 497-503, 507-508, 524, 583, 631, 648-649, 652-657, 662-663, 688, 697-699, 710-716, 720-744, 748-912, 915-922
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/bootstrap/__init__.py                             2      0   100%
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/bootstrap/gold_standard.py                       37     27    27%   17-23, 27-39, 44-55
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/bootstrap/grid_search.py                         88     79    10%   13-38, 44-52, 56-64, 69-91, 95-117
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/bootstrap/mock_manager.py                        61     14    77%   19, 23-24, 42-49, 82, 89-90, 97
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/bootstrap/simple_conv1d_space.py                 18      5    72%   65-71
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/getter.py                                       235    218     7%   61-68, 71-79, 82-83, 87-103, 109-116, 147-161, 187-212, 244-263, 296-345, 372-480, 528-556, 568-596, 601-621, 628-726
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/modeler/__init__.py                               4      0   100%
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/modeler/_operators/__init__.py                    4      0   100%
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/modeler/_operators/denovo_motif_conv.py          34     17    50%   5-6, 12-14, 19-20, 24-26, 30-34, 38, 73-74, 95
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/modeler/_operators/sepfc.py                      96     56    42%   11-13, 36-38, 41-50, 53, 73, 76-104, 107, 168-169, 205, 208-221, 224-231, 260-261, 281
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/modeler/_operators/topk.py                       15      0   100%
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/modeler/architectureDecoder.py                   46     32    30%   22-39, 58-66, 80-85
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/modeler/child.py                                597    244    59%   38, 46-49, 77, 85-87, 138-144, 164, 170-171, 190, 194, 198, 203-219, 224, 255-306, 309-311, 315, 322, 328-381, 412, 414-415, 427-431, 449, 455-478, 486, 503-529, 537-539, 542-546, 549-556, 559-560, 563-570, 625-630, 648, 653, 655-656, 672, 680, 700, 705-708, 723, 725-726, 732-733, 739-744, 747, 752, 777-778, 792, 801, 812-814, 817-820, 823-828, 831-832, 835-838
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/modeler/dag.py                                 1041    194    81%   49, 63-66, 88, 322-325, 336-337, 383, 393-394, 486-487, 504-505, 653-654, 726, 732, 734, 751, 759-760, 771-775, 791, 859-860, 946-953, 976, 995-1001, 1056, 1062-1065, 1104-1107, 1116-1130, 1133-1137, 1146-1147, 1150, 1159-1160, 1163, 1178, 1186, 1289-1291, 1296-1297, 1316, 1325-1344, 1352, 1362, 1367, 1457, 1466, 1513-1527, 1531-1537, 1542-1548, 1565, 1576, 1612, 1629-1641, 1646-1647, 1652, 1663-1667, 1671-1672, 1675, 1693-1711, 1719-1732, 1738, 1755-1759, 1764, 1771-1773, 1781-1782, 1791, 1810-1816, 1831-1832, 1834-1841, 1853, 1859, 1874, 1884, 1889
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/modeler/enasModeler.py                           99     11    89%   14, 17, 48-49, 66-68, 82, 169, 188, 255
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/modeler/kerasModeler.py                         299    170    43%   22-26, 29-57, 63-70, 73-89, 92-122, 215-225, 237, 249-261, 272, 294-297, 314, 323-331, 336, 351, 367-383, 392-395, 398-478, 495-512, 517-533, 540-548, 556-564
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/plots/__init__.py                                 2      0   100%
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/plots/plotsV1.py                                300    162    46%   42-43, 47-52, 56-58, 67-74, 81-87, 121, 157, 162-164, 178, 192-215, 224, 229-231, 244, 248-269, 286-288, 297-299, 307, 311-319, 324-344, 349-354, 358-371, 375-403, 416-456
-architect_env_test.py                                                                               91      3    97%   217-218, 254
-architect_helper_test.py                                                                           163      1    99%   306
-architect_optimize_test.py                                                                         177     10    94%   156-164, 297
-architect_pmbga_test.py                                                                             50      6    88%   34-38, 71
-integration_bionas_test.py                                                                          56      2    96%   16, 119
-modeler_enas_build_test.py                                                                          44      3    93%   19-20, 91
-modeler_ffnn_test.py                                                                               100      2    98%   33, 213
-modeler_keras_build_test.py                                                                         39      2    95%   79, 93
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/utils/__init__.py                                15     11    27%   6-8, 12-16, 20-22
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/utils/data_parser.py                            141    121    14%   15, 22-25, 29-30, 34-40, 63-69, 88-102, 106-112, 122-147, 153-172, 193-215, 221-233, 239-245
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/utils/io.py                                     144     39    73%   51-64, 73-86, 108, 149-151, 158-159, 164-166, 175-178, 194-195
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/utils/logging.py                                 15      0   100%
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/utils/testing_utils.py                           72      7    90%   8-9, 18-19, 35, 38, 95
-/mnt/ceph/users/zzhang/amber_github/AMBER-ga/amber/wrapper.py                                       81     60    26%   12-15, 62-80, 83-118, 121-123, 141-153, 156, 159-162, 165-169, 172-174, 178-179, 183, 187
-------------------------------------------------------------------------------------------------------------------------------
-TOTAL                                                                                             7045   2267    68%
+Name                                                                                    Stmts   Miss  Cover   Missing
+---------------------------------------------------------------------------------------------------------------------
+/Users/zzjfrank/workspace/AMBER-pub/amber/__init__.py                                      14      3    79%   10-12
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/__init__.py                             7      0   100%
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/buffer.py                             291     22    92%   36, 44-47, 242, 356, 373, 383, 393, 490, 525-528, 537, 553-557, 597, 608, 619
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/commonOps.py                          204     65    68%   7-8, 17-31, 33-39, 50, 65-68, 77, 81-85, 91, 94-105, 115, 118-125, 132-133, 149-154, 213-214, 217-218, 223-226, 258
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/controller/__init__.py                  6      0   100%
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/controller/generalController.py       397     40    90%   29, 32, 35, 38, 41, 44, 47, 212-213, 348-351, 354, 356, 502-506, 510, 512, 588, 665-667, 693-694, 697, 757, 788-793, 822-825
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/controller/multiioController.py       348     32    91%   129, 131, 172, 174, 209-212, 219, 221, 321, 323, 363, 365, 413-417, 424, 426, 433, 540-541, 571, 573, 616, 618, 643-646
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/controller/operationController.py     130     23    82%   25, 27, 30-33, 37-45, 49, 54, 228-233, 236-239
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/controller/zeroShotController.py       84      5    94%   15-16, 45-46, 111
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/manager.py                            218    114    48%   41, 195-197, 200-210, 214, 235, 247, 270-272, 282-293, 296-303, 310-424, 502, 545, 582, 585
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/modelSpace.py                         117     41    65%   40, 42, 65, 163, 177, 188-191, 244, 272-276, 286-289, 313, 332-356, 360, 364
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/pmbga.py                              271    126    54%   38-39, 48, 66-67, 93, 99, 102, 107-109, 112-117, 120-127, 132-139, 142-145, 148-149, 152-156, 160-162, 165-167, 171, 175, 178-182, 202-208, 211-215, 218-236, 239-242, 246-248, 252-257, 303-306, 309-312, 343, 397-399, 424-464
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/reward.py                             164     75    54%   20, 23, 48, 58, 62, 82, 90, 148, 160, 174-175, 182-185, 189-190, 198-205, 210-245, 283-306
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/store.py                               85     22    74%   34, 38, 40, 46, 86-105, 124, 151, 154, 164-165, 167, 174-175, 180
+/Users/zzjfrank/workspace/AMBER-pub/amber/architect/trainEnv.py                           545    204    63%   27, 31-32, 36-40, 158, 163, 168-170, 175, 180, 183, 188-189, 192-198, 204, 228, 258, 285, 313, 349-351, 356-357, 370, 403, 408, 415, 423, 429-434, 440, 474, 493-494, 497-503, 507-508, 524, 583, 631, 648-649, 652-657, 662-663, 688, 697-699, 710-716, 720-744, 748-912, 915-922
+/Users/zzjfrank/workspace/AMBER-pub/amber/bootstrap/__init__.py                             2      0   100%
+/Users/zzjfrank/workspace/AMBER-pub/amber/bootstrap/gold_standard.py                       37     27    27%   17-23, 27-39, 44-55
+/Users/zzjfrank/workspace/AMBER-pub/amber/bootstrap/grid_search.py                         88     79    10%   13-38, 44-52, 56-64, 69-91, 95-117
+/Users/zzjfrank/workspace/AMBER-pub/amber/bootstrap/mock_manager.py                        61     14    77%   19, 23-24, 42-49, 82, 89-90, 97
+/Users/zzjfrank/workspace/AMBER-pub/amber/bootstrap/simple_conv1d_space.py                 18      5    72%   65-71
+/Users/zzjfrank/workspace/AMBER-pub/amber/getter.py                                       236    219     7%   61-68, 71-79, 82-83, 87-103, 109-118, 149-163, 189-214, 246-265, 298-347, 374-482, 530-558, 570-598, 603-623, 630-728
+/Users/zzjfrank/workspace/AMBER-pub/amber/modeler/__init__.py                               4      0   100%
+/Users/zzjfrank/workspace/AMBER-pub/amber/modeler/_operators/__init__.py                    4      0   100%
+/Users/zzjfrank/workspace/AMBER-pub/amber/modeler/_operators/denovo_motif_conv.py          34     17    50%   5-6, 12-14, 19-20, 24-26, 30-34, 38, 73-74, 95
+/Users/zzjfrank/workspace/AMBER-pub/amber/modeler/_operators/sepfc.py                      96     49    49%   11-13, 36-38, 41-50, 53, 73, 76-104, 107, 168-169, 205, 211, 224-231, 260-261, 281
+/Users/zzjfrank/workspace/AMBER-pub/amber/modeler/_operators/topk.py                       15      0   100%
+/Users/zzjfrank/workspace/AMBER-pub/amber/modeler/architectureDecoder.py                   46     32    30%   22-39, 58-66, 80-85
+/Users/zzjfrank/workspace/AMBER-pub/amber/modeler/child.py                                597    244    59%   38, 46-49, 77, 85-87, 138-144, 164, 170-171, 190, 194, 198, 203-219, 224, 255-306, 309-311, 315, 322, 328-381, 412, 414-415, 427-431, 449, 455-478, 486, 503-529, 537-539, 542-546, 549-556, 559-560, 563-570, 625-630, 648, 653, 655-656, 672, 680, 700, 705-708, 723, 725-726, 732-733, 739-744, 747, 752, 777-778, 792, 801, 812-814, 817-820, 823-828, 831-832, 835-838
+/Users/zzjfrank/workspace/AMBER-pub/amber/modeler/dag.py                                 1041    194    81%   49, 63-66, 88, 322-325, 336-337, 383, 393-394, 486-487, 504-505, 653-654, 726, 732, 734, 751, 759-760, 771-775, 791, 859-860, 946-953, 976, 995-1001, 1056, 1062-1065, 1104-1107, 1116-1130, 1133-1137, 1146-1147, 1150, 1159-1160, 1163, 1178, 1186, 1289-1291, 1296-1297, 1316, 1325-1344, 1352, 1362, 1367, 1457, 1466, 1513-1527, 1531-1537, 1542-1548, 1565, 1576, 1612, 1629-1641, 1646-1647, 1652, 1663-1667, 1671-1672, 1675, 1693-1711, 1719-1732, 1738, 1755-1759, 1764, 1771-1773, 1781-1782, 1791, 1810-1816, 1831-1832, 1834-1841, 1853, 1859, 1874, 1884, 1889
+/Users/zzjfrank/workspace/AMBER-pub/amber/modeler/enasModeler.py                           99     11    89%   14, 17, 48-49, 66-68, 82, 169, 188, 255
+/Users/zzjfrank/workspace/AMBER-pub/amber/modeler/kerasModeler.py                         299    170    43%   22-26, 29-57, 63-70, 73-89, 92-122, 215-225, 237, 249-261, 272, 294-297, 314, 323-331, 336, 351, 367-383, 392-395, 398-478, 495-512, 517-533, 540-548, 556-564
+/Users/zzjfrank/workspace/AMBER-pub/amber/plots/__init__.py                                 2      0   100%
+/Users/zzjfrank/workspace/AMBER-pub/amber/plots/plotsV1.py                                300    162    46%   42-43, 47-52, 56-58, 67-74, 81-87, 121, 157, 162-164, 178, 192-215, 224, 229-231, 244, 248-269, 286-288, 297-299, 307, 311-319, 324-344, 349-354, 358-371, 375-403, 416-456
+architect_env_test.py                                                                      91      3    97%   217-218, 254
+architect_helper_test.py                                                                  163      1    99%   306
+architect_optimize_test.py                                                                177     10    94%   156-164, 297
+architect_pmbga_test.py                                                                    50      1    98%   71
+integration_bionas_test.py                                                                 56      1    98%   119
+modeler_enas_build_test.py                                                                 44      3    93%   19-20, 91
+modeler_ffnn_test.py                                                                      100      2    98%   33, 213
+modeler_keras_build_test.py                                                                39      2    95%   79, 93
+/Users/zzjfrank/workspace/AMBER-pub/amber/utils/__init__.py                                15     11    27%   6-8, 12-16, 20-22
+/Users/zzjfrank/workspace/AMBER-pub/amber/utils/data_parser.py                            141    123    13%   16-18, 22-25, 29-30, 34-40, 63-69, 88-102, 106-112, 122-147, 153-172, 193-215, 221-233, 239-245
+/Users/zzjfrank/workspace/AMBER-pub/amber/utils/io.py                                     144     39    73%   51-64, 73-86, 108, 149-151, 158-159, 164-166, 175-178, 194-195
+/Users/zzjfrank/workspace/AMBER-pub/amber/utils/logging.py                                 15      0   100%
+/Users/zzjfrank/workspace/AMBER-pub/amber/utils/testing_utils.py                           72      7    90%   8-9, 18-19, 35, 38, 95
+/Users/zzjfrank/workspace/AMBER-pub/amber/wrapper.py                                       81     60    26%   12-15, 62-80, 83-118, 121-123, 141-153, 156, 159-162, 165-169, 172-174, 178-179, 183, 187
+---------------------------------------------------------------------------------------------------------------------
+TOTAL                                                                                    7048   2258    68%
