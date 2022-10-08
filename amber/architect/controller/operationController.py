@@ -9,12 +9,11 @@ Aug. 7, 2018
 import os
 
 from ...utils import corrected_tf as tf
-import keras.backend as K
+import tensorflow.keras.backend as K
 import numpy as np
-from keras import optimizers
-from keras.layers import Input, Lambda, Dense, Activation
-from keras.layers.recurrent import LSTM
-from keras.models import Model
+from tensorflow.keras import optimizers
+from tensorflow.keras.layers import Input, Lambda, Dense, Activation, LSTM
+from tensorflow.keras.models import Model
 
 from amber.architect.buffer import Buffer
 from amber.architect.controller.generalController import BaseController
@@ -138,7 +137,7 @@ class OperationController(BaseController):
         input_dim = self.embedding_dim
         last_output_dim = len(self.state_space.state_space[maxlen - 1])
 
-        self.state_inputs = Input((1, last_output_dim), batch_shape=(None, 1, last_output_dim))  # states
+        self.state_inputs = Input(shape=(1, last_output_dim))  # states
         # build sampler model
         self.probs, self.action = build_actor(self.state_inputs, self.controller_units, input_dim, maxlen,
                                               self.state_space,

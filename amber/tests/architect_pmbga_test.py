@@ -29,7 +29,7 @@ class TestPmbga(testing_utils.TestCase):
         self.tempdir.cleanup()
 
     def test_get_action(self):
-        arc = self.controller.get_action()
+        arc, _ = self.controller.get_action()
         self.assertTrue(type(arc) is list)
         self.assertTrue(len(arc) == 2)
         for i in range(2):
