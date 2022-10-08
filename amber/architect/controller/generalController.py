@@ -9,11 +9,7 @@ import os
 import sys
 
 import h5py
-import tensorflow as tf
-if tf.__version__.startswith("2"):
-    tf.compat.v1.disable_eager_execution()
-    import tensorflow.compat.v1 as tf
-
+from ...utils import corrected_tf as tf
 from amber.architect.buffer import get_buffer
 from amber.architect.commonOps import get_keras_train_ops
 from amber.architect.commonOps import get_kl_divergence_n_entropy
@@ -447,7 +443,7 @@ class GeneralController(BaseController):
         prev_h = [tf.zeros([batch_size, self.lstm_size], tf.float32) for _ in
                   range(self.lstm_num_layers)]
         # only expand `g_emb` if necessary
-        g_emb_nrow = self.g_emb.shape[0] if type(self.g_emb.shape[0]) is int \
+        g_emb_nrow = self.g_emb.shape[0] if type(self.g_emb.shape[0]) in (int, type(None)) \
             else self.g_emb.shape[0].value
         if self.g_emb.shape[0] is not None and g_emb_nrow == 1:
             inputs = tf.matmul(tf.ones((batch_size, 1)), self.g_emb)

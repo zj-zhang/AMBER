@@ -144,7 +144,7 @@ class Buffer(object):
                  rescale_advantage_by_reward=False,
                  clip_advantage=10.):
         self.max_size = max_size
-        self.ewa_beta = ewa_beta or float(1 - 1./self.max_size)
+        self.ewa_beta = ewa_beta if ewa_beta is not None else float(1 - 1./self.max_size)
         self.discount_factor = discount_factor
         self.is_squeeze_dim = is_squeeze_dim
         self.rescale_advantage_by_reward = rescale_advantage_by_reward

@@ -1,5 +1,4 @@
-import tensorflow as tf
-
+from ...utils import corrected_tf as tf
 from amber.architect.controller.generalController import GeneralController, stack_lstm
 
 

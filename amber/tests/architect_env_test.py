@@ -4,7 +4,7 @@ expected behaviors
 """
 
 import os
-import tensorflow as tf
+from amber.utils import corrected_tf as tf
 import keras.backend as K
 import numpy as np
 import tempfile
@@ -212,7 +212,10 @@ class TestMultiManagerEnv(TestEnvDryRun):
     def test_build(self):
         is_enas = self.modeler_getter in (modeler.EnasAnnModelBuilder, modeler.EnasCnnModelBuilder)
         sess = tf.Session()
-        K.set_session(sess)
+        try:
+            K.set_session(sess)
+        except RuntimeError:
+            pass
         controller = self.get_controller(sess=sess)
         managers = []
         for dataset_key in self.datasets:

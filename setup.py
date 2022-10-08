@@ -13,8 +13,8 @@ config = {
         'matplotlib',
         'scipy',
         'tqdm',
-        'tensorflow >=1.9.0, <2.0.0',
-        'keras >=2.0.0, <2.3.0',
+        'tensorflow >=1.9.0',
+        'keras >=2.0.0',
         'seaborn >=0.9.0',
         'networkx'
         ],

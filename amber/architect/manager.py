@@ -192,7 +192,7 @@ class GeneralManager(BaseNetworkManager):
         with train_graph.as_default(), train_sess.as_default():
             try:
                 K.set_session(train_sess)
-            except RuntimeError: # keras 2.3.1 `set_session` not available for tf2.0
+            except (RuntimeError, AttributeError): # keras 2.3.1 `set_session` not available for tf2.0
                 assert keras.__version__ > '2.2.5'
                 pass
             model = self.model_fn(model_arc)  # a compiled keras Model
@@ -267,7 +267,7 @@ class GeneralManager(BaseNetworkManager):
         del hist
         try:
             K.clear_session()
-        except RuntimeError: # keras 2.3.1 `set_session` not available for tf2.0
+        except (RuntimeError, AttributeError): # keras 2.3.1 `set_session` not available for tf2.0
             assert keras.__version__ > '2.2.5'
             pass
 
@@ -330,7 +330,7 @@ class DistributedGeneralManager(GeneralManager):
             with tf.device(target_device):
                 try:
                     K.set_session(train_sess)
-                except RuntimeError: # keras 2.3.1 `set_session` not available for tf2.0
+                except (RuntimeError, AttributeError): # keras 2.3.1 `set_session` not available for tf2.0
                     pass
                 model = self.model_fn(model_arc)  # a compiled keras Model
 

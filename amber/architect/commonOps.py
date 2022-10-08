@@ -1,6 +1,6 @@
 import warnings
 
-import keras.backend as K
+import tensorflow.keras.backend as K
 import numpy as np
 import tensorflow as tf
 if tf.__version__.startswith("2"):
@@ -128,9 +128,9 @@ def get_tf_layer(fn_str):
 def create_weight(name, shape, initializer=None, trainable=True, seed=None):
     if initializer is None:
         try:
-            initializer = tf.contrib.keras.initializers.he_normal(seed=seed)
-        except AttributeError:
             initializer = tf.keras.initializers.he_normal(seed=seed)
+        except AttributeError:
+            initializer = tf.initializers.he_normal(seed=seed)
     return tf.get_variable(name, shape, initializer=initializer, trainable=trainable)
 
 
@@ -191,7 +191,6 @@ def get_keras_train_ops(loss, tf_variables, optim_algo, **kwargs):
     assert K.backend() == 'tensorflow'
     # TODO: change to TF.keras
     from keras.optimizers import get as get_opt
-    opt = get_opt(optim_algo)
     grads = tf.gradients(loss, tf_variables)
     grad_var = []
     no_grad_var = []
@@ -207,6 +206,7 @@ def get_keras_train_ops(loss, tf_variables, optim_algo, **kwargs):
     #    warnings.warn(
     #        "\n" + "=" * 80 + "\nWarning: the following tf.variables have no gradients"
     #                   " and have been discarded: \n %s" % no_grad_var, stacklevel=2)
+    opt = get_opt(optim_algo)
     train_op = opt.get_updates(loss, grad_var)
     try:
         config = opt.get_config()

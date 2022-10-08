@@ -14,7 +14,7 @@ import warnings
 from tqdm import tqdm
 import h5py
 import numpy as np
-import tensorflow as tf
+from ..utils import corrected_tf as tf
 from keras.callbacks import CallbackList, BaseLogger, History
 from tensorflow.keras.models import Model
 from keras.utils.data_utils import GeneratorEnqueuer
