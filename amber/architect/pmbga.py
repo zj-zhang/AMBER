@@ -29,8 +29,7 @@ class PopulationBuffer(Buffer):
     TODO: move to amber.architect.buffer
     """
     def finish_path(self, state_space, global_ep, working_dir, *args, **kwargs):
-        # TODO: handle ewa_beta in __init__
-        self.ewa_beta = 0
+        #self.ewa_beta = 0
         # sort acts by reward
         act_reward_pairs = [(a, r) for a,r in zip(*[self.action_buffer, self.reward_buffer])]
         act_reward_pairs = sorted(act_reward_pairs, key=lambda x: x[1], reverse=True)
@@ -45,6 +44,7 @@ class PopulationBuffer(Buffer):
         if self.r_bias is None:
             self.r_bias = np.mean(self.lt_nrbuffer[-1])
         else:
+            #print(f"r_bias = {self.r_bias} * {self.ewa_beta} + {(1. - self.ewa_beta)} * {np.mean(self.lt_nrbuffer[-1])}")
             self.r_bias = self.r_bias * self.ewa_beta + (1. - self.ewa_beta) * np.mean(self.lt_nrbuffer[-1])
         # write out
         with open(os.path.join(working_dir, 'buffers.txt'), mode='a+') as f:
@@ -313,7 +313,7 @@ class ZeroTruncatedNegativeBinomial(Poisson):
 
 
 class ProbaModelBuildGeneticAlgo(object):
-    def __init__(self, model_space, buffer_type, buffer_size=1, batch_size=100):
+    def __init__(self, model_space, buffer_type, buffer_size=1, batch_size=100, *args, **kwargs):
         """the workhorse for building model hyperparameters using Bayesian genetic algorithms
 
         I tried to match the arguments with BaseController, whenever possible; however, this means some arguments will
@@ -338,8 +338,11 @@ class ProbaModelBuildGeneticAlgo(object):
         #buffer_fn = get_buffer(buffer_type)
         assert buffer_type.lower() == 'population'
         buffer_fn = PopulationBuffer
+        ewa_beta = kwargs.get("ewa_beta", 0)
+        if ewa_beta is None or ewa_beta=='auto':
+            ewa_beta = 1 - 1./buffer_size
         self.buffer = buffer_fn(max_size=buffer_size,
-                                #ewa_beta=max(1 - 1. / buffer_size, 0.9),
+                                ewa_beta=ewa_beta,
                                 discount_factor=0.,
                                 is_squeeze_dim=True)
         self.batch_size = batch_size
@@ -390,7 +393,7 @@ class ProbaModelBuildGeneticAlgo(object):
 
     def train(self, episode, working_dir):
         try:
-            self.buffer.finish_path(self.model_space, episode, working_dir)
+            self.buffer.finish_path(state_space=self.model_space, global_ep=episode, working_dir=working_dir)
         except Exception as e:
             print("cannot finish path in buffer because: %s" % e)
             sys.exit(1)
