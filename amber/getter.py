@@ -7,7 +7,8 @@ Useful in order to get a working TrainEnv from a configuration text file.
 
 # Author : zzjfrank
 # Date   : 11.6.2019
-# Update : 4.23.2022 - add examples and docstrings FZZ
+# Update : 04.23.2022 - add examples and docstrings. FZZ
+# Update : 10.17.2022 - allow subclassing to be passed to getter instead of only strings. FZZ
 
 import os
 
@@ -146,8 +147,11 @@ def get_train_env(env_type, controller, manager, *args, **kwargs):
         if ``env_type`` string is not found in current implementations
 
     """
-    assert type(env_type) in (str,), TypeError("env_type must be a string")
-    if env_type == "ControllerTrainEnv":
+    from .architect.trainEnv import ControllerTrainEnvironment
+    assert isinstance(env_type, (str,)) or issubclass(env_type, ControllerTrainEnvironment), TypeError("env_type must be a subclass amber.architect.trainEnv, string")
+    if (not isinstance(env_type, (str,))) and issubclass(env_type, ControllerTrainEnvironment):
+        env = env_type(controller=controller, manager=manager, *args, **kwargs)
+    elif env_type == "ControllerTrainEnv":
         from .architect.trainEnv import ControllerTrainEnvironment
 
         env = ControllerTrainEnvironment(
@@ -186,7 +190,12 @@ def get_controller(controller_type, model_space, session, **kwargs):
     kwargs : dict
         keyword arguments for controller, such as buffer type
     """
-    if controller_type == "General" or controller_type == "GeneralController":
+    from .architect.controller import BaseController
+    assert isinstance(controller_type, (str,)) or issubclass(controller_type, BaseController), TypeError("controller_type must be a subclass amber.architect.BaseController, or string")
+
+    if (not isinstance(controller_type, (str,))) and issubclass(controller_type, BaseController):
+        controller = controller_type(model_space=model_space, session=session, **kwargs)
+    elif controller_type == "General" or controller_type == "GeneralController":
         from .architect import GeneralController
 
         controller = GeneralController(
@@ -295,8 +304,20 @@ def get_manager(manager_type, model_fn, reward_fn, data_dict, session, *args, **
         a dictionary for data filepaths, must have keys "train_data" and "validation_data"
 
     """
+    from .architect.manager import BaseNetworkManager
+    assert isinstance(manager_type, (str,)) or issubclass(manager_type, BaseNetworkManager), TypeError("manager_type must be a subclass amber.architect.BaseNetworkManager, or string")
+
     data_dict_unpacked = load_data_dict(data_dict)
-    if manager_type == "General" or manager_type == "GeneralManager":
+    if (not isinstance(manager_type, (str,))) and issubclass(manager_type, BaseNetworkManager):
+        manager = manager_type(
+            model_fn=model_fn,
+            reward_fn=reward_fn,
+            train_data=data_dict_unpacked["train_data"],
+            validation_data=data_dict_unpacked["validation_data"],
+            *args,
+            **kwargs
+        )
+    elif manager_type == "General" or manager_type == "GeneralManager":
         from .architect.manager import GeneralManager
 
         manager = GeneralManager(
@@ -371,9 +392,26 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
     session : tf.Session
         tensorflow session, can be None if not applicable for certain model builders
     """
+    from .modeler import ModelBuilder
+    assert isinstance(model_fn_type, (str,)) or issubclass(model_fn_type, ModelBuilder), TypeError("model_fn_type must be a amber.modeler.ModelBuilder, or string; got %s" % type(model_fn_type))
+
     from .architect.modelSpace import State
 
-    if model_fn_type == "DAG" or model_fn_type == "DAGModelBuilder":
+    if (not isinstance(model_fn_type, (str,))) and issubclass(model_fn_type, ModelBuilder):
+        inp_op_list = kwargs.pop("inputs_op")
+        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        out_op_list = kwargs.pop("outputs_op")
+        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
+        model_fn = model_fn_type(
+            model_space=model_space,
+            num_layers=len(model_space),
+            inputs_op=inputs_op,
+            output_op=output_op,
+            session=session,
+            *args,
+            **kwargs
+        )
+    elif model_fn_type == "DAG" or model_fn_type == "DAGModelBuilder":
         from .modeler import DAGModelBuilder
 
         assert "inputs_op" in kwargs and "outputs_op" in kwargs
@@ -527,7 +565,12 @@ def get_reward_fn(reward_fn_type, knowledge_fn, *args, **kwargs):
     neural networks `arXiv <https://arxiv.org/abs/1909.00337>`_.
 
     """
-    if reward_fn_type == "KnowledgeReward":
+    from .architect.reward import Reward
+    assert isinstance(reward_fn_type, (str,)) or issubclass(reward_fn_type, Reward), TypeError("reward_fn_type must be a subclass amber.architect.reward.Reward, or string")
+
+    if (not isinstance(reward_fn_type, (str,))) and issubclass(reward_fn_type, Reward):
+        reward_fn = reward_fn_type(knowledge_function=knowledge_fn, *args, **kwargs)
+    elif reward_fn_type == "KnowledgeReward":
         from .architect.reward import KnowledgeReward
 
         reward_fn = KnowledgeReward(knowledge_fn, *args, **kwargs)

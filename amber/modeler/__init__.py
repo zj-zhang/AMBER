@@ -8,13 +8,14 @@ from . import child, dag
 
 
 from .enasModeler import DAGModelBuilder, EnasAnnModelBuilder, EnasCnnModelBuilder
-from .kerasModeler import KerasModelBuilder, KerasMultiIOModelBuilder, KerasResidualCnnBuilder, \
+from .kerasModeler import ModelBuilder, KerasModelBuilder, KerasMultiIOModelBuilder, KerasResidualCnnBuilder, \
     build_sequential_model, build_multi_gpu_sequential_model, \
     build_multi_gpu_sequential_model_from_string, build_sequential_model_from_string, \
     KerasBranchModelBuilder
 
 
 __all__ = [
+    'ModelBuilder',
     'DAGModelBuilder',
     'EnasCnnModelBuilder',
     'EnasAnnModelBuilder',
