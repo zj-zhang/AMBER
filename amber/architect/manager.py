@@ -367,7 +367,10 @@ class DistributedGeneralManager(GeneralManager):
                                      )
 
                     # load best performance epoch in this training session
-                    model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
+                    try:
+                        model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
+                    except:
+                        pass
                     elapse_time = time.time() - start_time
                     sys.stderr.write("  %.3f sec\n"%elapse_time)
 
