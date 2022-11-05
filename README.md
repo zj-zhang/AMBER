@@ -14,9 +14,30 @@
 
 **Automated Modeling for Biological Evidence-based Research**
 
-
+<a id='sec1'></a>
 AMBER is a toolkit for designing high-performance neural network models automatically in
 Genomics and Bioinformatics.
+AMBER is a toolkit for designing high-performance neral network models automatically in
+Genomics and Bioinformatics. 
+
+🧐**AMBER can be used to automatically build:**
+- 🟢 Convolution neural networks
+- 🟢 Sparsified feed-forward neural network
+- 🟡 Transfer learning
+- 🟡 Kinetics-interpretable neural network
+- 🟡 Symbolic explainable AI [WIP]
+- 🔴 Graph neural network [WIP]
+
+
+🤝**Supported backend deep-learning libraries:**
+- 🟢 Tensorflow 1.X / Keras
+- 🟡 Tensorflow 2
+- 🟡 PyTorch / Pytorch-Lightning
+
+*Legend*
+🟢: Running & Tested; 🟡: Release soon; 🔴: Work in Progress
+
+---
 
 The overview, tutorials, API documentation can be found at:
 https://amber-automl.readthedocs.io/en/latest/
@@ -26,6 +47,7 @@ To get quick started, use this Google Colab notebook.
 
 Finally, you can read the AMBER paper for epigenetics regulatory modelling published in [Nature Machine Intelligence](https://www.nature.com/articles/s42256-021-00316-z).
 
+
 <a id='sec0'></a>
 ## Table of Contents
 1. [Introduction](#sec1)
@@ -33,30 +55,7 @@ Finally, you can read the AMBER paper for epigenetics regulatory modelling publi
 3. [Quick Start](#sec3)
 4. [Contact & References](#sec4)
 
-<a id='sec1'></a>
-## Introduction
-AMBER is a toolkit for designing high-performance neral network models automatically in
-Genomics and Bioinformatics. For more details, please read our
-papers [here](https://www.biorxiv.org/content/10.1101/2020.08.18.251561v1).
 
-**AMBER can be used to build:**
-- 🟢 Convolution neural networks
-- 🟢 Sparsified feed-forward neural network
-- 🟡 Transfer learning
-- 🟡 Kinetics-interpretable neural network
-- 🟡 Symbolic explainable AI [WIP]
-- 🔴 Graph neural network [WIP]
-
-
-**Supported backend deep-learning libraries:**
-- 🟢 Tensorflow 1.X / Keras
-- 🟡 Tensorflow 2
-- 🟡 PyTorch / Pytorch-Lightning
-
-*Legend*
-🟢: Running & Tested; 🟡: Release soon; 🔴: Work in Progress
-
-[Back to Top](#sec0)
 
 <a id='sec2'></a>
 ## Installation
@@ -72,7 +71,7 @@ from the GitHub repository and install with `Anaconda`; and 2) using `pypi` to i
 > NOTE
 We strongly encourage you to create a new conda environment by using the yaml file in this github repository, even if you are installing from PyPI.
 ```
-conda create -n amber -f conda_env.yml
+conda env create -n amber -f conda_env.yml
 ```
 
 
