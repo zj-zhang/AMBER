@@ -60,6 +60,7 @@ class BaseTorchModel(LightningModule):
         self.criterion = None
         self.optimizer = None
         self.metrics = {}
+        self.trainer = None
         self.save_hyperparameters()
     
     @property
@@ -93,6 +94,15 @@ class BaseTorchModel(LightningModule):
         )            
         trainer.fit(self, train_data, validation_data)
         return self
+    
+    def evaluate(self, data, verbose=False):
+        trainer = pl.Trainer(
+            accelerator="auto",
+            max_epochs=1,
+            enable_progress_bar=verbose,
+            # deterministic=True,
+        )
+        return trainer.test(self, data, verbose=verbose)[0]
 
     @staticmethod
     def _get_loss(loss_str: str):
@@ -101,7 +111,7 @@ class BaseTorchModel(LightningModule):
         elif loss_str == 'binary_crossentropy':
             return torch.nn.BCELoss()
         elif loss_str == 'mae':
-            return torch.nn.MAELoss()
+            return torch.nn.L1Loss()
         elif loss_str == 'nll':
             return torch.nn.NLLLoss()
         else:
@@ -186,7 +196,7 @@ class BaseTorchModel(LightningModule):
             avg_loss = total_loss / total
             metrics_tot = {}
             for metric in self.metrics:
-                metrics[str(metric)] = metric.on_epoch_end(
+                metrics_tot[str(metric)] = metric.on_epoch_end(
                     [_[str(metric)] for _ in outputs],
                     [_["total"] for _ in outputs]
                 )

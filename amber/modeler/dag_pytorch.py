@@ -40,8 +40,8 @@ class LambdaLayer(Module):
         return self.lambd(x)
 
 
-mro = (Module, EnasConv1dDAG) if has_torch else EnasConv1dDAG
-class EnasConv1dDAGpyTorch(mro):
+mro = [Module, EnasConv1dDAG] if has_torch else [EnasConv1dDAG]
+class EnasConv1dDAGpyTorch(*mro):
     def __init__(
         self,
         model_space,
@@ -121,7 +121,7 @@ class EnasConv1dDAGpyTorch(mro):
         )
         layers = self._build_dag()
         # register with ModuleDict in PyTorch
-        self.layers = ModuleDict(layers)
+        self.layers = torch.nn.ModuleDict(layers)
         # helpers
         self.decoder = ResConvNetArchitecture(model_space=self.model_space)
 

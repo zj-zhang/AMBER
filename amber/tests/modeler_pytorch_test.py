@@ -14,13 +14,14 @@ from amber.modeler.dag_pytorch import EnasConv1dDAGpyTorch
 import logging, sys
 logging.disable(sys.maxsize)
 import unittest
+from parameterized import parameterized
 try:
     from torchviz import make_dot
     has_torchviz = True
 except ImportError:
     has_torchviz = False
 
-
+@unittest.skip
 class TestEnasPyTorchConvDAG(testing_utils.TestCase):
     def setUp(self):
         try:
@@ -82,15 +83,25 @@ class TestPyTorchResConvModelBuilder(unittest.TestCase):
         pred = pred.detach().cpu().numpy()
         self.assertTrue(pred.shape == (3,1))
     
-    def test_2backward(self):
+    @parameterized.expand([
+        ('binary_crossentropy', 'adam'),
+        ('mse', 'adam'),
+        ('mae', 'adam'),
+        ('mse', 'sgd'),
+        ('mse', torch.optim.Adam)
+    ])
+    def test_2backward(self, loss, optimizer):
         x = torch.randn((50, 4, 1000))
         y = torch.randint(low=0, high=1, size=(50, 1), dtype=torch.float)
         train_data = DataLoader(TensorDataset(x, y), batch_size=10)
         arc = self.arc
         model = self.mb(arc)
-        model.compile(loss='binary_crossentropy', optimizer='adam')
-        model.fit(train_data)
-    
+        model.compile(loss=loss, optimizer=optimizer)
+        old_loss = model.evaluate(train_data)
+        model.fit(train_data, epochs=10)
+        new_loss = model.evaluate(train_data)
+        self.assertLess(new_loss['test_loss'], old_loss['test_loss'])
+        
     def test_3viz(self):
         if has_torchviz:
             arc = self.arc
