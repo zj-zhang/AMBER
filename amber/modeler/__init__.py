@@ -6,7 +6,7 @@ Modeler is an interface class that interacts outside with manager, and inside co
 
 from . import child, dag
 
-
+from .pytorchModeler import PytorchResidualCnnBuilder
 from .enasModeler import DAGModelBuilder, EnasAnnModelBuilder, EnasCnnModelBuilder
 from .kerasModeler import ModelBuilder, KerasModelBuilder, KerasMultiIOModelBuilder, KerasResidualCnnBuilder, \
     build_sequential_model, build_multi_gpu_sequential_model, \
@@ -23,6 +23,7 @@ __all__ = [
     'KerasMultiIOModelBuilder',
     'KerasResidualCnnBuilder',
     'KerasBranchModelBuilder',
+    'PytorchResidualCnnBuilder',
     'build_sequential_model',
     'build_sequential_model_from_string',
     'build_multi_gpu_sequential_model_from_string',

@@ -4,6 +4,7 @@ Test modeler DAGs (underlying modelers)
 
 import tensorflow as tf
 import torch
+from torch.utils.data import TensorDataset, DataLoader
 import numpy as np
 from tqdm import tqdm
 from amber.utils import testing_utils
@@ -12,6 +13,13 @@ from amber import architect
 from amber.modeler.dag_pytorch import EnasConv1dDAGpyTorch
 import logging, sys
 logging.disable(sys.maxsize)
+import unittest
+try:
+    from torchviz import make_dot
+    has_torchviz = True
+except ImportError:
+    has_torchviz = False
+
 
 class TestEnasPyTorchConvDAG(testing_utils.TestCase):
     def setUp(self):
@@ -53,5 +61,50 @@ class TestEnasPyTorchConvDAG(testing_utils.TestCase):
         self.assertLess(losses[-1], losses[0])    
 
 
+class TestPyTorchResConvModelBuilder(unittest.TestCase):
+    def setUp(self):
+        input_op = architect.Operation('input', shape=(1000, 4), name="input")
+        output_op = architect.Operation('dense', units=1, activation='sigmoid', name="output")
+        model_space, _ = testing_utils.get_example_conv1d_space(num_layers=3, num_pool=3)
+        #self.controller = architect.GeneralController(model_space=model_space, with_skip_connection=True, session=self.session)
+        self.arc = [0, 1, 1, 2, 1, 1]
+        self.mb = modeler.pytorchModeler.PytorchResidualCnnBuilder(
+            input_op, output_op, fc_units=32, flatten_mode='flatten', 
+            model_compile_dict={'loss':'mse', 'optimizer':'adam'}, 
+            model_space=model_space,
+            verbose=False
+        )
+
+    def test_1forward(self):
+        child = self.mb(self.arc)
+        child.eval()
+        pred = child.forward(torch.randn(3,4,1000), verbose=False)
+        pred = pred.detach().cpu().numpy()
+        self.assertTrue(pred.shape == (3,1))
+    
+    def test_2backward(self):
+        x = torch.randn((50, 4, 1000))
+        y = torch.randint(low=0, high=1, size=(50, 1), dtype=torch.float)
+        train_data = DataLoader(TensorDataset(x, y), batch_size=10)
+        arc = self.arc
+        model = self.mb(arc)
+        model.compile(loss='binary_crossentropy', optimizer='adam')
+        model.fit(train_data)
+    
+    def test_3viz(self):
+        if has_torchviz:
+            arc = self.arc
+            child = self.mb(arc)
+            child.eval()
+            pred = child.forward(torch.randn(3,4,1000), verbose=False)
+            dot = make_dot(pred.mean(), params=dict(child.named_parameters()))
+        else:
+            dot = None
+        return dot
+
+
 if __name__ == '__main__':
     tf.test.main()
+
+
+

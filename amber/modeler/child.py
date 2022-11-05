@@ -19,13 +19,8 @@ from keras.callbacks import CallbackList, BaseLogger, History
 from tensorflow.keras.models import Model
 from keras.utils.data_utils import GeneratorEnqueuer
 from tqdm import trange
-
+from .base import GeneralChild
 from ..architect.commonOps import batchify, numpy_shuffle_in_unison
-
-
-class GeneralChild(Model):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
 
 class DenseAddOutputChild(GeneralChild):

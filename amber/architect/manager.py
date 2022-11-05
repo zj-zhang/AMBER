@@ -318,8 +318,8 @@ class DistributedGeneralManager(GeneralManager):
         if remap_device is not None:
             target_device = remap_device
         elif self.devices is None:
-            from ..utils.gpu_query import get_idle_gpus
-            idle_gpus = get_idle_gpus()
+            from ..utils import get_available_gpus
+            idle_gpus = get_available_gpus()
             target_device = idle_gpus[0]
             target_device = "/device:GPU:%i"%target_device
             self.devices = [target_device]

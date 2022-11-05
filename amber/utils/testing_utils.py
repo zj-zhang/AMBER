@@ -82,7 +82,7 @@ class PseudoReward(PseudoCaller):
 def get_example_conv1d_space(out_filters=8, num_layers=2, num_pool=1):
     """Model space for stacking the same conv-pool-id layers"""
     model_space = architect.ModelSpace()
-    expand_layers = [num_layers//k-1 for k in range(1, num_pool)]
+    expand_layers = [num_layers//num_pool-1 + i*(num_layers//num_pool) for i in range(num_pool-1)]
     layer_sharing = {}
     for i in range(num_layers):
         model_space.add_layer(i, [

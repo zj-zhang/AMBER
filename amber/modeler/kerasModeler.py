@@ -4,7 +4,7 @@ import tensorflow.keras as keras
 from ..architect.modelSpace import Operation
 from .dag import get_layer
 import numpy as np
-from .enasModeler import ModelBuilder
+from .base import ModelBuilder
 import tensorflow as tf
 from .architectureDecoder import MultiIOArchitecture, ResConvNetArchitecture
 from tensorflow.keras.layers import Concatenate, Add, Dense, Conv1D, MaxPooling1D, AveragePooling1D, \
@@ -139,10 +139,17 @@ class KerasResidualCnnBuilder(ModelBuilder):
         dropout rate, must be 0<dropout_rate<1
     wsf : int
         width scale factor
+    reduction_factor : int
+        reduce the feature dimension by this factor at each pool layer
+    
+    Returns
+    ---------
+    tensorflow.keras.models.Model : 
+        a compiled keras model
     """
 
     def __init__(self, inputs_op, output_op, fc_units, flatten_mode, model_compile_dict, model_space,
-                 dropout_rate=0.2, wsf=1, add_conv1_under_pool=True, verbose=1, **kwargs):
+                 dropout_rate=0.2, wsf=1, reduction_factor=4, add_conv1_under_pool=True, verbose=1, **kwargs):
         self.model_compile_dict = model_compile_dict
         self.inputs = inputs_op
         self.outputs = output_op
@@ -154,6 +161,7 @@ class KerasResidualCnnBuilder(ModelBuilder):
         self.model_space = model_space
         self.dropout_rate = dropout_rate
         self.wsf = wsf
+        self.reduction_factor = reduction_factor
         self.add_conv1_under_pool = add_conv1_under_pool
         self.decoder = ResConvNetArchitecture(model_space=model_space)
 
@@ -218,7 +226,8 @@ class KerasResidualCnnBuilder(ModelBuilder):
                         self.factorized_reduction_layer(
                             layer,
                             out_filters[layer_id + 1] * self.wsf,
-                            name="pool_at_%i_from_%i" % (layer_id, i))
+                            name="pool_at_%i_from_%i" % (layer_id, i)),
+                            reduction_factor = self.reduction_factor
                     )
                 if verbose:
                     print("pooled@%i, %s" % (layer_id, pooled_layers))
@@ -268,10 +277,7 @@ class KerasResidualCnnBuilder(ModelBuilder):
             num_filters = width_scale_factor * \
                 layer.Layer_attributes['filters']
             kernel_size = layer.Layer_attributes['kernel_size']
-            if 'dilation' in layer.Layer_attributes:
-                dilation = layer.Layer_attributes['dilation']
-            else:
-                dilation = 1
+            dilation = layer.Layer_attributes.get('dilation', 1)
             x = Conv1D(num_filters,
                        kernel_size=kernel_size,
                        strides=1,

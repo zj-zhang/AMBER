@@ -9,20 +9,96 @@ from parameterized import parameterized_class
 from amber.utils import testing_utils
 from amber import modeler
 from amber import architect
-import logging, sys
+import logging, sys, unittest
 logging.disable(sys.maxsize)
 
+@unittest.skip
+class TestEnasConvModeler(testing_utils.TestCase):
+    def setUp(self):
+        try:
+            self.session = tf.Session()
+        except AttributeError:
+            self.session = tf.compat.v1.Session()
+        self.input_op = [architect.Operation('input', shape=(10, 4), name="input")]
+        self.output_op = architect.Operation('dense', units=1, activation='sigmoid', name="output")
+        self.x = np.random.choice(2, 40).reshape((1, 10, 4))
+        self.y = np.random.sample(1).reshape((1, 1))
+        self.model_space, _ = testing_utils.get_example_conv1d_space()
+        self.model_compile_dict = {'loss': 'binary_crossentropy', 'optimizer': 'sgd'}
+        self.controller = architect.GeneralController(
+            model_space=self.model_space,
+            buffer_type='ordinal',
+            with_skip_connection=True,
+            kl_threshold=0.05,
+            buffer_size=15,
+            batch_size=5,
+            session=self.session,
+            train_pi_iter=2,
+            lstm_size=32,
+            lstm_num_layers=1,
+            lstm_keep_prob=1.0,
+            optim_algo="adam",
+            skip_target=0.8,
+            skip_weight=0.4,
+        )
+        self.target_arc = [0, 0, 1]
+        self.enas_modeler = modeler.EnasCnnModelBuilder(
+            model_space=self.model_space,
+            num_layers=len(self.model_space),
+            inputs_op=self.input_op,
+            output_op=self.output_op,
+            model_compile_dict=self.model_compile_dict,
+            session=self.session,
+            controller=self.controller,
+            batch_size=1,
+            dag_kwargs={
+                'stem_config': {
+                    'has_stem_conv': True,
+                    'fc_units': 5
+                }
+            }
+        )
+        self.num_samps = 15
 
-@parameterized_class(attrs=('dag_func',), input_values=[
-    ('DAG',),
-    ('InputBlockDAG',),
-    ('InputBlockAuxLossDAG',)
+    def test_sample_arc_builder(self):
+        model = self.enas_modeler()
+        samp_preds = [model.predict(self.x).flatten()[0] for _ in range(self.num_samps)]
+        # sampled loss can't be always identical
+        self.assertNotEqual(len(set(samp_preds)), 1)
+        old_loss = [model.evaluate(self.x, self.y)['val_loss'] for _ in range(self.num_samps)]
+        model.fit(self.x, self.y, batch_size=1, epochs=100, verbose=0)
+        new_loss = [model.evaluate(self.x, self.y)['val_loss'] for _ in range(self.num_samps)]
+        self.assertLess(sum(new_loss), sum(old_loss))
+
+    def test_fix_arc_builder(self):
+        model = self.enas_modeler(arc_seq=self.target_arc)
+        # fixed preds must always be identical
+        fix_preds = [model.predict(self.x).flatten()[0] for _ in range(self.num_samps)]
+        self.assertEqual(len(set(fix_preds)), 1)
+        # record original loss
+        old_loss = model.evaluate(self.x, self.y)['val_loss']
+        # train weights with sampled arcs from model2
+        model2 = self.enas_modeler()
+        model2.fit(self.x, self.y, batch_size=1, epochs=100, verbose=0)
+        # loss should reduce
+        new_loss = model.evaluate(self.x, self.y)['val_loss']
+        self.assertLess(new_loss, old_loss)
+        # fixed preds should still be identical
+        fix_preds = [model.predict(self.x).flatten()[0] for _ in range(self.num_samps)]
+        self.assertEqual(len(set(fix_preds)), 1)
+
+
+# TODO: test Ann with a upstream feature model, e.g. CNN
+@parameterized_class(attrs=('with_output_blocks',), input_values=[
+    (True,),
+    (False,)
 ])
-class TestKerasDAG(testing_utils.TestCase):
+class TestEnasAnnDAG(testing_utils.TestCase):
+    with_output_blocks = False
+    fit_epochs = 15
     with_input_blocks = True
     with_skip_connection = True
     num_inputs = 4
-    fit_epochs = 5
     dag_func = 'InputBlockDAG'
     model_compile_dict = {'optimizer': 'adam', 'loss': 'mse', 'metrics': ['mae']}
 
@@ -34,21 +110,9 @@ class TestKerasDAG(testing_utils.TestCase):
         self.output_op = architect.Operation('Dense', units=1, activation='linear', name='output')
         # get a three-layer model space
         self.model_space = testing_utils.get_example_sparse_model_space(4)
-        # get data
-        self.traindata, self.validdata, self.testdata = self.get_data(seed=111)
-
-    def get_model_builder(self):
-        model_fn = modeler.DAGModelBuilder(
-            self.inputs_op,
-            self.output_op,
-            num_layers=len(self.model_space),
-            model_space=self.model_space,
-            model_compile_dict=self.model_compile_dict,
-            with_skip_connection=self.with_skip_connection,
-            with_input_blocks=self.with_input_blocks,
-            dag_func=self.dag_func)
-        return model_fn
-
+        # get data (again)
+        self.traindata, self.validdata, self.testdata = self.get_data(seed=111, blockify_inputs=False)
+    
     def get_data(self, seed=111, blockify_inputs=True):
         n1 = 3000
         n2 = 1000
@@ -67,60 +131,7 @@ class TestKerasDAG(testing_utils.TestCase):
             X_valid = [X_valid[:, i].reshape((-1, 1)) for i in range(4)]
             X_test = [X_test[:, i].reshape((-1, 1)) for i in range(4)]
         return (X_train, y_train), (X_valid, y_valid), (X_test, y_test)
-
-    def model_fit(self, model):
-        model.fit(
-            self.traindata[0], self.traindata[1],
-            batch_size=512,
-            epochs=self.fit_epochs,
-            validation_data=self.validdata,
-            callbacks=[tf.keras.callbacks.EarlyStopping(patience=2)],
-            verbose=0
-        )
-        train_loss = model.evaluate(*self.traindata, verbose=0)
-        # test_loss = model.evaluate(*self.testdata, verbose=0)
-        test_loss = np.mean( (model.predict(self.testdata[0]).squeeze() - self.testdata[1]) ** 2)
-        return train_loss, test_loss
-
-    def test_multi_input(self):
-        model_fn = self.get_model_builder()
-        # correct model: y = h1(x0,x1) + h2(x2,x3)
-        arc1 = np.array([
-            0, 0, 0, 1, 1,
-            0, 1, 1, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 1, 1, 1
-        ], dtype=np.int32)
-        # disconnected model: y = f(x0,x1,x2)
-        arc2 = np.array([
-            0, 1, 1, 1, 0,
-            0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 1,
-            0, 0, 0, 0, 0, 0, 0, 1
-        ], dtype=np.int32)
-
-        with self.session() as sess:
-            m1 = model_fn(arc1)
-            m2 = model_fn(arc2)
-            m1_train, m1_test = self.model_fit(m1)
-            m2_train, m2_test = self.model_fit(m2)
-            # self.assertLess(m1_test, m2_test)  # this needs a lot more fit_epochs
-
-
-# TODO: test Ann with a upstream feature model, e.g. CNN
-@parameterized_class(attrs=('with_output_blocks',), input_values=[
-    (True,),
-    (False,)
-])
-class TestEnasAnnDAG(TestKerasDAG):
-    with_output_blocks = False
-    fit_epochs = 15
-
-    def setUp(self):
-        super().setUp()
-        # get data (again)
-        self.traindata, self.validdata, self.testdata = self.get_data(seed=111, blockify_inputs=False)
-
+    
     def get_model_builder(self, sess):
         model_fn = modeler.EnasAnnModelBuilder(
             session=sess,
@@ -161,6 +172,20 @@ class TestEnasAnnDAG(TestKerasDAG):
             )
         return controller
 
+    def model_fit(self, model):
+        model.fit(
+            self.traindata[0], self.traindata[1],
+            batch_size=512,
+            epochs=self.fit_epochs,
+            validation_data=self.validdata,
+            callbacks=[tf.keras.callbacks.EarlyStopping(patience=2)],
+            verbose=0
+        )
+        train_loss = model.evaluate(*self.traindata, verbose=0)
+        # test_loss = model.evaluate(*self.testdata, verbose=0)
+        test_loss = np.mean( (model.predict(self.testdata[0]).squeeze() - self.testdata[1]) ** 2)
+        return train_loss, test_loss
+        
     def test_multi_input(self):
         # correct model: y = h1(x0,x1) + h2(x2,x3)
         arc1 = np.array([

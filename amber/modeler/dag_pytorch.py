@@ -6,7 +6,13 @@ architecture selections
 
 import numpy as np
 import warnings
-import torch
+try:
+    import torch
+    from torch.nn import Module
+    has_torch = True
+except ImportError:
+    Module = object
+    has_torch = False
 from ..utils import corrected_tf as tf
 
 # for general child
@@ -25,7 +31,7 @@ def get_torch_layer(fn_str):
         raise Exception("cannot get tensorflow layer for: %s" % fn_str)
 
 
-class LambdaLayer(torch.nn.Module):
+class LambdaLayer(Module):
     def __init__(self, lambd):
         super(LambdaLayer, self).__init__()
         self.lambd = lambd
@@ -34,7 +40,8 @@ class LambdaLayer(torch.nn.Module):
         return self.lambd(x)
 
 
-class EnasConv1dDAGpyTorch(torch.nn.Module, EnasConv1dDAG):
+mro = (Module, EnasConv1dDAG) if has_torch else EnasConv1dDAG
+class EnasConv1dDAGpyTorch(mro):
     def __init__(
         self,
         model_space,
@@ -97,7 +104,7 @@ class EnasConv1dDAGpyTorch(torch.nn.Module, EnasConv1dDAG):
 
 
         """
-        # init torch.nn.Modules, and manually call EnasConv1dDAG
+        # init Modules, and manually call EnasConv1dDAG
         super().__init__()
         EnasConv1dDAG.__init__(
             self,
@@ -114,14 +121,14 @@ class EnasConv1dDAGpyTorch(torch.nn.Module, EnasConv1dDAG):
         )
         layers = self._build_dag()
         # register with ModuleDict in PyTorch
-        self.layers = torch.nn.ModuleDict(layers)
+        self.layers = ModuleDict(layers)
         # helpers
         self.decoder = ResConvNetArchitecture(model_space=self.model_space)
 
     def forward(self, arc_seq, x):
         """use forward to compute predictions on the given arc_seq and
         datapoints of (input, label) pairs
-        Forward pass should parse arc_seq and call ``_layer()``
+        Forward pass should parse arc_seq
         """
         ops, skip_cons = self.decoder.decode(arc_seq)
         # pytorch conv1d expects data format of NCW
@@ -226,7 +233,7 @@ class EnasConv1dDAGpyTorch(torch.nn.Module, EnasConv1dDAG):
         elif flatten_op == "flatten":
             inp_c = (
                 self.input_node.Layer_attributes["shape"][0]
-                // (self.reduction_factor * len(self.pool_layers))
+                // (self.reduction_factor ** len(self.pool_layers))
                 * self.out_filters[-1]
             )
             layers["flatten_op"] = torch.nn.Flatten()
@@ -317,7 +324,7 @@ class EnasConv1dDAGpyTorch(torch.nn.Module, EnasConv1dDAG):
     def _conv_branch(self, in_channels, layer_attr):
         kernel_size = layer_attr["kernel_size"]
         activation_fn = layer_attr["activation"]
-        dilation = layer_attr["dilation"] if "dilation" in layer_attr else 1
+        dilation = layer_attr.get("dilation", 1)
         filters = layer_attr["filters"]
         x = torch.nn.Sequential(
             torch.nn.Conv1d(
@@ -369,14 +376,14 @@ class EnasConv1dDAGpyTorch(torch.nn.Module, EnasConv1dDAG):
             raise ValueError("Unknown pool {}".format(avg_or_max))
         x = torch.nn.Sequential(*x)
         return x
-
+    
+    def _identity_branch(self):
+        return torch.nn.Sequential()
+    
     def _verify_args(self):
         super()._verify_args()
         self.input_ph = None
         self.label_ph = None
-
-    def _identity_branch(self):
-        return torch.nn.Sequential()
 
     def _build_sample_arc(self, input_tensor=None, label_tensor=None, **kwargs):
         pass
