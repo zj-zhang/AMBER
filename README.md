@@ -14,9 +14,30 @@
 
 **Automated Modeling for Biological Evidence-based Research**
 
-
+<a id='sec1'></a>
 AMBER is a toolkit for designing high-performance neural network models automatically in
 Genomics and Bioinformatics.
+AMBER is a toolkit for designing high-performance neral network models automatically in
+Genomics and Bioinformatics. 
+
+🧐**AMBER can be used to automatically build:**
+- 🟢 Convolution neural networks
+- 🟢 Sparsified feed-forward neural network
+- 🟡 Transfer learning
+- 🟡 Kinetics-interpretable neural network
+- 🟡 Symbolic explainable AI [WIP]
+- 🔴 Graph neural network [WIP]
+
+
+🤝**Supported backend deep-learning libraries:**
+- 🟢 Tensorflow 1.X / Keras
+- 🟡 Tensorflow 2
+- 🟡 PyTorch / Pytorch-Lightning
+
+*Legend*
+🟢: Running & Tested; 🟡: Release soon; 🔴: Work in Progress
+
+---
 
 The overview, tutorials, API documentation can be found at:
 https://amber-automl.readthedocs.io/en/latest/
@@ -26,6 +47,7 @@ To get quick started, use this Google Colab notebook.
 
 Finally, you can read the AMBER paper for epigenetics regulatory modelling published in [Nature Machine Intelligence](https://www.nature.com/articles/s42256-021-00316-z).
 
+
 <a id='sec0'></a>
 ## Table of Contents
 1. [Introduction](#sec1)
@@ -33,28 +55,10 @@ Finally, you can read the AMBER paper for epigenetics regulatory modelling publi
 3. [Quick Start](#sec3)
 4. [Contact & References](#sec4)
 
-<a id='sec1'></a>
-## Introduction
-AMBER is a toolkit for designing high-performance neral network models automatically in
-Genomics and Bioinformatics. For more details, please read our
-preprint [here](https://www.biorxiv.org/content/10.1101/2020.08.18.251561v1).
 
-**What's new?**
-- July 2021: We employed AMBER to automate an end-to-end, SOTA predictor for CRISPR/Cas9 editing outcomes. Check it out here: [OA Paper](https://academic.oup.com/bioinformatics/article/37/Supplement_1/i342/6319668). [GitHub code](https://github.com/vli31/CROTON/).
-- May 2021: AMBER is selected as the [Cover Art](https://www.nature.com/natmachintell/volumes/3/issues/5) for the May Issue in Nature Machine Intelligence.
-- Mar. 7, 2021: Initial testing coverage added; covered test paths include RL-NAS and ENAS to build Conv1D resnets. See [here](https://github.com/zj-zhang/AMBER/blob/master/amber/tests/integration_bionas_test.py)
-for a quick mock controller training test.
-- Nov. 24, 2020: Evan Cofer ([@evan_cofer](https://twitter.com/evan_cofer)) gave a great talk at *MLCB 2020* about a zero-shot version of AMBER, tentatively under the
-name "AMBIENT". See his talk on YouTube [here](https://youtu.be/8co5_aqBwGQ?t=11171).
-- Nov. 22, 2020: AMBER now has a logo. We also added a tutorial hosted by Google Colab.
-
-
-[Back to Top](#sec0)
 
 <a id='sec2'></a>
 ## Installation
-
-AMBER is developed under Python 3.7 and Tensorflow 1.15.
 
 Currently AMBER is designed to be run in Linux-like environment. As a prerequisite, please make sure
  you have Anaconda/miniconda installed, as we provide the detailed dependencies through a conda 
@@ -62,8 +66,13 @@ Currently AMBER is designed to be run in Linux-like environment. As a prerequisi
  
 
 Please follow the steps below to install AMBER. There are two ways to install `AMBER`: 1) cloning the latest development
-from the GitHub repository and install with `Anaconda`; and 2) using `pypi` to install a versioned
-release.
+from the GitHub repository and install with `Anaconda`; and 2) using `pypi` to install a versioned release.
+
+> NOTE
+We strongly encourage you to create a new conda environment by using the yaml file in this github repository, even if you are installing from PyPI.
+```
+conda env create -n amber -f conda_env.yml
+```
 
 
 ### Get the latest source code
@@ -79,10 +88,10 @@ If you see `Already up to date` in your terminal, that means the code is at the 
 
 ### Installing with Anaconda
 The easiest way to install AMBER is by ``Anaconda``. It is recommended to create a new conda
-environment for AMBER:
+environment for AMBER using the yaml file `conda_env.yml` in this repo:
 
 ```
-conda env create -f=examples/DeepSEA/conda_amber.linux_env.yml 
+conda env create -n amber -f conda_env.yml 
 python setup.py develop
 ```
 
@@ -98,14 +107,14 @@ encouter any issues, please send me a bug report, and try installing with Anacon
 
 
 ### Testing your installation
-You can test if AMBER can be imported to your new `conda` environment like so:
+You can test if AMBER can be imported to your new `conda` environment by:
 
 ```bash
 conda activate amber
-python -c "import amber"
+python -c "import amber; print(amber.__version__)"
 ```
 
-If no errors pop up, that means you have successfully installed AMBER.
+If the version number is printed out, and no errors pop up, that means you have successfully installed AMBER.
 
 The typical installation process should take less than 10 minutes with regular network 
 connection and hardware specifications. 

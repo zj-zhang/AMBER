@@ -151,11 +151,12 @@ class LossAucReward(Reward):
         self.loss_c = float(loss_c) if loss_c is not None else None
         self.knowledge_c = float(knowledge_c) if knowledge_c is not None else None
         self.pred = kwargs.pop('pred', None)
+        self.pred_bs = kwargs.pop('batch_size', 256)
 
     def __call__(self, model, data, *args, **kwargs):
         X, y = unpack_data(data, unroll_generator_y=True)
         if self.pred is None:
-            pred = model.predict(X)
+            pred = model.predict(X, batch_size=self.pred_bs)
         else:
             pred = self.pred
         auc_list = []

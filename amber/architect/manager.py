@@ -318,8 +318,8 @@ class DistributedGeneralManager(GeneralManager):
         if remap_device is not None:
             target_device = remap_device
         elif self.devices is None:
-            from ..utils.gpu_query import get_idle_gpus
-            idle_gpus = get_idle_gpus()
+            from ..utils import get_available_gpus
+            idle_gpus = get_available_gpus()
             target_device = idle_gpus[0]
             target_device = "/device:GPU:%i"%target_device
             self.devices = [target_device]
@@ -367,7 +367,10 @@ class DistributedGeneralManager(GeneralManager):
                                      )
 
                     # load best performance epoch in this training session
-                    model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
+                    try:
+                        model.load_weights(os.path.join(self.working_dir, 'temp_network.h5'))
+                    except:
+                        pass
                     elapse_time = time.time() - start_time
                     sys.stderr.write("  %.3f sec\n"%elapse_time)
 

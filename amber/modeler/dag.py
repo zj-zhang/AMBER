@@ -66,7 +66,7 @@ def get_dag(arg):
         raise ValueError("Could not understand the DAG func:", arg)
 
 
-def get_layer(x, state, with_bn=False):
+def get_layer(x, state, custom_objects=None, with_bn=False):
     """Getter method for a Keras layer, including native Keras implementation and custom layers that are not included in
     Keras.
 
@@ -76,6 +76,8 @@ def get_layer(x, state, with_bn=False):
         The input Keras layer
     state : amber.architect.Operation, or callable
         The target layer to be built
+    custom_objects : dict, or None
+        Allow stringify custom objects by parsing a str->class dict
     with_bn : bool, optional
         If true, add batch normalization layers before activation
 
@@ -84,6 +86,7 @@ def get_layer(x, state, with_bn=False):
     x : tf.keras.layers
         The built target layer connected to input x
     """
+    custom_objects = custom_objects or {}
     if callable(state):
         return state()(x)
     elif state.Layer_type == 'dense':
@@ -174,6 +177,9 @@ def get_layer(x, state, with_bn=False):
 
     elif state.Layer_type == 'concatenate':
         return Concatenate(**state.Layer_attributes)(x)
+    
+    elif state.Layer_type in custom_objects:
+        return custom_objects[state.Layer_type](**state.Layer_attributes)(x)
 
     else:
         raise ValueError('Layer_type "%s" is not understood' % state.Layer_type)

@@ -4,17 +4,8 @@ import warnings
 from .dag import get_dag, get_layer
 from .dag import ComputationNode
 from .dag import EnasConv1dDAG
+from .base import ModelBuilder
 
-
-class ModelBuilder:
-    """Scaffold of Model Builder
-    """
-
-    def __init__(self, inputs, outputs, *args, **kwargs):
-        raise NotImplementedError("Abstract method.")
-
-    def __call__(self, model_states):
-        raise NotImplementedError("Abstract method.")
 
 
 class DAGModelBuilder(ModelBuilder):
