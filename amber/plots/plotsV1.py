@@ -128,7 +128,7 @@ def plot_environment_entropy(entropy_record, save_fn):
     '''
     # plt.clf()
     reset_plot()
-    ax = sns.lineplot(np.arange(len(entropy_record)), entropy_record)
+    ax = sns.lineplot(x=np.arange(len(entropy_record)), y=entropy_record)
     ax.set_xlabel('Time step')
     ax.set_ylabel('Entropy')
     plt.savefig(save_fn)

@@ -137,12 +137,14 @@ class BaseTorchModel(LightningModule):
         Uses Adam, learning rate from `self.lr`, and no scheduler by default.
         """
         assert self.is_compiled
-        if self.optimizer == 'adam':
+        if isinstance(self.optimizer, (tuple, list)):
+            return self.optimizer[0](self.parameters(), **self.optimizer[1])
+        elif self.optimizer == 'adam':
             return torch.optim.Adam(self.parameters(), lr=0.001)
         elif self.optimizer == 'sgd':
             return torch.optim.SGD(self.parameters(), lr=0.01, weight_decay=5e-4)
         elif isinstance(self.optimizer, (torch.optim.Adam, torch.optim.SGD)):
-            return self.optimizer    
+            return self.optimizer
         elif issubclass(self.optimizer, torch.optim.Optimizer):
             return self.optimizer(self.parameters(), lr=0.001)
         else:
