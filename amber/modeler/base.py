@@ -61,7 +61,7 @@ class BaseTorchModel(LightningModule):
     add module: use torch.nn.Module.add_module
     define forward pass: how?
     """
-    def __init__(self, data_format='NWC', *args, **kwargs):
+    def __init__(self, layers=None, data_format='NWC', *args, **kwargs):
         if has_torch is False:
             ImportError("To build TorchModel, you need to install pytorch and pytorch_lightning")
         super().__init__()
@@ -74,6 +74,10 @@ class BaseTorchModel(LightningModule):
         self.metrics = {}
         self.trainer = None
         self.data_format = data_format
+        layers = layers or []
+        for layer in layers:
+            layer_id, operation, input_ids = layer[0], layer[1], layer[2] if len(layer)>2 else None
+            self.add(layer_id=layer_id, operation=operation, input_ids=input_ids)
         self.save_hyperparameters()
     
     @property

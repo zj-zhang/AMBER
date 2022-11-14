@@ -1,6 +1,6 @@
 from .base import ModelBuilder, BaseTorchModel
 from .architectureDecoder import ResConvNetArchitecture
-from .dag_pytorch import LambdaLayer, get_torch_layer
+from .dag_pytorch import LambdaLayer, ConcatLayer, GlobalAveragePooling1DLayer, get_torch_layer
 try:
     import torch
     has_torch = True
@@ -85,7 +85,7 @@ class PytorchResidualCnnBuilder(ModelBuilder):
     def _convert(self, arc_seq, verbose=False):
         # init a new Model instance
         out_filters, pool_layers, layerid_to_block, block_to_filters = self.get_out_filters(self.model_space)
-        model = BaseTorchModel(model_compile_dict=self.model_compile_dict)
+        layers = []
         ops, skip_cons = self.decoder.decode(arc_seq)
         # for making connections with name IDs
         # key = f"layer_{layer_id}-b{pool_block}"
@@ -99,7 +99,8 @@ class PytorchResidualCnnBuilder(ModelBuilder):
             ),
             torch.nn.BatchNorm1d(num_features=out_filters[0] * self.wsf),
         )
-        model.add('stem', stem)
+        #model.add
+        layers.append(('stem', stem))
         # build conv trunk
         # skip connections should always connect within a pool block
         # to ensure the number of channels are matched
@@ -116,10 +117,11 @@ class PytorchResidualCnnBuilder(ModelBuilder):
                 layer=this_layer, 
                 width_scale_factor=self.wsf, 
                 in_channels=out_filters[layer_id] * self.wsf)
-            model.add(
-                layer_id=f"layer_{layer_id}-b{pool_block}", 
-                operation=conv_op,
-                )
+            #model.add
+            layers.append((
+                f"layer_{layer_id}-b{pool_block}", 
+                conv_op,
+            ))
             # build skip connections
             if layer_id > 0:
                 skip = skip_cons[layer_id - 1]
@@ -130,7 +132,9 @@ class PytorchResidualCnnBuilder(ModelBuilder):
                     start_block = layerid_to_block[skip_layer]
                     for prev_block in range(start_block+1, pool_block+1):
                         skip_id = f"layer_{skip_layer}-b{prev_block}"
-                        if skip_id not in model.layers:
+                        #if skip_id not in model.layers:
+                        model_layers = set([layer[0] for layer in layers])
+                        if skip_id not in model_layers:
                             skip_op = self.factorized_reduction_layer(
                                 in_channels=block_to_filters[prev_block-1] * self.wsf,
                                 out_channels=block_to_filters[prev_block] * self.wsf,
@@ -138,22 +142,26 @@ class PytorchResidualCnnBuilder(ModelBuilder):
                                 )
                             if verbose:
                                 print(skip_id, f"layer_{skip_layer}-b{prev_block-1}")
-                            model.add(
-                                layer_id=skip_id, 
-                                operation=skip_op, 
-                                input_ids=f"layer_{skip_layer}-b{prev_block-1}"
-                            )
+                            #model.add
+                            layers.append((
+                                skip_id, 
+                                skip_op, 
+                                f"layer_{skip_layer}-b{prev_block-1}"
+                            ))
                 # add residual sum to model, if any
                 if len(skip_layers):
                     res_sum = torch.nn.Sequential(
-                        LambdaLayer(lambda x: torch.stack(x, dim=0).sum(dim=0)),
+                        #LambdaLayer(lambda x: torch.stack(x, dim=0).sum(dim=0)),
+                        ConcatLayer(take_sum=True),
                         torch.nn.BatchNorm1d(num_features=out_filters[layer_id]*self.wsf)
                     )
-                    model.add(
-                        layer_id=f"resid_{layer_id}", 
-                        operation=res_sum, 
-                        input_ids=[f"layer_{layer_id}-b{pool_block}"] + \
-                            [f"layer_{skip_layer}-b{pool_block}" for skip_layer in skip_layers])
+                    #model.add
+                    layers.append((
+                        f"resid_{layer_id}", 
+                        res_sum, 
+                        [f"layer_{layer_id}-b{pool_block}"] + \
+                            [f"layer_{skip_layer}-b{pool_block}" for skip_layer in skip_layers]
+                    ))
             # add a fatorize layer if in pool_layers
             if layer_id in pool_layers:
                 factor_op = self.factorized_reduction_layer(
@@ -161,14 +169,15 @@ class PytorchResidualCnnBuilder(ModelBuilder):
                         out_channels=out_filters[layer_id+1] * self.wsf,
                         reduction_factor = self.reduction_factor
                         )
-                model.add(
-                    layer_id=f"pool_from_{layer_id}_to_{layer_id+1}",
-                    operation=factor_op
-                )
+                #model.add
+                layers.append((
+                    f"pool_from_{layer_id}_to_{layer_id+1}",
+                    factor_op
+                ))
         
         if self.flatten_mode == "global_avg_pool" or self.flatten_mode == "gap":
             inp_c = out_filters[-1] * self.wsf
-            flatten_op = LambdaLayer(lambda x: torch.mean(x, dim=-1))
+            flatten_op = GlobalAveragePooling1DLayer()
         elif self.flatten_mode == "flatten":
             inp_c = (
                 self.inputs.Layer_attributes["shape"][0]
@@ -178,19 +187,23 @@ class PytorchResidualCnnBuilder(ModelBuilder):
             flatten_op = torch.nn.Flatten()
         else:
             raise Exception("cannot understand flatten_op: %s" % self.flatten_mode)
-        model.add("flatten", flatten_op)
+        #model.add
+        layers.append(("flatten", flatten_op))
         
-        model.add("fc", torch.nn.Sequential(
+        #model.add
+        layers.append(("fc", torch.nn.Sequential(
             torch.nn.Dropout(self.dropout_rate),
             torch.nn.Linear(inp_c, self.fc_units),
             torch.nn.BatchNorm1d(self.fc_units),
             torch.nn.ReLU(),
             torch.nn.Dropout(self.dropout_rate),
-        ))
-        model.add("out", torch.nn.Sequential(
+        )))
+        #model.add
+        layers.append(("out", torch.nn.Sequential(
             torch.nn.Linear(self.fc_units, self.outputs.Layer_attributes["units"]),
             get_torch_layer(self.outputs.Layer_attributes["activation"]),
-        ))
+        )))
+        model = BaseTorchModel(layers=layers, model_compile_dict=self.model_compile_dict)
         return model
 
 

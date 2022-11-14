@@ -40,6 +40,26 @@ class LambdaLayer(Module):
         return self.lambd(x)
 
 
+class ConcatLayer(Module):
+    def __init__(self, take_sum=False):
+        super(ConcatLayer, self).__init__()
+        self.take_sum = take_sum
+
+    def forward(self, x):
+        out = torch.stack(x, dim=0)
+        if self.take_sum:
+            out = out.sum(dim=0)
+        return out
+
+
+class GlobalAveragePooling1DLayer(Module):
+    def __init__(self):
+        super(GlobalAveragePooling1DLayer, self).__init__()
+
+    def forward(self, x):
+        return torch.mean(x, dim=-1)
+
+
 mro = [Module, EnasConv1dDAG] if has_torch else [EnasConv1dDAG]
 class EnasConv1dDAGpyTorch(*mro):
     def __init__(
