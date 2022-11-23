@@ -6,7 +6,7 @@ Useful in order to get a working TrainEnv from a configuration text file.
 """
 
 # Author : zzjfrank
-# Date   : 11.6.2019
+# Create : 11.6.2019
 # Update : 04.23.2022 - add examples and docstrings. FZZ
 # Update : 10.17.2022 - allow subclassing to be passed to getter instead of only strings. FZZ
 

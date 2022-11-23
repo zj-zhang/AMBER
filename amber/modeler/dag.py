@@ -13,8 +13,10 @@ from ..architect.modelSpace import State, ModelSpace
 
 # for general child
 from .child import DenseAddOutputChild, EnasAnnModel, EnasCnnModel
-from ..architect.commonOps import get_tf_metrics, get_keras_train_ops, get_tf_layer, get_tf_loss, create_weight, \
-    create_bias, batch_norm1d
+#from ..architect.commonOps import F.get_metric, get_keras_train_ops, F.get_layer, F.get_loss, F.create_weight, \
+#    F.create_bias, batch_norm1d, get_keras_train_ops
+from ..architect.commonOps import batch_norm1d
+from .. import backend as F
 # for get layers
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import GlobalAveragePooling1D, GlobalMaxPooling1D, GaussianNoise
@@ -1045,15 +1047,15 @@ class EnasAnnDAG:
                                         tf.ones((1, self._child_output_size[i]), dtype=tf.int32))
                 w = tf.where(tf.cast(output_mask, tf.bool), x=self.w_out[i], y=tf.fill(tf.shape(self.w_out[i]), 0.))
                 model_output.append(
-                    get_tf_layer(self._child_output_func[i])(tf.matmul(layer_outputs_, w) + self.b_out[i]))
+                    F.get_layer(self._child_output_func[i])(tf.matmul(layer_outputs_, w) + self.b_out[i]))
                 w_masks.append((w, self.b_out[i]))
         else:
-            model_output = [get_tf_layer(self._child_output_func[i])(tf.matmul(x, self.w_out[i]) + self.b_out[i])
+            model_output = [F.get_layer(self._child_output_func[i])(tf.matmul(x, self.w_out[i]) + self.b_out[i])
                             for i in range(len(self.output_node))]
         return model_output, w_masks, layer_outputs, dropout_placeholders
 
     def _layer(self, w, b, inputs, layer_id, use_dropout=True):
-        layer = get_tf_layer(self._actv_fn)(tf.matmul(inputs, w) + b)
+        layer = F.get_layer(self._actv_fn)(tf.matmul(inputs, w) + b)
         if use_dropout:
             drop_prob = tf.placeholder_with_default(0.0, shape=(), name='dropout_%i' % layer_id)
             layer = tf.nn.dropout(layer, rate=drop_prob)
@@ -1115,14 +1117,14 @@ class EnasAnnDAG:
             # TODO: process loss_weights
             loss_weights = self.model_compile_dict['loss_weights'] if 'loss_weights' in self.model_compile_dict else None
             if type(loss) is str:
-                loss_ = [get_tf_loss(loss, labels[i], model_output[i]) for i in range(len(model_output))]
+                loss_ = [F.get_loss(loss, labels[i], model_output[i]) for i in range(len(model_output))]
                 # loss_ should originally all have the batch_size dim, then reduce_mean to 1-unit sample
                 # if the loss is homogeneous, then take the mean
                 loss_ = tf.reduce_mean(loss_)
             elif type(loss) is list:
                 loss_ = []
                 for i in range(len(loss)):
-                    loss_.append(get_tf_loss(
+                    loss_.append(F.get_loss(
                         loss[i],
                         labels[i],
                         model_output[i]
@@ -1173,25 +1175,21 @@ class EnasAnnDAG:
             # default settings used from enas
             if self.child_train_op_kwargs is None:
                 # more sensible default values
-                train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
-                    # get_train_ops(
+                train_op, lr, optimizer_ = F.get_train_op(
                     loss=loss_,
-                    tf_variables=trainable_var,
-                    optim_algo=optimizer,
-                    train_step=self.train_step)
+                    variables=trainable_var,
+                    optimizer=optimizer)
             # user specific settings; useful when training the final searched arc
             else:
-                train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(
-                    # get_train_ops
+                train_op, lr, optimizer_ = F.get_train_op(
                     loss=loss_,
-                    tf_variables=trainable_var,
-                    train_step=self.train_step,
-                    optim_algo=optimizer,
+                    variables=trainable_var,
+                    optimizer=optimizer,
                     **self.child_train_op_kwargs)
             if metrics is None:
                 metrics = []
             else:
-                metrics = [get_tf_metrics(x) for x in metrics]
+                metrics = [F.get_metric(x) for x in metrics]
             # TODO: this needs fixing to be more generic;
             # TODO: for example, the squeeze op is not usable for
             # TODO: other metrics such as Acc
@@ -1199,7 +1197,6 @@ class EnasAnnDAG:
                         for i in range(len(model_output)) for f in metrics]
             ops = {'train_op': train_op,
                    'lr': lr,
-                   'grad_norm': grad_norm,
                    'optimizer': optimizer,
                    'loss': loss_,
                    'metrics': metrics_,
@@ -1512,14 +1509,14 @@ class EnasConv1dDAG:
         labels = self.label_ph if labels is None else labels
         with tf.variable_scope('compile'):
             if type(loss) is str:
-                loss_ = [get_tf_loss(loss, labels[i], model_output[i]) for i in range(len(model_output))]
+                loss_ = [F.get_loss(loss, labels[i], model_output[i]) for i in range(len(model_output))]
                 # loss_ should originally all have the batch_size dim, then reduce_mean to 1-unit sample
                 # if the loss is homogeneous, then take the mean
                 loss_ = tf.reduce_mean(loss_)
             elif type(loss) is list:
                 loss_ = []
                 for i in range(len(loss)):
-                    loss_.append(get_tf_loss(
+                    loss_.append(F.get_loss(
                         loss[i],
                         labels[i],
                         model_output[i]
@@ -1561,25 +1558,25 @@ class EnasConv1dDAG:
                 # default settings used from enas
                 if self.child_train_op_kwargs is None:
                     # more sensible default values
-                    train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(  # get_train_ops(
+                    train_op, lr, optimizer_ = F.get_train_op( 
                         loss=loss_,
-                        tf_variables=trainable_var,
-                        optim_algo=optimizer,
+                        variables=trainable_var,
+                        optimizer=optimizer,
                         train_step=self.train_step)
                 # user specific settings; useful when training the final searched arc
                 else:
-                    train_op, lr, grad_norm, optimizer_ = get_keras_train_ops(  # get_train_ops(
+                    train_op, lr, optimizer_ = F.get_train_op(  # get_train_ops(
                         loss=loss_,
-                        tf_variables=trainable_var,
+                        variables=trainable_var,
+                        optimizer=optimizer,
                         train_step=self.train_step,
-                        optim_algo=optimizer,
                         **self.child_train_op_kwargs)
             else:
-                train_op, lr, grad_norm, optimizer_ = None, None, None, None
+                train_op, lr, optimizer_ = None, None, None, None
             if metrics is None:
                 metrics = []
             else:
-                metrics = [get_tf_metrics(x) for x in metrics]
+                metrics = [F.get_metric(x) for x in metrics]
             # TODO: this needs fixing to be more generic;
             # TODO: for example, the squeeze op is not usable for
             # TODO: other metrics such as Acc
@@ -1587,7 +1584,6 @@ class EnasConv1dDAG:
                         for i in range(len(model_output)) for f in metrics]
             ops = {'train_op': train_op,
                    'lr': lr,
-                   'grad_norm': grad_norm,
                    'optimizer': optimizer_,
                    'loss': loss_,
                    'metrics': metrics_,
@@ -1609,7 +1605,7 @@ class EnasConv1dDAG:
                 with tf.variable_scope("stem_conv"):
                     stem_kernel_size = self.stem_config.get('stem_kernel_size', 8)
                     stem_filters = out_filters[0]
-                    w = create_weight("w", [stem_kernel_size, 4, stem_filters])
+                    w = F.create_weight("w", [stem_kernel_size, 4, stem_filters])
                     x = tf.nn.conv1d(input, w, 1, "SAME", data_format=self.data_format)
                     x = batch_norm1d(x, is_training, data_format=self.data_format)
                     layers.append(x)
@@ -1670,16 +1666,16 @@ class EnasConv1dDAG:
                         inp_c = x.get_shape()[-1].value
                     except AttributeError:
                         inp_c = x.get_shape()[-1]
-                    w = create_weight("w_fc", [inp_c, fc_units])
+                    w = F.create_weight("w_fc", [inp_c, fc_units])
                 elif flatten_op == 'flatten':
                     try:
                         inp_c = np.prod(x.get_shape()[1:]).value
                     except AttributeError:
                         inp_c = np.prod(x.get_shape()[1:])
-                    w = create_weight("w_fc", [inp_c, fc_units])
+                    w = F.create_weight("w_fc", [inp_c, fc_units])
                 else:
                     raise Exception("Unknown fc string: %s" % flatten_op)
-                b = create_bias("b_fc", shape=[fc_units])
+                b = F.create_bias("b_fc", shape=[fc_units])
                 x = tf.matmul(x, w) + b
                 x = tf.nn.relu(x)
                 if is_training:
@@ -1688,9 +1684,9 @@ class EnasConv1dDAG:
                     )
                     x = tf.nn.dropout(x, rate=dropout_placeholders[-1])
 
-                w_out = create_weight("w_out", [fc_units, self.output_node.Layer_attributes['units']])
-                b_out = create_bias("b_out", shape=[self.output_node.Layer_attributes['units']])
-                model_output = get_tf_layer(self.output_node.Layer_attributes['activation'])(
+                w_out = F.create_weight("w_out", [fc_units, self.output_node.Layer_attributes['units']])
+                b_out = F.create_bias("b_out", shape=[self.output_node.Layer_attributes['units']])
+                model_output = F.get_layer(self.output_node.Layer_attributes['activation'])(
                     tf.matmul(x, w_out) + b_out)
         return model_output, dropout_placeholders
 
@@ -1710,7 +1706,7 @@ class EnasConv1dDAG:
             actual_data_format = 'channels_first'
 
         with tf.variable_scope("path1_conv"):
-            w = create_weight("w", [1, inp_c, out_filters])
+            w = F.create_weight("w", [1, inp_c, out_filters])
             x = tf.nn.conv1d(layer, filters=w, stride=1, padding="SAME")
             x = tf.layers.max_pooling1d(
                 x, self.reduction_factor, self.reduction_factor, "SAME", data_format=actual_data_format)
@@ -1820,11 +1816,11 @@ class EnasConv1dDAG:
                 inp_c = inputs.get_shape()[1].value
             except AttributeError:
                 inp_c = inputs.get_shape()[1]
-        w = create_weight("w", [kernel_size, inp_c, filters])
+        w = F.create_weight("w", [kernel_size, inp_c, filters])
         x = tf.nn.conv1d(inputs, filters=w, stride=1, padding="SAME", dilations=dilation)
         x = batch_norm1d(x, is_training, data_format=self.data_format)
-        b = create_bias("b", shape=[1])
-        x = get_tf_layer(activation_fn)(x + b)
+        b = F.create_bias("b", shape=[1])
+        x = F.get_layer(activation_fn)(x + b)
         return lambda: x
 
     def _pool_branch(self, inputs, avg_or_max, layer_attr, is_training):
@@ -1848,7 +1844,7 @@ class EnasConv1dDAG:
 
         if self.add_conv1_under_pool:
             with tf.variable_scope("conv_1"):
-                w = create_weight("w", [1, inp_c, filters])
+                w = F.create_weight("w", [1, inp_c, filters])
                 x = tf.nn.conv1d(inputs, w, 1, "SAME", data_format=self.data_format)
                 x = batch_norm1d(x, is_training, data_format=self.data_format)
                 x = tf.nn.relu(x)

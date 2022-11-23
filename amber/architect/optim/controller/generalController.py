@@ -7,11 +7,12 @@ General controller for searching computational operation per layer, and residual
 
 import os
 import sys
-
+import numpy as np
 import h5py
-from ...utils import corrected_tf as tf
+from ....utils import corrected_tf as tf
+from .... import backend as F
 from amber.architect.buffer import get_buffer
-from amber.architect.commonOps import get_keras_train_ops
+#from amber.architect.commonOps import get_keras_train_ops
 from amber.architect.commonOps import get_kl_divergence_n_entropy
 from amber.architect.commonOps import proximal_policy_optimization_loss
 from amber.architect.commonOps import stack_lstm
@@ -45,6 +46,10 @@ class BaseController(object):
 
     def remove_files(self, *args, **kwargs):
         raise NotImplementedError("Abstract method.")
+    
+    @property
+    def search_space_size(self):
+        raise NotImplementedError()
 
 
 class GeneralController(BaseController):
@@ -605,10 +610,10 @@ class GeneralController(BaseController):
         tf_variables = [var
                         for var in tf.trainable_variables() if var.name.startswith(self.name)]
 
-        self.train_op, self.lr, self.grad_norm, self.optimizer = get_keras_train_ops(
+        self.train_op, self.lr, self.optimizer = F.get_train_op(
             loss=self.loss,
-            tf_variables=tf_variables,
-            optim_algo=self.optim_algo
+            variables=tf_variables,
+            optimizer=self.optim_algo
         )
 
     def get_action(self, *args, **kwargs):
@@ -869,3 +874,11 @@ class GeneralController(BaseController):
                 onehot_list.append(tf.transpose(tf.stack(tmp), [1, 0, 2]))
             arc_pointer += 1 + num_input_blocks * with_input_blocks + layer_id * with_skip_connection
         return onehot_list
+    
+    @property
+    def search_space_size(self):
+        input_blocks, output_blocks, num_layers, num_choices_per_layer = self.input_blocks, self.output_blocks, len(self.model_space), np.mean([len(layer) for layer in self.model_space])
+        s = np.log10(num_choices_per_layer) * num_layers
+        s += np.log10(2) * (num_layers-1)*num_layers/2
+        s += np.log10(input_blocks) * num_layers + np.log10(output_blocks) * num_layers
+        return s

@@ -2,13 +2,15 @@
 
 """
 A pure Keras-implementation of NAS
-ZZJ
-Aug. 7, 2018
 """
+
+# Author: ZZJ
+# Date  : Aug. 7, 2018
+
 
 import os
 
-from ...utils import corrected_tf as tf
+from ....utils import corrected_tf as tf
 import tensorflow.keras.backend as K
 import numpy as np
 from tensorflow.keras import optimizers
@@ -16,7 +18,7 @@ from tensorflow.keras.layers import Input, Lambda, Dense, Activation, LSTM
 from tensorflow.keras.models import Model
 
 from amber.architect.buffer import Buffer
-from amber.architect.controller.generalController import BaseController
+from .generalController import BaseController
 from amber.architect.commonOps import get_kl_divergence_n_entropy, proximal_policy_optimization_loss
 
 

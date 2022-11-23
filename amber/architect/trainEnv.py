@@ -8,12 +8,13 @@ Training environment provides interactions between several components within arc
 import csv
 import datetime
 import shutil
+import os
 import sys
 import time
 import warnings
+import numpy as np
 from collections import defaultdict
 
-from amber.architect.controller.operationController import *
 from .buffer import parse_action_str, parse_action_str_squeezed
 from .manager import BaseNetworkManager, EnasManager
 from ..plots import plot_stats2, plot_environment_entropy, plot_controller_performance, \

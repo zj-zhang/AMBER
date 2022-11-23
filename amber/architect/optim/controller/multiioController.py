@@ -1,5 +1,5 @@
-from ...utils import corrected_tf as tf
-from amber.architect.controller.generalController import GeneralController, stack_lstm
+from ....utils import corrected_tf as tf
+from .generalController import GeneralController, stack_lstm
 
 
 class MultiInputController(GeneralController):

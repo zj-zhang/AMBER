@@ -626,3 +626,68 @@ class MultiManagerBuffer:
             }
             yield batch_data
 
+
+class PopulationBuffer(Buffer):
+    """Population buffer for working with genetic algorithms
+    """
+    def finish_path(self, state_space, global_ep, working_dir, *args, **kwargs):
+        #self.ewa_beta = 0
+        # sort acts by reward
+        act_reward_pairs = [(a, r) for a,r in zip(*[self.action_buffer, self.reward_buffer])]
+        act_reward_pairs = sorted(act_reward_pairs, key=lambda x: x[1], reverse=True)
+        # append to long-term
+        if self.lt_abuffer is None:
+            self.lt_abuffer = [[x[0] for x in act_reward_pairs]]
+            self.lt_nrbuffer = [[x[1] for x in act_reward_pairs]]
+        else:
+            self.lt_abuffer.append([x[0] for x in act_reward_pairs])
+            self.lt_nrbuffer.append([x[1] for x in act_reward_pairs])
+        # update r-bias
+        if self.r_bias is None:
+            self.r_bias = np.mean(self.lt_nrbuffer[-1])
+        else:
+            #print(f"r_bias = {self.r_bias} * {self.ewa_beta} + {(1. - self.ewa_beta)} * {np.mean(self.lt_nrbuffer[-1])}")
+            self.r_bias = self.r_bias * self.ewa_beta + (1. - self.ewa_beta) * np.mean(self.lt_nrbuffer[-1])
+        # write out
+        with open(os.path.join(working_dir, 'buffers.txt'), mode='a+') as f:
+            action_readable_str = ','.join([str(x) for x in self.action_buffer[-1]])
+            f.write(
+                "-" * 80 + "\n" +
+                "Episode:%d\tReward:%.4f\tR_bias:%.4f\tAdvantage:NA\n" %
+                (
+                    global_ep,
+                    self.reward_buffer[-1],
+                    self.r_bias,
+                ) +
+                "\tAction:%s\n\tProb:NA\n" % (
+                    action_readable_str,
+                )
+            )
+        # remove tailing buffer to max_size
+        if len(self.lt_abuffer) > self.max_size:
+            self.lt_abuffer = self.lt_abuffer[-self.max_size:]
+            self.lt_nrbuffer = self.lt_nrbuffer[-self.max_size:]
+        self.action_buffer, self.reward_buffer = [], []
+
+    def get_data(self, bs, shuffle=True):
+        """return any architectures whose reward is higher than the moving award reward `r_bias` in batches.
+
+        Depending on the NAS application, this ad hoc survival selection criterion can be either good or bad.
+        In building kinetic-interpretable neural networks, it works good; however, if one needs customization,
+        subclassing `amber.architect.Buffer` should be considered. 
+        """
+        lt_abuffer = np.concatenate(self.lt_abuffer, axis=0)
+        lt_nrbuffer = np.concatenate(self.lt_nrbuffer, axis=0)
+        lt_abuffer = lt_abuffer[lt_nrbuffer>=self.r_bias]
+        lt_nrbuffer = lt_nrbuffer[lt_nrbuffer>=self.r_bias]
+        if shuffle is True:
+            slice_ = np.random.choice(lt_nrbuffer.shape[0], size=lt_nrbuffer.shape[0], replace=False)
+            lt_abuffer = lt_abuffer[slice_]
+            lt_nrbuffer = lt_nrbuffer[slice_]
+
+        for i in range(0, len(lt_nrbuffer), bs):
+            b = min(i + bs, len(lt_nrbuffer))
+            p_batch = None
+            a_batch = lt_abuffer[i:b]
+            yield None, p_batch, a_batch, None, lt_nrbuffer[i:b]
+

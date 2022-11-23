@@ -65,14 +65,26 @@ Currently AMBER is designed to be run in Linux-like environment. As a prerequisi
  environment.
  
 
-Please follow the steps below to install AMBER. There are two ways to install `AMBER`: 1) cloning the latest development
-from the GitHub repository and install with `Anaconda`; and 2) using `pypi` to install a versioned release.
+Please follow the steps below to install AMBER. To install `AMBER`, 
+you can use `conda` and `pypi` to install a versioned release (recommended).
 
 > NOTE
-We strongly encourage you to create a new conda environment by using the yaml file in this github repository, even if you are installing from PyPI.
+We strongly encourage you to create a new conda environment, regardless of the backend library you choose.
+
+
+### Installing with TF 1.X/Keras
+In the command-line terminal, type the following commands to get it installed:
+
+```{bash}
+conda create -n amber -c anaconda tensorflow-gpu=1.15.0 keras=2.2.5 numpy~=1.18.5 h5py~=2.10.0
+conda activate amber
+pip install amber-automl
+# if you plan to run tests
+pip install pytest coverage parameterized pydot graphviz
 ```
-conda env create -n amber -f conda_env.yml
-```
+
+### Installing with PyTorch/Lightning
+TODO
 
 
 ### Get the latest source code
@@ -82,28 +94,10 @@ First, clone the Github Repository; if you have previous versions, make sure you
 git clone https://github.com/zj-zhang/AMBER.git
 cd AMBER
 git pull
-```
-
-If you see `Already up to date` in your terminal, that means the code is at the latest change.
-
-### Installing with Anaconda
-The easiest way to install AMBER is by ``Anaconda``. It is recommended to create a new conda
-environment for AMBER using the yaml file `conda_env.yml` in this repo:
-
-```
-conda env create -n amber -f conda_env.yml 
 python setup.py develop
 ```
 
-### Installing with Pip
-As of version `0.1.0`, AMBER is on pypi. In the command-line terminal, type the following commands to get it installed:
-
-```{bash}
-pip install amber-automl
-```
-
-This will also install the required dependencies automatically. The pip install is still in its beta phase, so if you
-encouter any issues, please send me a bug report, and try installing with Anaconda as above.
+If you see `Already up to date` in your terminal, that means the code is at the latest change.
 
 
 ### Testing your installation

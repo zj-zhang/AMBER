@@ -68,78 +68,6 @@ def numpy_shuffle_in_unison(List):
         np.random.shuffle(x)
 
 
-def get_tf_loss(loss, y_true, y_pred):
-    if type(loss) is str:
-        loss = loss.lower()
-        if loss == 'mse' or loss == 'mean_squared_error':
-            loss_ = tf.reduce_mean(tf.square(y_true - y_pred))
-        elif loss == 'categorical_crossentropy':
-            loss_ = tf.reduce_mean(tf.keras.losses.categorical_crossentropy(y_true, y_pred))
-        elif loss == 'binary_crossentropy':
-            loss_ = tf.reduce_mean(tf.keras.losses.binary_crossentropy(y_true, y_pred))
-        else:
-            raise Exception("cannot understand string loss: %s" % loss)
-    elif type(loss) is callable:
-        loss_ = loss(y_true, y_pred)
-    else:
-        raise TypeError("Expect loss argument to be str or callable, got %s" % type(loss))
-    return loss_
-
-
-def get_tf_metrics(m):
-    if callable(m):
-        return m
-    elif m.lower() == 'mae':
-        return tf.keras.metrics.MAE
-    elif m.lower() == 'mse':
-        return tf.keras.metrics.MSE
-    elif m.lower() == 'acc':
-        def acc(y_true, y_pred):
-            return tf.reduce_mean(y_true)
-
-        # return tf.keras.metrics.Accuracy
-        return acc
-    elif m.lower() == 'auc':
-        return tf.keras.metrics.AUC
-    else:
-        raise Exception("cannot understand metric type: %s" % m)
-
-
-def get_tf_layer(fn_str):
-    fn_str = fn_str.lower()
-    if fn_str == "relu":
-        return tf.nn.relu
-    elif fn_str == "linear":
-        return lambda x: x
-    elif fn_str == "softmax":
-        return tf.nn.softmax
-    elif fn_str == "sigmoid":
-        return tf.nn.sigmoid
-    elif fn_str == 'leaky_relu':
-        return tf.nn.leaky_relu
-    elif fn_str == 'elu':
-        return tf.nn.elu
-    elif fn_str == 'tanh':
-        return tf.nn.tanh
-    else:
-        raise Exception("cannot get tensorflow layer for: %s" % fn_str)
-
-
-def create_weight(name, shape, initializer=None, trainable=True, seed=None):
-    if initializer is None:
-        try:
-            initializer = tf.keras.initializers.he_normal(seed=seed)
-        except AttributeError:
-            initializer = tf.initializers.he_normal(seed=seed)
-    return tf.get_variable(name, shape, initializer=initializer, trainable=trainable)
-
-
-def create_bias(name, shape, initializer=None):
-    if initializer is None:
-        initializer = tf.constant_initializer(0.0, dtype=tf.float32)
-    return tf.get_variable(name, shape, initializer=initializer)
-
-
 def batch_norm1d(x, is_training, name="bn", decay=0.9, epsilon=1e-5,
                  data_format="NWC"):
     if data_format == "NWC":
@@ -185,38 +113,6 @@ def batch_norm1d(x, is_training, name="bn", decay=0.9, epsilon=1e-5,
                 is_training=False)
         x = tf.squeeze(x, axis=sq_dim)
     return x
-
-
-def get_keras_train_ops(loss, tf_variables, optim_algo, **kwargs):
-    assert K.backend() == 'tensorflow'
-    # TODO: change to TF.keras
-    from keras.optimizers import get as get_opt
-    grads = tf.gradients(loss, tf_variables)
-    grad_var = []
-    no_grad_var = []
-    for g, v in zip(grads, tf_variables):
-        if g is None:
-            # get sub-scope name; if is optimizer-related, ignore
-            if 'compile' in v.name.split('/'):
-                continue
-            no_grad_var.append(v)
-        else:
-            grad_var.append(v)
-    # if no_grad_var:
-    #    warnings.warn(
-    #        "\n" + "=" * 80 + "\nWarning: the following tf.variables have no gradients"
-    #                   " and have been discarded: \n %s" % no_grad_var, stacklevel=2)
-    opt = get_opt(optim_algo)
-    train_op = opt.get_updates(loss, grad_var)
-    try:
-        config = opt.get_config()
-    except NotImplementedError:  # if cannot get learning-rate when eager-execution is disableed
-        config = {'lr':None}
-    try:
-        learning_rate = config['lr']
-    except:  # for newer version of keras
-        learning_rate = config['learning_rate']
-    return train_op, learning_rate, None, opt
 
 
 def count_model_params(tf_variables):

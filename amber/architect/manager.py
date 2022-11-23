@@ -14,7 +14,6 @@ import warnings
 import numpy as np
 import tensorflow.keras as keras
 from ..utils import corrected_tf as tf
-import tensorflow as tf2
 from tensorflow.keras import backend as K
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.models import Model
@@ -268,7 +267,7 @@ class GeneralManager(BaseNetworkManager):
         try:
             K.clear_session()
         except (RuntimeError, AttributeError): # keras 2.3.1 `set_session` not available for tf2.0
-            assert keras.__version__ > '2.2.5'
+            assert version.parse(keras.__version__) > version.parse('2.2.5')
             pass
 
         gc.collect()
