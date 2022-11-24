@@ -1,8 +1,8 @@
 from abc import ABC
 
-import tensorflow.keras as keras
 from ..architect.modelSpace import Operation
-from .dag import get_layer
+from .. import backend as F
+from ..backend import get_layer, Model  # type: ignore
 import numpy as np
 from .base import ModelBuilder
 import tensorflow as tf
@@ -104,7 +104,7 @@ class KerasBranchModelBuilder(ModelBuilder):
         # merge branches
         if self.model_space.concat_op == 'concatenate':
             branch_merge = get_layer(
-                x=branches, state=Operation('concatenate'))
+                x=branches, op=Operation('concatenate'))
         else:
             raise ValueError(
                 'Model builder cannot understand model space concat op: %s' %
@@ -116,7 +116,7 @@ class KerasBranchModelBuilder(ModelBuilder):
                           for j in self._branch_to_layer[(1, None)]],
             model_space=self.model_space.subspaces[1]
         )
-        out = get_layer(x=h, state=self.output_op)
+        out = get_layer(x=h, op=self.output_op)
         model = Model(inputs=inps, outputs=out)
         model.compile(**self.model_compile_dict)
         return model
@@ -174,7 +174,7 @@ class KerasResidualCnnBuilder(ModelBuilder):
     def _convert(self, arc_seq, verbose=True):
         out_filters, pool_layers = self.get_out_filters(self.model_space)
 
-        inp = get_layer(x=None, state=self.inputs)
+        inp = get_layer(x=None, op=self.inputs)
         # this is assuming all choices have the same out_filters
         stem_conv = Operation(
             'conv1d',
@@ -248,7 +248,7 @@ class KerasResidualCnnBuilder(ModelBuilder):
             x = Dropout(self.dropout_rate)(x)
         x = Dense(units=self.fc_units, activation="relu")(x)
 
-        out = get_layer(x=x, state=self.outputs)
+        out = get_layer(x=x, op=self.outputs)
 
         model = Model(inputs=inp, outputs=out)
         return model
@@ -404,10 +404,10 @@ class KerasMultiIOModelBuilder(ModelBuilder):
         inputs = [
             get_layer(
                 x=None,
-                state=x) for x in self.inputs] if self.num_inputs > 0 else [
+                op=x) for x in self.inputs] if self.num_inputs > 0 else [
             get_layer(
                 x=None,
-                state=self.inputs)]
+                op=self.inputs)]
         op, inp, skp, out = self.decoder.decode(arc_seq)
         out_rowsum = np.apply_along_axis(np.sum, 1, out)
         out_colsum = np.apply_along_axis(np.sum, 0, out)
@@ -449,14 +449,14 @@ class KerasMultiIOModelBuilder(ModelBuilder):
                 input_tensor = Concatenate()(this_inputs)
                 layer = get_layer(
                     x=input_tensor,
-                    state=model_op,
+                    op=model_op,
                     with_bn=with_bn)
                 prev_layers.append(layer)
             elif len(this_inputs) == 1:
                 input_tensor = this_inputs[0]
                 layer = get_layer(
                     x=input_tensor,
-                    state=model_op,
+                    op=model_op,
                     with_bn=with_bn)
                 prev_layers.append(layer)
             else:
@@ -478,7 +478,7 @@ class KerasMultiIOModelBuilder(ModelBuilder):
         outputs = [
             get_layer(
                 x=outputs_inputs[i],
-                state=self.outputs[i]) for i in range(
+                op=self.outputs[i]) for i in range(
                 self.num_outputs)]
         model = Model(inputs=inputs, outputs=outputs)
         return model

@@ -12,7 +12,7 @@ from amber import architect
 import logging, sys, unittest
 logging.disable(sys.maxsize)
 
-@unittest.skip
+
 class TestEnasConvModeler(testing_utils.TestCase):
     def setUp(self):
         try:

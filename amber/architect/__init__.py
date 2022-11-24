@@ -13,17 +13,19 @@ from . import buffer, store, reward, trainEnv, modelSpace, controller, pmbga
 # alias
 Operation = State
 
-# TODO: Do not include MultiIO until its tested in multiio branch
 __all__ = [
     # funcs
     'BaseController',
     'GeneralController',
+    'MultiIOController',
+    'MultiInputController',
     'Operation',
     'State',
     'ModelSpace',
     'GeneralManager',
     'EnasManager',
     'ControllerTrainEnvironment',
+    'MultiManagerEnvironment',
     'EnasTrainEnv',
     # modules
     'buffer',

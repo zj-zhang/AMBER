@@ -1,12 +1,6 @@
 import warnings
-
-import tensorflow.keras.backend as K
+from .. import backend as F
 import numpy as np
-import tensorflow as tf
-if tf.__version__.startswith("2"):
-    tf.compat.v1.disable_eager_execution()
-    import tensorflow.compat.v1 as tf
-from tensorflow.python.training import moving_averages
 
 
 def unpack_data(data, unroll_generator_x=False, unroll_generator_y=False, callable_kwargs=None):
@@ -14,11 +8,7 @@ def unpack_data(data, unroll_generator_x=False, unroll_generator_y=False, callab
     unroll_generator = unroll_generator_x or unroll_generator_y
     if type(data) in (tuple, list):
         x, y = data[0], data[1]
-    elif isinstance(data, tf.keras.utils.Sequence):
-        x = data
-        y = None
-        is_generator = True
-    elif hasattr(data, '__next__'):
+    elif hasattr(data, '__iter__') or hasattr(data, '__next__'):
         x = data
         y = None
         is_generator = True
@@ -68,63 +58,16 @@ def numpy_shuffle_in_unison(List):
         np.random.shuffle(x)
 
 
-def batch_norm1d(x, is_training, name="bn", decay=0.9, epsilon=1e-5,
-                 data_format="NWC"):
-    if data_format == "NWC":
-        shape = [x.get_shape()[-1]]
-        x = tf.expand_dims(x, axis=1)  # NHWC
-        sq_dim = 1
-    elif data_format == "NCW":
-        shape = [x.get_shape()[1]]
-        x = tf.expand_dims(x, axis=2)  # NCHW
-        sq_dim = 2
-    else:
-        raise NotImplementedError("Unknown data_format {}".format(data_format))
-
-    with tf.variable_scope(name, reuse=False if is_training else True):
-        offset = tf.get_variable(
-            "offset", shape,
-            initializer=tf.constant_initializer(0.0, dtype=tf.float32))
-        scale = tf.get_variable(
-            "scale", shape,
-            initializer=tf.constant_initializer(1.0, dtype=tf.float32))
-        moving_mean = tf.get_variable(
-            "moving_mean", shape, trainable=False,
-            initializer=tf.constant_initializer(0.0, dtype=tf.float32))
-        moving_variance = tf.get_variable(
-            "moving_variance", shape, trainable=False,
-            initializer=tf.constant_initializer(1.0, dtype=tf.float32))
-
-        if is_training:
-            x, mean, variance = tf.nn.fused_batch_norm(
-                x, scale, offset, epsilon=epsilon,
-                is_training=True)
-            update_mean = moving_averages.assign_moving_average(
-                moving_mean, mean, decay)
-            update_variance = moving_averages.assign_moving_average(
-                moving_variance, variance, decay)
-            with tf.control_dependencies([update_mean, update_variance]):
-                x = tf.identity(x)
-        else:
-            x, _, _ = tf.nn.fused_batch_norm(
-                x, scale, offset, mean=moving_mean,
-                variance=moving_variance,
-                epsilon=epsilon,
-                is_training=False)
-        x = tf.squeeze(x, axis=sq_dim)
-    return x
-
-
-def count_model_params(tf_variables):
+def count_model_params(model_params):
     num_vars = 0
-    for var in tf_variables:
+    for var in model_params:
         num_vars += np.prod([dim.value for dim in var.get_shape()])
     return num_vars
 
 
 def proximal_policy_optimization_loss(curr_prediction, curr_onehot, old_prediction, old_onehotpred, rewards, advantage, clip_val, beta=None):
-    rewards_ = tf.squeeze(rewards, axis=1)
-    advantage_ = tf.squeeze(advantage, axis=1)
+    rewards_ = F.squeeze(rewards, axis=1)
+    advantage_ = F.squeeze(advantage, axis=1)
 
     entropy = 0
     r = 1
@@ -134,16 +77,16 @@ def proximal_policy_optimization_loss(curr_prediction, curr_onehot, old_predicti
         # print("p", p)
         # print("old_p", old_p)
         # print("old_onehot", old_onehot)
-        ll_t = tf.log(tf.reduce_sum(old_onehot * p))
-        ll_0 = tf.log(tf.reduce_sum(old_onehot * old_p))
-        r_t = tf.exp(ll_t - ll_0)
+        ll_t = F.log(F.reduce_sum(old_onehot * p))
+        ll_0 = F.log(F.reduce_sum(old_onehot * old_p))
+        r_t = F.exp(ll_t - ll_0)
         r = r * r_t
         # approx entropy
-        entropy += -tf.reduce_mean(tf.log(tf.reduce_sum(onehot * p, axis=1)))
+        entropy += -F.reduce_mean(F.log(F.reduce_sum(onehot * p, axis=1)))
 
-    surr_obj = tf.reduce_mean(tf.abs(1 / (rewards_ + 1e-8)) *
-                              tf.minimum(r * advantage_,
-                                         tf.clip_by_value(r,
+    surr_obj = F.reduce_mean(F.abs(1 / (rewards_ + 1e-8)) *
+                              F.minimum(r * advantage_,
+                                         F.clip_by_value(r,
                                                           clip_value_min=1 - clip_val,
                                                           clip_value_max=1 + clip_val) * advantage_)
                               )
@@ -163,20 +106,20 @@ def get_kl_divergence_n_entropy(curr_prediction, curr_onehot, old_prediction, ol
     for t, (p, onehot, old_p, old_onehot) in \
             enumerate(zip(curr_prediction, curr_onehot, old_prediction, old_onehotpred)):
         # print(t, old_p, old_onehot, p, onehot)
-        kl.append(tf.reshape(tf.keras.metrics.kullback_leibler_divergence(old_p, p), [-1]))
-        ent.append(tf.reshape(tf.keras.backend.binary_crossentropy(onehot, p), [-1]))
-    return tf.reduce_mean(tf.concat(kl, axis=0)), tf.reduce_mean(tf.concat(ent, axis=0))
+        kl.append(F.reshape(F.get_metric('kl_div')(old_p, p), [-1]))
+        ent.append(F.reshape(F.get_loss('binary_crossentropy', y_true=onehot, y_pred=p), [-1]))
+    return F.reduce_mean(F.concat(kl, axis=0)), F.reduce_mean(F.concat(ent, axis=0))
 
 
 def lstm(x, prev_c, prev_h, w):
-    ifog = tf.matmul(tf.concat([x, prev_h], axis=1), w)
-    i, f, o, g = tf.split(ifog, 4, axis=1)
-    i = tf.sigmoid(i)
-    f = tf.sigmoid(f)
-    o = tf.sigmoid(o)
-    g = tf.tanh(g)
+    ifog = F.matmul(F.concat([x, prev_h], axis=1), w)
+    i, f, o, g = F.split(ifog, 4, axis=1)
+    i = F.sigmoid(i)
+    f = F.sigmoid(f)
+    o = F.sigmoid(o)
+    g = F.tanh(g)
     next_c = i * g + f * prev_c
-    next_h = o * tf.tanh(next_c)
+    next_h = o * F.tanh(next_c)
     return next_c, next_h
 
 

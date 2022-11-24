@@ -1,0 +1,67 @@
+Name                                                                                         Stmts   Miss  Cover   Missing
+--------------------------------------------------------------------------------------------------------------------------
+/common/zhangz2/workspace/AMBER/amber/__init__.py                                               14      3    79%   10-12
+/common/zhangz2/workspace/AMBER/amber/architect/__init__.py                                      7      0   100%
+/common/zhangz2/workspace/AMBER/amber/architect/buffer.py                                      324     27    92%   36, 44-47, 242, 356, 373, 383, 393, 490, 525-528, 537, 553-557, 597, 608, 619, 640-641, 650, 668-669
+/common/zhangz2/workspace/AMBER/amber/architect/commonOps.py                                    92     25    73%   11-21, 23-29, 40, 55-58, 62-65, 97
+/common/zhangz2/workspace/AMBER/amber/architect/controller.py                                    1      0   100%
+/common/zhangz2/workspace/AMBER/amber/architect/manager.py                                     220    117    47%   40, 194-196, 199-209, 213, 234, 246, 269-271, 281-292, 295-302, 309-426, 504, 547, 584, 587
+/common/zhangz2/workspace/AMBER/amber/architect/modelSpace.py                                  117     41    65%   40, 42, 65, 163, 177, 188-191, 244, 272-276, 286-289, 313, 332-356, 360, 364
+/common/zhangz2/workspace/AMBER/amber/architect/optim/__init__.py                                0      0   100%
+/common/zhangz2/workspace/AMBER/amber/architect/optim/controller/__init__.py                     6      0   100%
+/common/zhangz2/workspace/AMBER/amber/architect/optim/controller/generalController.py          406     46    89%   30, 33, 36, 39, 42, 45, 48, 52, 217-218, 353-356, 359, 361, 507-511, 515, 517, 593, 670-672, 698-699, 702, 762, 793-798, 827-830, 880-884
+/common/zhangz2/workspace/AMBER/amber/architect/optim/controller/multiioController.py          348     32    91%   129, 131, 172, 174, 209-212, 219, 221, 321, 323, 363, 365, 413-417, 424, 426, 433, 540-541, 571, 573, 616, 618, 643-646
+/common/zhangz2/workspace/AMBER/amber/architect/optim/controller/operationController.py        130     23    82%   27, 29, 32-35, 39-47, 51, 56, 230-235, 238-241
+/common/zhangz2/workspace/AMBER/amber/architect/optim/controller/zeroShotController.py          85      5    94%   17-18, 46-47, 114
+/common/zhangz2/workspace/AMBER/amber/architect/optim/pmbga.py                                 216    101    53%   32, 38, 41, 46-48, 51-56, 59-66, 71-78, 81-84, 87-88, 91-95, 99-101, 104-106, 110, 114, 117-121, 141-147, 150-154, 157-175, 178-181, 185-187, 191-196, 242-245, 248-251, 282, 336-338
+/common/zhangz2/workspace/AMBER/amber/architect/pmbga.py                                         1      0   100%
+/common/zhangz2/workspace/AMBER/amber/architect/reward.py                                      165     75    55%   20, 23, 48, 58, 62, 82, 90, 148, 161, 175-176, 183-186, 190-191, 199-206, 211-246, 284-307
+/common/zhangz2/workspace/AMBER/amber/architect/store.py                                        85     22    74%   34, 38, 40, 46, 86-105, 124, 151, 154, 164-165, 167, 174-175, 180
+/common/zhangz2/workspace/AMBER/amber/architect/trainEnv.py                                    546    204    63%   28, 32-33, 37-41, 159, 164, 169-171, 176, 181, 184, 189-190, 193-199, 205, 229, 259, 286, 314, 350-352, 357-358, 371, 404, 409, 416, 424, 430-435, 441, 475, 494-495, 498-504, 508-509, 525, 584, 632, 649-650, 653-658, 663-664, 689, 698-700, 711-717, 721-745, 749-913, 916-923
+/common/zhangz2/workspace/AMBER/amber/backend/__init__.py                                       63     14    78%   18, 29-30, 35-40, 54, 73, 79, 88-94
+/common/zhangz2/workspace/AMBER/amber/backend/backend.py                                        46     22    52%   19, 22, 25, 29, 32, 35, 39, 42, 45, 48, 51, 55, 58, 61, 64, 67, 70, 73, 76, 79, 82, 85
+/common/zhangz2/workspace/AMBER/amber/backend/set_default_backend.py                            15     10    33%   7-11, 21-35
+/common/zhangz2/workspace/AMBER/amber/backend/tensorflow_1/__init__.py                           7      0   100%
+/common/zhangz2/workspace/AMBER/amber/backend/tensorflow_1/_operators/__init__.py                4      0   100%
+/common/zhangz2/workspace/AMBER/amber/backend/tensorflow_1/_operators/denovo_motif_conv.py      34     17    50%   5-6, 12-14, 19-20, 24-26, 30-34, 38, 73-74, 95
+/common/zhangz2/workspace/AMBER/amber/backend/tensorflow_1/_operators/sepfc.py                  96     56    42%   11-13, 36-38, 41-50, 53, 73, 76-104, 107, 168-169, 205, 208-221, 224-231, 260-261, 281
+/common/zhangz2/workspace/AMBER/amber/backend/tensorflow_1/_operators/topk.py                   15      0   100%
+/common/zhangz2/workspace/AMBER/amber/backend/tensorflow_1/layer.py                             76      2    97%   27, 120
+/common/zhangz2/workspace/AMBER/amber/backend/tensorflow_1/math.py                              27      3    89%   11, 16, 35
+/common/zhangz2/workspace/AMBER/amber/backend/tensorflow_1/model.py                             55     16    71%   9, 13-17, 23, 27, 29-32, 34, 38, 64-65, 68-69
+/common/zhangz2/workspace/AMBER/amber/backend/tensorflow_1/session.py                            0      0   100%
+/common/zhangz2/workspace/AMBER/amber/backend/tensorflow_1/tensor.py                            20      2    90%   12-13
+/common/zhangz2/workspace/AMBER/amber/bootstrap/__init__.py                                      2      0   100%
+/common/zhangz2/workspace/AMBER/amber/bootstrap/gold_standard.py                                37     27    27%   17-23, 27-39, 44-55
+/common/zhangz2/workspace/AMBER/amber/bootstrap/grid_search.py                                  88     79    10%   13-38, 44-52, 56-64, 69-91, 95-117
+/common/zhangz2/workspace/AMBER/amber/bootstrap/mock_manager.py                                 61     14    77%   19, 23-24, 42-49, 82, 89-90, 97
+/common/zhangz2/workspace/AMBER/amber/bootstrap/simple_conv1d_space.py                          18      5    72%   65-71
+/common/zhangz2/workspace/AMBER/amber/getter.py                                                259    242     7%   62-69, 72-80, 83-84, 88-104, 110-119, 150-167, 193-223, 255-274, 307-368, 395-520, 568-601, 613-641, 646-666, 673-771
+/common/zhangz2/workspace/AMBER/amber/modeler/__init__.py                                        5      0   100%
+/common/zhangz2/workspace/AMBER/amber/modeler/architectureDecoder.py                            46     32    30%   22-39, 58-66, 80-85
+/common/zhangz2/workspace/AMBER/amber/modeler/base.py                                          246    170    31%   15-17, 21-27, 41, 44, 65-81, 86, 89-90, 93-101, 104-115, 118-124, 128-137, 143-155, 162-179, 187-207, 216-231, 234, 237, 240, 243, 246, 249, 260-261, 268, 273-283, 312-321, 327-330, 335-336, 341-342, 349-355, 359, 364, 369-371, 379, 389-393, 398, 405-406, 413-414, 422, 425-438
+/common/zhangz2/workspace/AMBER/amber/modeler/child.py                                         595    244    59%   33, 41-44, 72, 80-82, 133-139, 159, 165-166, 185, 189, 193, 198-214, 219, 250-301, 304-306, 310, 317, 323-376, 407, 409-410, 422-426, 444, 450-473, 481, 498-524, 532-534, 537-541, 544-551, 554-555, 558-565, 620-625, 643, 648, 650-651, 667, 675, 695, 700-703, 718, 720-721, 727-728, 734-739, 742, 747, 772-773, 787, 796, 807-809, 812-815, 818-823, 826-827, 830-833
+/common/zhangz2/workspace/AMBER/amber/modeler/dag.py                                           968    193    80%   39, 53-56, 199-202, 213-214, 260, 270-271, 363-364, 381-382, 530-531, 603, 609, 611, 628, 636-637, 648-652, 668, 736-737, 822-829, 852, 871-877, 940, 946-949, 988-991, 1000-1014, 1017-1021, 1030-1031, 1034, 1043-1044, 1047, 1060, 1066, 1168-1170, 1175-1176, 1195, 1204-1223, 1231, 1241, 1246, 1336, 1345, 1392-1406, 1410-1416, 1421-1427, 1444, 1455, 1491, 1508-1520, 1525-1526, 1531, 1542-1546, 1550-1551, 1554, 1574-1592, 1600-1613, 1619, 1636-1640, 1645, 1652-1654, 1662-1663, 1672, 1691-1697, 1715-1716, 1718-1725, 1738, 1744, 1759, 1769, 1774
+/common/zhangz2/workspace/AMBER/amber/modeler/dag_pytorch.py                                   179    145    19%   11-12, 24-31, 36-37, 40, 45-46, 49-52, 57, 60, 128-146, 153-192, 198-277, 281-292, 298-342, 345-360, 363-398, 401, 404-406, 409, 412, 415
+/common/zhangz2/workspace/AMBER/amber/modeler/enasModeler.py                                    96      9    91%   40-41, 58-60, 74, 161, 180, 247
+/common/zhangz2/workspace/AMBER/amber/modeler/kerasModeler.py                                  298    169    43%   22-26, 29-57, 63-70, 73-89, 92-122, 223-234, 246, 258-270, 300-303, 320, 329-337, 342, 357, 373-389, 398-401, 404-484, 501-518, 523-539, 546-554, 562-570
+/common/zhangz2/workspace/AMBER/amber/modeler/pytorchModeler.py                                121    105    13%   6, 39-52, 56-77, 80-83, 87-207, 212-266, 270-281
+/common/zhangz2/workspace/AMBER/amber/plots/__init__.py                                          2      0   100%
+/common/zhangz2/workspace/AMBER/amber/plots/plotsV1.py                                         300    162    46%   42-43, 47-52, 56-58, 67-74, 81-87, 121, 157, 162-164, 178, 192-215, 224, 229-231, 244, 248-269, 286-288, 297-299, 307, 311-319, 324-344, 349-354, 358-371, 375-403, 416-456
+/common/zhangz2/workspace/AMBER/amber/utils/__init__.py                                         15     11    27%   6-8, 12-16, 20-22
+/common/zhangz2/workspace/AMBER/amber/utils/data_parser.py                                     141    121    14%   15, 22-25, 29-30, 34-40, 63-69, 88-102, 106-112, 122-147, 153-172, 193-215, 221-233, 239-245
+/common/zhangz2/workspace/AMBER/amber/utils/io.py                                              144     39    73%   51-64, 73-86, 108, 149-151, 158-159, 164-166, 175-178, 194-195
+/common/zhangz2/workspace/AMBER/amber/utils/logging.py                                          15      0   100%
+/common/zhangz2/workspace/AMBER/amber/utils/testing_utils.py                                    71      7    90%   8-9, 18-19, 35, 38, 94
+/common/zhangz2/workspace/AMBER/amber/wrapper.py                                                81     60    26%   12-15, 62-80, 83-118, 121-123, 141-153, 156, 159-162, 165-169, 172-174, 178-179, 183, 187
+__init__.py                                                                                      0      0   100%
+architect_env_test.py                                                                           91      3    97%   217-218, 254
+architect_helper_test.py                                                                       163      1    99%   306
+architect_optimize_test.py                                                                     177     10    94%   156-164, 297
+architect_pmbga_test.py                                                                         50      1    98%   71
+integration_bionas_test.py                                                                      56      2    96%   16, 119
+modeler_keras_test.py                                                                           89      3    97%   80, 111, 189
+modeler_pytorch_test.py                                                                         92     63    32%   19-21, 29-38, 41-46, 49-64, 70-75, 83-87, 97-106, 109-117, 121
+modeler_tensorflow_test.py                                                                     117      7    94%   20-21, 109, 130-132, 238
+--------------------------------------------------------------------------------------------------------------------------
+TOTAL                                                                                         7844   2787    64%

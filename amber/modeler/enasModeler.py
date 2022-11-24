@@ -1,7 +1,8 @@
 # -*- coding: UTF-8 -*-
 
 import warnings
-from .dag import get_dag, get_layer
+from .. import backend as F
+from .dag import get_dag
 from .dag import ComputationNode
 from .dag import EnasConv1dDAG
 from .base import ModelBuilder

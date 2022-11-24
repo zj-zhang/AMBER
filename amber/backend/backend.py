@@ -11,21 +11,75 @@ also OK to skip some. The generated backend module has an ``is_enabled`` functio
 that returns whether the interface is supported by the framework or not.
 """
 
+import numpy as np
+from typing import List, Tuple, Callable, Dict, Union
 
-def create_weight(name, shape, initializer=None, trainable=True, seed=None):
+# model
+def Model(inputs, outputs):
     pass
 
-def create_bias(name, shape, trainable=True, initializer=None):
+def get_loss(loss, y_true, y_pred) -> float:  # type: ignore
     pass
 
-def get_train_op(loss, parameters, optimizer, **kwargs):
+def get_metric(m: Union[str, Callable]) -> Callable: # type: ignore
     pass
 
-def get_layer():
+# layers
+def create_parameter(name, shape, dtype='float32', initializer=None, trainable=True, seed=None) -> np.ndarray: # type: ignore
     pass
 
-def get_loss(loss, y_true, y_pred):
+def get_train_op(loss, parameters, optimizer, **kwargs) -> Tuple: # type: ignore
     pass
 
-def get_metric(m):
+def get_layer(x, op) -> Callable: # type: ignore
+    pass
+
+# tensor
+def data_type_dict() -> Dict: # type: ignore
+    pass
+
+def reshape(x, shape) -> np.ndarray: # type: ignore
+    pass
+
+def squeeze(x, axis) -> np.ndarray: # type: ignore
+    pass
+
+def concat(x, axis) -> np.ndarray: # type: ignore
+    pass
+
+def split(x, num_splits, axis) -> List[np.ndarray]: # type: ignore
+    pass
+
+# math
+def abs(x) -> np.ndarray: # type: ignore
+    pass
+
+def minimum(a,b) -> np.ndarray: # type: ignore
+    pass
+
+def maximum(a,b) -> np.ndarray: # type: ignore
+    pass
+
+def clip_by_value(x, clip_value_min, clip_value_max) -> np.ndarray: # type: ignore
+    pass
+
+def matmul(a,b) -> np.ndarray: # type: ignore
+    pass
+
+def reduce_sum(x, axis=-1) -> Union[float, np.ndarray]: # type: ignore
+    pass
+
+def reduce_mean(x, axis=-1) -> Union[float, np.ndarray]: # type: ignore
+    pass
+
+def log(x) -> Union[float, np.ndarray]: # type: ignore
+    pass
+
+def exp(x) -> Union[float, np.ndarray]: # type: ignore
+    pass
+
+def sigmoid(x) -> Union[float, np.ndarray]: # type: ignore
+    pass
+
+def tanh(x) -> Union[float, np.ndarray]: # type: ignore
     pass

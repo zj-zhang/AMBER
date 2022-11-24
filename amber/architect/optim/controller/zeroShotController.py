@@ -7,8 +7,9 @@ ZZ, May 13, 2020
 """
 
 from .generalController import GeneralController
-#from amber.architect.commonOps import F.create_bias, F.create_weight
 from .... import backend as F
+from ....backend import create_parameter, get_layer  # type: ignore
+from amber.architect.modelSpace import Operation
 from amber.architect.buffer import MultiManagerBuffer
 import tensorflow as tf
 from tensorflow.keras.regularizers import L1L2
@@ -44,17 +45,19 @@ class ZeroShotController(GeneralController):
                     hidden_actv = self.data_description_config['hidden_layer']['activation']
                 except KeyError:
                     raise KeyError("Error in parsing data_description_config: missing keys units or activation")
-                w_dd_1 = F.create_weight(name="w_dd_1", shape=(data_description_len, hidden_units))
-                b_dd_1 = F.create_bias(name="b_dd_1", shape=(hidden_units,))
+                w_dd_1 = create_parameter(name="w_dd_1", shape=(data_description_len, hidden_units))
+                b_dd_1 = create_parameter(name="b_dd_1", shape=(hidden_units,), initializer='zeros')
                 self.w_dd.append(w_dd_1)
                 self.b_dd.append(b_dd_1)
-                h = F.get_layer(hidden_actv)(tf.matmul(self.data_descriptive_feature, w_dd_1) + b_dd_1)
+                h = get_layer(
+                    x=tf.matmul(self.data_descriptive_feature, w_dd_1) + b_dd_1,
+                    op=Operation("Activation", activation=hidden_actv))
                 input_dim = hidden_units
             else:
                 h = self.data_descriptive_feature
                 input_dim = data_description_len
-            w_dd = F.create_weight(name="w_dd", shape=(input_dim, self.lstm_size))
-            b_dd = F.create_bias(name="b_dd", shape=(self.lstm_size,))
+            w_dd = create_parameter(name="w_dd", shape=(input_dim, self.lstm_size))
+            b_dd = create_parameter(name="b_dd", shape=(self.lstm_size,), initializer='zeros')
             self.w_dd.append(w_dd)
             self.b_dd.append(b_dd)
             self.g_emb = tf.matmul(h, w_dd) + b_dd  # shape: none, lstm_size

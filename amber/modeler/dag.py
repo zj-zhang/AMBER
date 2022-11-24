@@ -8,25 +8,13 @@ import numpy as np
 import warnings
 from ..utils import corrected_tf as tf
 from tensorflow.keras.layers import Concatenate
-from tensorflow.keras.models import Model
 from ..architect.modelSpace import State, ModelSpace
 
 # for general child
 from .child import DenseAddOutputChild, EnasAnnModel, EnasCnnModel
-#from ..architect.commonOps import F.get_metric, get_keras_train_ops, F.get_layer, F.get_loss, F.create_weight, \
-#    F.create_bias, batch_norm1d, get_keras_train_ops
-from ..architect.commonOps import batch_norm1d
 from .. import backend as F
-# for get layers
-from tensorflow.keras import backend as K
-from tensorflow.keras.layers import GlobalAveragePooling1D, GlobalMaxPooling1D, GaussianNoise
-from tensorflow.keras.layers import GlobalAveragePooling2D, GlobalMaxPooling2D
-from tensorflow.keras.layers import Dense, Dropout, Flatten
-from tensorflow.keras.layers import Conv1D, MaxPooling1D, AveragePooling1D
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, AveragePooling2D
-from tensorflow.keras.layers import Input, Lambda, Permute, BatchNormalization, Activation
-from tensorflow.keras.layers import LSTM
-from ._operators import Layer_deNovo, SeparableFC, sparsek_vec
+from ..backend import create_parameter, get_layer, Model  # type: ignore
+from ..architect.modelSpace import Operation
 from ..architect.modelSpace import get_layer_shortname
 
 
@@ -66,125 +54,6 @@ def get_dag(arg):
         return arg
     else:
         raise ValueError("Could not understand the DAG func:", arg)
-
-
-def get_layer(x, state, custom_objects=None, with_bn=False):
-    """Getter method for a Keras layer, including native Keras implementation and custom layers that are not included in
-    Keras.
-
-    Parameters
-    ----------
-    x : tf.keras.layers or None
-        The input Keras layer
-    state : amber.architect.Operation, or callable
-        The target layer to be built
-    custom_objects : dict, or None
-        Allow stringify custom objects by parsing a str->class dict
-    with_bn : bool, optional
-        If true, add batch normalization layers before activation
-
-    Returns
-    -------
-    x : tf.keras.layers
-        The built target layer connected to input x
-    """
-    custom_objects = custom_objects or {}
-    if callable(state):
-        return state()(x)
-    elif state.Layer_type == 'dense':
-        if with_bn is True:
-            actv_fn = state.Layer_attributes.pop('activation', 'linear')
-            x = Dense(**state.Layer_attributes)(x)
-            x = BatchNormalization()(x)
-            x = Activation(actv_fn)(x)
-            return x
-        else:
-            return Dense(**state.Layer_attributes)(x)
-
-    elif state.Layer_type == 'sfc':
-        return SeparableFC(**state.Layer_attributes)(x)
-
-    elif state.Layer_type == 'input':
-        return Input(**state.Layer_attributes)
-
-    elif state.Layer_type == 'conv1d':
-        if with_bn is True:
-            actv_fn = state.Layer_attributes.pop('activation', 'linear')
-            x = Conv1D(**state.Layer_attributes)(x)
-            x = BatchNormalization()(x)
-            x = Activation(actv_fn)(x)
-            return x
-        else:
-            return Conv1D(**state.Layer_attributes)(x)
-
-    elif state.Layer_type == 'conv2d':
-        if with_bn is True:
-            actv_fn = state.Layer_attributes.pop('activation', 'linear')
-            x = Conv2D(**state.Layer_attributes)(x)
-            x = BatchNormalization()(x)
-            x = Activation(actv_fn)(x)
-            return x
-        else:
-            return Conv2D(**state.Layer_attributes)(x)
-
-    elif state.Layer_type == 'denovo':
-        x = Lambda(lambda t: K.expand_dims(t))(x)
-        x = Permute(dims=(2, 1, 3))(x)
-        x = Layer_deNovo(**state.Layer_attributes)(x)
-        x = Lambda(lambda t: K.squeeze(t, axis=1))(x)
-        return x
-
-    elif state.Layer_type == 'sparsek_vec':
-        x = Lambda(sparsek_vec, **state.Layer_attributes)(x)
-        return x
-
-    elif state.Layer_type == 'maxpool1d':
-        return MaxPooling1D(**state.Layer_attributes)(x)
-
-    elif state.Layer_type == 'maxpool2d':
-        return MaxPooling2D(**state.Layer_attributes)(x)
-
-    elif state.Layer_type == 'avgpool1d':
-        return AveragePooling1D(**state.Layer_attributes)(x)
-
-    elif state.Layer_type == 'avgpool2d':
-        return AveragePooling2D(**state.Layer_attributes)(x)
-
-    elif state.Layer_type == 'lstm':
-        return LSTM(**state.Layer_attributes)(x)
-
-    elif state.Layer_type == 'flatten':
-        return Flatten()(x)
-
-    elif state.Layer_type == 'globalavgpool1d':
-        return GlobalAveragePooling1D()(x)
-
-    elif state.Layer_type == 'globalavgpool2d':
-        return GlobalAveragePooling2D()(x)
-
-    elif state.Layer_type == 'globalmaxpool1d':
-        return GlobalMaxPooling1D()(x)
-
-    elif state.Layer_type == 'globalmaxpool2d':
-        return GlobalMaxPooling2D()(x)
-
-    elif state.Layer_type == 'dropout':
-        return Dropout(**state.Layer_attributes)(x)
-
-    elif state.Layer_type == 'identity':
-        return Lambda(lambda t: t, **state.Layer_attributes)(x)
-
-    elif state.Layer_type == 'gaussian_noise':
-        return GaussianNoise(**state.Layer_attributes)(x)
-
-    elif state.Layer_type == 'concatenate':
-        return Concatenate(**state.Layer_attributes)(x)
-    
-    elif state.Layer_type in custom_objects:
-        return custom_objects[state.Layer_type](**state.Layer_attributes)(x)
-
-    else:
-        raise ValueError('Layer_type "%s" is not understood' % state.Layer_type)
 
 
 class ComputationNode:
@@ -232,7 +101,7 @@ class ComputationNode:
             else:
                 self.merge_layer = self.parent[0].operation_layer
         self.operation.Layer_attributes['name'] = self.node_name
-        self.operation_layer = get_layer(self.merge_layer, self.operation)
+        self.operation_layer = get_layer(x=self.merge_layer, op=self.operation)
         self.is_built = True
 
 
@@ -869,23 +738,22 @@ class EnasAnnDAG:
                 # if also learn the connection of output_blocks, need to enlarge the output to allow
                 # potential multi-inputs from different hidden layers
                 if self.with_output_blocks:
-                    self.w_out = [tf.compat.v1.get_variable("w_out_%i" % i, shape=(
-                    self._weight_max_units * self.num_layers, self._child_output_size[i]), dtype=tf.float32,
+                    self.w_out = [create_parameter(name="w_out_%i" % i, shape=(
+                    self._weight_max_units * self.num_layers, self._child_output_size[i]),
                                                             initializer=tf.keras.initializers.VarianceScaling())
                                   for i in range(len(self.output_node))]
                     self.b_out = [
-                        tf.compat.v1.get_variable("b_out_%i" % i, shape=(self._child_output_size[i]), dtype=tf.float32,
-                                                  initializer=tf.initializers.zeros())
+                        create_parameter(name="b_out_%i" % i, shape=(self._child_output_size[i]),
+                                                  initializer='zeros')
                         for i in range(len(self.output_node))]
                 # otherwise, only need to connect to the last hidden layer
                 else:
-                    self.w_out = [tf.compat.v1.get_variable("w_out_%i" % i,
-                                                            shape=(self._weight_max_units, self._child_output_size[i]),
-                                                            dtype=tf.float32,
-                                                            initializer=tf.keras.initializers.VarianceScaling())
+                    self.w_out = [create_parameter(name="w_out_%i" % i,
+                                                    shape=(self._weight_max_units, self._child_output_size[i]),
+                                                    initializer=tf.keras.initializers.VarianceScaling())
                                   for i in range(len(self.output_node))]
                     self.b_out = [
-                        tf.compat.v1.get_variable("b_out_%i" % i, shape=(self._child_output_size[i]), dtype=tf.float32,
+                        create_parameter(name="b_out_%i" % i, shape=(self._child_output_size[i]), dtype=tf.float32,
                                                   initializer=tf.initializers.zeros())
                         for i in range(len(self.output_node))]
 
@@ -1047,15 +915,23 @@ class EnasAnnDAG:
                                         tf.ones((1, self._child_output_size[i]), dtype=tf.int32))
                 w = tf.where(tf.cast(output_mask, tf.bool), x=self.w_out[i], y=tf.fill(tf.shape(self.w_out[i]), 0.))
                 model_output.append(
-                    F.get_layer(self._child_output_func[i])(tf.matmul(layer_outputs_, w) + self.b_out[i]))
+                    get_layer(
+                        x=tf.matmul(layer_outputs_, w) + self.b_out[i], 
+                        op=Operation("Activation", activation=self._child_output_func[i])
+                    ))
                 w_masks.append((w, self.b_out[i]))
         else:
-            model_output = [F.get_layer(self._child_output_func[i])(tf.matmul(x, self.w_out[i]) + self.b_out[i])
+            model_output = [
+                get_layer(
+                    x=tf.matmul(x, self.w_out[i]) + self.b_out[i],
+                    op=Operation("Activation", activation=self._child_output_func[i]))
                             for i in range(len(self.output_node))]
         return model_output, w_masks, layer_outputs, dropout_placeholders
 
     def _layer(self, w, b, inputs, layer_id, use_dropout=True):
-        layer = F.get_layer(self._actv_fn)(tf.matmul(inputs, w) + b)
+        layer = get_layer(
+            x=tf.matmul(inputs, w) + b,
+            op=Operation("Activation", activation=self._actv_fn))
         if use_dropout:
             drop_prob = tf.placeholder_with_default(0.0, shape=(), name='dropout_%i' % layer_id)
             layer = tf.nn.dropout(layer, rate=drop_prob)
@@ -1572,7 +1448,7 @@ class EnasConv1dDAG:
                         train_step=self.train_step,
                         **self.child_train_op_kwargs)
             else:
-                train_op, lr, optimizer_ = None, None, None, None
+                train_op, lr, optimizer_ = None, None, None
             if metrics is None:
                 metrics = []
             else:
@@ -1605,9 +1481,10 @@ class EnasConv1dDAG:
                 with tf.variable_scope("stem_conv"):
                     stem_kernel_size = self.stem_config.get('stem_kernel_size', 8)
                     stem_filters = out_filters[0]
-                    w = F.create_weight("w", [stem_kernel_size, 4, stem_filters])
+                    w = create_parameter("w", [stem_kernel_size, 4, stem_filters])
                     x = tf.nn.conv1d(input, w, 1, "SAME", data_format=self.data_format)
-                    x = batch_norm1d(x, is_training, data_format=self.data_format)
+                    bn = tf.keras.layers.BatchNormalization()
+                    x = bn(x, training=is_training)
                     layers.append(x)
                     self.layers.append(x)
             else:
@@ -1666,16 +1543,16 @@ class EnasConv1dDAG:
                         inp_c = x.get_shape()[-1].value
                     except AttributeError:
                         inp_c = x.get_shape()[-1]
-                    w = F.create_weight("w_fc", [inp_c, fc_units])
+                    w = create_parameter("w_fc", [inp_c, fc_units])
                 elif flatten_op == 'flatten':
                     try:
                         inp_c = np.prod(x.get_shape()[1:]).value
                     except AttributeError:
                         inp_c = np.prod(x.get_shape()[1:])
-                    w = F.create_weight("w_fc", [inp_c, fc_units])
+                    w = create_parameter("w_fc", [inp_c, fc_units])
                 else:
                     raise Exception("Unknown fc string: %s" % flatten_op)
-                b = F.create_bias("b_fc", shape=[fc_units])
+                b = create_parameter("b_fc", shape=[fc_units], initializer='zeros')
                 x = tf.matmul(x, w) + b
                 x = tf.nn.relu(x)
                 if is_training:
@@ -1684,10 +1561,12 @@ class EnasConv1dDAG:
                     )
                     x = tf.nn.dropout(x, rate=dropout_placeholders[-1])
 
-                w_out = F.create_weight("w_out", [fc_units, self.output_node.Layer_attributes['units']])
-                b_out = F.create_bias("b_out", shape=[self.output_node.Layer_attributes['units']])
-                model_output = F.get_layer(self.output_node.Layer_attributes['activation'])(
-                    tf.matmul(x, w_out) + b_out)
+                w_out = create_parameter("w_out", [fc_units, self.output_node.Layer_attributes['units']])
+                b_out = create_parameter("b_out", shape=[self.output_node.Layer_attributes['units']], initializer='zeros')
+                model_output = get_layer(
+                    x=tf.matmul(x, w_out) + b_out,
+                    op=Operation("Activation", activation=self.output_node.Layer_attributes['activation'])
+                )
         return model_output, dropout_placeholders
 
     def _refactorized_channels_for_skipcon(self, layer, out_filters, is_training):
@@ -1706,7 +1585,7 @@ class EnasConv1dDAG:
             actual_data_format = 'channels_first'
 
         with tf.variable_scope("path1_conv"):
-            w = F.create_weight("w", [1, inp_c, out_filters])
+            w = create_parameter("w", [1, inp_c, out_filters])
             x = tf.nn.conv1d(layer, filters=w, stride=1, padding="SAME")
             x = tf.layers.max_pooling1d(
                 x, self.reduction_factor, self.reduction_factor, "SAME", data_format=actual_data_format)
@@ -1797,8 +1676,8 @@ class EnasConv1dDAG:
                                                   lambda: tf.stop_gradient(tf.zeros_like(prev_layers[i]))))
                 res_layers.append(out)
                 out = tf.add_n(res_layers)
-
-                out = batch_norm1d(out, is_training, data_format=self.data_format)
+                bn = tf.keras.layers.BatchNormalization()
+                out = bn(out, training=is_training)
         return out
 
     def _conv_branch(self, inputs, layer_attr, is_training):
@@ -1816,11 +1695,14 @@ class EnasConv1dDAG:
                 inp_c = inputs.get_shape()[1].value
             except AttributeError:
                 inp_c = inputs.get_shape()[1]
-        w = F.create_weight("w", [kernel_size, inp_c, filters])
+        w = create_parameter("w", [kernel_size, inp_c, filters])
         x = tf.nn.conv1d(inputs, filters=w, stride=1, padding="SAME", dilations=dilation)
-        x = batch_norm1d(x, is_training, data_format=self.data_format)
-        b = F.create_bias("b", shape=[1])
-        x = F.get_layer(activation_fn)(x + b)
+        bn = tf.keras.layers.BatchNormalization()
+        x = bn(x, training=is_training)
+        b = create_parameter("b", shape=[1], initializer='zeros')
+        x = get_layer(
+            x=x+b,
+            op=Operation("Activation", activation=activation_fn))
         return lambda: x
 
     def _pool_branch(self, inputs, avg_or_max, layer_attr, is_training):
@@ -1844,9 +1726,10 @@ class EnasConv1dDAG:
 
         if self.add_conv1_under_pool:
             with tf.variable_scope("conv_1"):
-                w = F.create_weight("w", [1, inp_c, filters])
+                w = create_parameter("w", [1, inp_c, filters])
                 x = tf.nn.conv1d(inputs, w, 1, "SAME", data_format=self.data_format)
-                x = batch_norm1d(x, is_training, data_format=self.data_format)
+                bn = tf.keras.layers.BatchNormalization()
+                x = bn(x, training=is_training)
                 x = tf.nn.relu(x)
         else:
             x = inputs

@@ -6,6 +6,7 @@ from parameterized import parameterized, parameterized_class
 from amber.utils import testing_utils
 from amber import modeler
 from amber import architect
+from amber import backend
 import logging, sys
 logging.disable(sys.maxsize)
 
@@ -70,13 +71,13 @@ class TestKerasGetLayer(testing_utils.TestCase):
     ])
     def test_get_layers(self, input_shape, layer_name, layer_attr, exp_type=None, exp_error=None, kwargs=None):
         kwargs = kwargs or {}
-        x = modeler.dag.get_layer(x=None, state=architect.Operation('Input', shape=input_shape))
+        x = backend.get_layer(x=None, op=architect.Operation('Input', shape=input_shape))
         operation = architect.Operation(layer_name, **layer_attr)
         if exp_error is None:
-            layer = modeler.dag.get_layer(x=x, state=operation, **kwargs)
+            layer = backend.get_layer(x=x, op=operation, **kwargs)
             self.assertIsInstance(layer, exp_type)
         else:
-            self.assertRaises(exp_error, modeler.dag.get_layer, x=x, state=operation, **kwargs)
+            self.assertRaises(exp_error, backend.get_layer, x=x, op=operation, **kwargs)
 
     @parameterized.expand([
         # undef should throw error, or return None
@@ -85,8 +86,8 @@ class TestKerasGetLayer(testing_utils.TestCase):
         ((100,), architect.Operation('concatenate'), ValueError),
     ])
     def test_get_layers_catch_exception(self, input_shape, operation, exp_error):
-        x = modeler.dag.get_layer(x=None, state=architect.Operation('Input', shape=input_shape))
-        self.assertRaises(exp_error, modeler.dag.get_layer, x=x, state=operation)
+        x = backend.get_layer(x=None, op=architect.Operation('Input', shape=input_shape))
+        self.assertRaises(exp_error, backend.get_layer, x=x, op=operation)
 
 
 
