@@ -12,7 +12,6 @@ import h5py
 from ....utils import corrected_tf as tf
 from .... import backend as F
 from amber.architect.buffer import get_buffer
-#from amber.architect.commonOps import get_keras_train_ops
 from amber.architect.commonOps import get_kl_divergence_n_entropy
 from amber.architect.commonOps import proximal_policy_optimization_loss
 from amber.architect.commonOps import stack_lstm

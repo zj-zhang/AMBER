@@ -28,7 +28,7 @@ def get_torch_layer(fn_str):
     elif fn_str == "sigmoid":
         return torch.nn.Sigmoid()
     else:
-        raise Exception("cannot get tensorflow layer for: %s" % fn_str)
+        raise Exception("cannot get torch layer for: %s" % fn_str)
 
 
 class LambdaLayer(Module):
