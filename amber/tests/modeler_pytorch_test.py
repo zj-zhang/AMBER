@@ -23,7 +23,7 @@ except ImportError:
     torch = object
     has_torchviz = False
 
-@unittest.skip
+
 class TestEnasPyTorchConvDAG(testing_utils.TestCase):
     def setUp(self):
         try:
@@ -64,7 +64,6 @@ class TestEnasPyTorchConvDAG(testing_utils.TestCase):
         self.assertLess(losses[-1], losses[0])    
 
 
-@unittest.skip
 class TestPyTorchResConvModelBuilder(unittest.TestCase):
     def setUp(self):
         input_op = architect.Operation('input', shape=(1000, 4), name="input")
@@ -82,7 +81,7 @@ class TestPyTorchResConvModelBuilder(unittest.TestCase):
     def test_1forward(self):
         child = self.mb(self.arc)
         child.eval()
-        pred = child.forward(torch.randn(3,4,1000), verbose=False)
+        pred = child.forward(torch.randn(3,1000,4), verbose=False)
         pred = pred.detach().cpu().numpy()
         self.assertTrue(pred.shape == (3,1))
     
@@ -94,7 +93,7 @@ class TestPyTorchResConvModelBuilder(unittest.TestCase):
         #('mse', torch.optim.Adam)
     ])
     def test_2backward(self, loss, optimizer):
-        x = torch.randn((50, 4, 1000))
+        x = torch.randn((50, 1000, 4))
         y = torch.randint(low=0, high=1, size=(50, 1), dtype=torch.float)
         train_data = DataLoader(TensorDataset(x, y), batch_size=10)
         arc = self.arc
@@ -110,7 +109,7 @@ class TestPyTorchResConvModelBuilder(unittest.TestCase):
             arc = self.arc
             child = self.mb(arc)
             child.eval()
-            pred = child.forward(torch.randn(3,4,1000), verbose=False)
+            pred = child.forward(torch.randn(3,1000,4), verbose=False)
             dot = make_dot(pred.mean(), params=dict(child.named_parameters()))
         else:
             dot = None
