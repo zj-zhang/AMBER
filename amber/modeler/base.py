@@ -146,8 +146,8 @@ class BaseTorchModel(LightningModule):
             opt = self.optimizer[0](self.parameters(), **self.optimizer[1])
             # if has scheduler? not sure if there should be better ways
             if len(self.optimizer) > 2:
-                scheduler = self.optimizer[3](
-                    opt, **self.optimizer[4]
+                scheduler = self.optimizer[2](
+                    opt, **self.optimizer[3]
                 )
                 d['scheduler'] = scheduler
         elif self.optimizer == 'adam':
