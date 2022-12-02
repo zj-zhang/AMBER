@@ -76,7 +76,7 @@ We strongly encourage you to create a new conda environment, regardless of the b
 In the command-line terminal, type the following commands to get it installed:
 
 ```{bash}
-conda create -n amber -c anaconda tensorflow-gpu=1.15.0 keras=2.2.5 numpy~=1.18.5 h5py~=2.10.0
+conda create -n amber -c anaconda tensorflow-gpu=1.15.0 keras numpy~=1.18.5 h5py~=2.10.0
 conda activate amber
 pip install amber-automl
 # if you plan to run tests

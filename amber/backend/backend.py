@@ -12,7 +12,7 @@ that returns whether the interface is supported by the framework or not.
 """
 
 import numpy as np
-from typing import List, Tuple, Callable, Dict, Union
+from typing import List, Tuple, Callable, Dict, Union, Generator
 
 # model
 def Model(inputs, outputs):
@@ -28,7 +28,7 @@ def get_metric(m: Union[str, Callable]) -> Callable: # type: ignore
 def create_parameter(name, shape, dtype='float32', initializer=None, trainable=True, seed=None) -> np.ndarray: # type: ignore
     pass
 
-def get_train_op(loss, parameters, optimizer, **kwargs) -> Tuple: # type: ignore
+def get_train_op(loss, variables, optimizer, **kwargs) -> Tuple: # type: ignore
     pass
 
 def get_layer(x, op) -> Callable: # type: ignore
@@ -44,7 +44,7 @@ def reshape(x, shape) -> np.ndarray: # type: ignore
 def squeeze(x, axis) -> np.ndarray: # type: ignore
     pass
 
-def concat(x, axis) -> np.ndarray: # type: ignore
+def concat(x, axis=-1) -> np.ndarray: # type: ignore
     pass
 
 def split(x, num_splits, axis) -> List[np.ndarray]: # type: ignore
@@ -83,3 +83,19 @@ def sigmoid(x) -> Union[float, np.ndarray]: # type: ignore
 
 def tanh(x) -> Union[float, np.ndarray]: # type: ignore
     pass
+
+# session
+def session_cache() -> Dict: # type:ignore
+    pass
+
+def init_all_params(sess, var_scope=None) -> None: # type:ignore
+    pass
+
+class variable_scope:
+    def __init__(self, name, *args, **kwargs):
+        pass
+    def __enter__(self):
+        pass
+    def __exit__(self):
+        pass
+

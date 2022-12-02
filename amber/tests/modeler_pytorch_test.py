@@ -9,6 +9,7 @@ from tqdm import tqdm
 from amber.utils import testing_utils
 from amber import modeler
 from amber import architect
+from amber import backend
 from amber.modeler.dag_pytorch import EnasConv1dDAGpyTorch
 import logging, sys
 logging.disable(sys.maxsize)
@@ -24,6 +25,7 @@ except ImportError:
     has_torchviz = False
 
 
+@unittest.skipIf(backend.mod_name!="pytorch", reason="skipped because non-pytorch backend")
 class TestEnasPyTorchConvDAG(testing_utils.TestCase):
     def setUp(self):
         try:
@@ -64,6 +66,7 @@ class TestEnasPyTorchConvDAG(testing_utils.TestCase):
         self.assertLess(losses[-1], losses[0])    
 
 
+@unittest.skipIf(backend.mod_name!="pytorch", reason="skipped because non-pytorch backend")
 class TestPyTorchResConvModelBuilder(unittest.TestCase):
     def setUp(self):
         input_op = architect.Operation('input', shape=(1000, 4), name="input")

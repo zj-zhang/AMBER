@@ -7,13 +7,11 @@ architecture selections
 import numpy as np
 import warnings
 from ..utils import corrected_tf as tf
-from tensorflow.keras.layers import Concatenate
 from ..architect.modelSpace import State, ModelSpace
 
 # for general child
 from .child import DenseAddOutputChild, EnasAnnModel, EnasCnnModel
 from .. import backend as F
-from ..backend import create_parameter, get_layer, Model  # type: ignore
 from ..architect.modelSpace import Operation
 from ..architect.modelSpace import get_layer_shortname
 
@@ -78,7 +76,7 @@ class ComputationNode:
     merge_op: tf.keras.layers.merge, optional
         operation for merging multiple inputs
     """
-    def __init__(self, operation, node_name, merge_op=Concatenate):
+    def __init__(self, operation, node_name, merge_op=F.concat):
         assert type(operation) is State, "Expect operation is of type amber.architect.State, got %s" % type(
             operation)
         self.operation = operation
@@ -97,11 +95,11 @@ class ComputationNode:
         """
         if self.parent:
             if len(self.parent) > 1:
-                self.merge_layer = self.merge_op()([p.operation_layer for p in self.parent])
+                self.merge_layer = self.merge_op([p.operation_layer for p in self.parent])
             else:
                 self.merge_layer = self.parent[0].operation_layer
         self.operation.Layer_attributes['name'] = self.node_name
-        self.operation_layer = get_layer(x=self.merge_layer, op=self.operation)
+        self.operation_layer = F.get_layer(x=self.merge_layer, op=self.operation)
         self.is_built = True
 
 
@@ -176,7 +174,7 @@ class DAG:
         for node in node_list:
             node.build()
 
-        self.model = Model(inputs=[x.operation_layer for x in self.input_node],
+        self.model = F.Model(inputs=[x.operation_layer for x in self.input_node],
                            outputs=[self.output_node.operation_layer])
         self.nodes = nodes
         return self.model
@@ -636,8 +634,7 @@ class EnasAnnDAG:
             self.controller = controller
             self._build_sample_arc()
         self._build_fixed_arc()
-        vars = [v for v in tf.all_variables() if v.name.startswith(self.name)]
-        self.session.run(tf.initialize_variables(vars))
+        F.init_all_params(self.session, var_scope=self.name)
 
         # for compatability with EnasConv1d
         self.train_fixed_arc = False
@@ -657,8 +654,7 @@ class EnasAnnDAG:
                                         "EnasAnnDAG instance if you want to connect another controller"
         self.controller = controller
         self._build_sample_arc()
-        vars = [v for v in tf.all_variables() if v.name.startswith("%s/sample" % self.name)]
-        self.session.run(tf.initialize_variables(vars))
+        F.init_all_params(sess=self.session, var_scope="%s/sample" % self.name)
 
     def _verify_args(self):
         """verify vanilla ANN model space, input nodes, etc.,
@@ -712,10 +708,10 @@ class EnasAnnDAG:
         self.w = []
         self.b = []
         input_max_size = self._input_block_map[-1][-1]
-        with tf.variable_scope(self.name):
+        with F.variable_scope(self.name):
             self.train_step = tf.Variable(0, dtype=tf.int32, trainable=False, name="train_step")
             for layer_id in range(self.num_layers):
-                with tf.variable_scope("layer_{}".format(layer_id)):
+                with F.variable_scope("layer_{}".format(layer_id)):
                     self.w.append(tf.compat.v1.get_variable("Weight/w", shape=(
                     input_max_size + layer_id * self._weight_max_units, self._weight_max_units),
                                                             dtype=tf.float32,
@@ -723,7 +719,7 @@ class EnasAnnDAG:
                     self.b.append(tf.compat.v1.get_variable("Bias/b", shape=(self._weight_max_units,),
                                                             initializer=tf.initializers.zeros(),
                                                             dtype=tf.float32))
-            with tf.compat.v1.variable_scope("stem_io"):
+            with F.variable_scope("stem_io"):
                 self.child_model_input = tf.compat.v1.placeholder(shape=(None, self._feature_max_size),
                                                                   dtype=tf.float32,
                                                                   name="child_input")
@@ -738,22 +734,22 @@ class EnasAnnDAG:
                 # if also learn the connection of output_blocks, need to enlarge the output to allow
                 # potential multi-inputs from different hidden layers
                 if self.with_output_blocks:
-                    self.w_out = [create_parameter(name="w_out_%i" % i, shape=(
+                    self.w_out = [F.create_parameter(name="w_out_%i" % i, shape=(
                     self._weight_max_units * self.num_layers, self._child_output_size[i]),
                                                             initializer=tf.keras.initializers.VarianceScaling())
                                   for i in range(len(self.output_node))]
                     self.b_out = [
-                        create_parameter(name="b_out_%i" % i, shape=(self._child_output_size[i]),
+                        F.create_parameter(name="b_out_%i" % i, shape=(self._child_output_size[i]),
                                                   initializer='zeros')
                         for i in range(len(self.output_node))]
                 # otherwise, only need to connect to the last hidden layer
                 else:
-                    self.w_out = [create_parameter(name="w_out_%i" % i,
+                    self.w_out = [F.create_parameter(name="w_out_%i" % i,
                                                     shape=(self._weight_max_units, self._child_output_size[i]),
                                                     initializer=tf.keras.initializers.VarianceScaling())
                                   for i in range(len(self.output_node))]
                     self.b_out = [
-                        create_parameter(name="b_out_%i" % i, shape=(self._child_output_size[i]), dtype=tf.float32,
+                        F.create_parameter(name="b_out_%i" % i, shape=(self._child_output_size[i]), dtype=tf.float32,
                                                   initializer=tf.initializers.zeros())
                         for i in range(len(self.output_node))]
 
@@ -762,7 +758,7 @@ class EnasAnnDAG:
         sample_output and sample_w_masks are the child model tensors that got built after getting a random sample
         from controller.sample_arc
         """
-        with tf.compat.v1.variable_scope("%s/sample" % self.name):
+        with F.variable_scope("%s/sample" % self.name):
             self.connect_controller(self.controller)
             sample_output, sample_w_masks, sample_layer_outputs, sample_dropouts = self._build_dag(self.sample_arc)
             self.sample_model_output = sample_output
@@ -783,7 +779,7 @@ class EnasAnnDAG:
         """
         fixed_output and fixed_w_masks are the child model tensors built according to a fixed arc from user inputs
         """
-        with tf.compat.v1.variable_scope("%s/fixed" % self.name):
+        with F.variable_scope("%s/fixed" % self.name):
             self._create_input_ph()
             fixed_output, fixed_w_masks, fixed_layer_outputs, fixed_dropouts = self._build_dag(self.input_arc)
             self.fixed_model_output = fixed_output
@@ -915,21 +911,21 @@ class EnasAnnDAG:
                                         tf.ones((1, self._child_output_size[i]), dtype=tf.int32))
                 w = tf.where(tf.cast(output_mask, tf.bool), x=self.w_out[i], y=tf.fill(tf.shape(self.w_out[i]), 0.))
                 model_output.append(
-                    get_layer(
+                    F.get_layer(
                         x=tf.matmul(layer_outputs_, w) + self.b_out[i], 
                         op=Operation("Activation", activation=self._child_output_func[i])
                     ))
                 w_masks.append((w, self.b_out[i]))
         else:
             model_output = [
-                get_layer(
+                F.get_layer(
                     x=tf.matmul(x, self.w_out[i]) + self.b_out[i],
                     op=Operation("Activation", activation=self._child_output_func[i]))
                             for i in range(len(self.output_node))]
         return model_output, w_masks, layer_outputs, dropout_placeholders
 
     def _layer(self, w, b, inputs, layer_id, use_dropout=True):
-        layer = get_layer(
+        layer = F.get_layer(
             x=tf.matmul(inputs, w) + b,
             op=Operation("Activation", activation=self._actv_fn))
         if use_dropout:
@@ -980,7 +976,7 @@ class EnasAnnDAG:
         metrics = self.model_compile_dict['metrics'] if 'metrics' in self.model_compile_dict else None
         var_scope = var_scope or self.name
 
-        with tf.compat.v1.variable_scope("compile", reuse=tf.AUTO_REUSE):
+        with F.variable_scope("compile", reuse=tf.AUTO_REUSE):
             if self.feature_model is None or self.feature_model.pseudo_inputs_pipe is None:
                 labels = self.child_model_label
             else:
@@ -1179,7 +1175,8 @@ class EnasConv1dDAG:
             self.controller = controller
             self._build_sample_arc()
         self._build_fixed_arc()
-        self.session.run(tf.initialize_variables(self.vars))
+        F.init_all_params(sess=self.session)
+        #self.session.run(tf.initialize_variables(self.vars))
 
     def _verify_args(self):
         out_filters = []
@@ -1292,7 +1289,7 @@ class EnasConv1dDAG:
         var_scope = self.name
         is_training = kwargs.pop('is_training', True)
         reuse = kwargs.pop('reuse', tf.AUTO_REUSE)
-        with tf.compat.v1.variable_scope(var_scope, reuse=reuse):
+        with F.variable_scope(var_scope, reuse=reuse):
             input_tensor = self.input_ph if input_tensor is None else input_tensor
             label_tensor = self.label_ph if label_tensor is None else label_tensor
             model_out, dropout_placeholders = self._build_dag(arc_seq=self.sample_arc, input_tensor=input_tensor,
@@ -1311,11 +1308,12 @@ class EnasConv1dDAG:
             self.sample_metrics = ops['metrics']
             self.sample_ops = ops
         # if not self.is_initialized:
-        vars_ = [v for v in tf.all_variables() if v.name.startswith(var_scope) and v not in self.vars]
-        if len(vars_):
-            self.session.run(tf.initialize_variables(vars_))
-            self.vars += vars_
-            # self.is_initialized = True
+        F.init_all_params(sess=self.session, var_scope=var_scope)
+        #vars_ = [v for v in tf.all_variables() if v.name.startswith(var_scope) and v not in self.vars]
+        #if len(vars_):
+        #    self.session.run(tf.initialize_variables(vars_))
+        #    self.vars += vars_
+        #    # self.is_initialized = True
 
     def _build_fixed_arc(self, input_tensor=None, label_tensor=None, **kwargs):
         """
@@ -1337,7 +1335,7 @@ class EnasConv1dDAG:
         else:
             is_training = kwargs.get('is_training', False)
         reuse = kwargs.pop('reuse', tf.AUTO_REUSE)
-        with tf.compat.v1.variable_scope(var_scope, reuse=reuse):
+        with F.variable_scope(var_scope, reuse=reuse):
             input_tensor = self.input_ph if input_tensor is None else input_tensor
             label_tensor = self.label_ph if label_tensor is None else label_tensor
             self._create_input_ph()
@@ -1362,11 +1360,12 @@ class EnasConv1dDAG:
             self.fixed_metrics = ops['metrics']
             self.fixed_ops = ops
         # if not self.is_initialized:
-        vars = [v for v in tf.all_variables() if v.name.startswith(var_scope) and v not in self.vars]
-        if len(vars):
-            self.session.run(tf.initialize_variables(vars))
-            self.vars += vars
-            # self.is_initialized = True
+        F.init_all_params(sess=self.session, var_scope=var_scope)
+        #vars = [v for v in tf.all_variables() if v.name.startswith(var_scope) and v not in self.vars]
+        #if len(vars):
+        #    self.session.run(tf.initialize_variables(vars))
+        #    self.vars += vars
+        #    # self.is_initialized = True
 
     def _create_input_ph(self):
         ops_each_layer = 1
@@ -1383,7 +1382,7 @@ class EnasConv1dDAG:
         metrics = self.model_compile_dict.pop('metrics', None)
         var_scope = var_scope or self.name
         labels = self.label_ph if labels is None else labels
-        with tf.variable_scope('compile'):
+        with F.variable_scope('compile'):
             if type(loss) is str:
                 loss_ = [F.get_loss(loss, labels[i], model_output[i]) for i in range(len(model_output))]
                 # loss_ should originally all have the batch_size dim, then reduce_mean to 1-unit sample
@@ -1471,17 +1470,17 @@ class EnasConv1dDAG:
         self.layers = []
         self.train_step = tf.Variable(0, dtype=tf.int32, trainable=False, name="train_step")
         dropout_placeholders = []
-        with tf.variable_scope('child_model', reuse=reuse):
+        with F.variable_scope('child_model', reuse=reuse):
             out_filters = self.out_filters
             # input = self.input_node
             input = self.input_ph if input_tensor is None else input_tensor
             layers = []
             has_stem_conv = self.stem_config.get('has_stem_conv', True)
             if has_stem_conv:
-                with tf.variable_scope("stem_conv"):
+                with F.variable_scope("stem_conv"):
                     stem_kernel_size = self.stem_config.get('stem_kernel_size', 8)
                     stem_filters = out_filters[0]
-                    w = create_parameter("w", [stem_kernel_size, 4, stem_filters])
+                    w = F.create_parameter("w", [stem_kernel_size, 4, stem_filters])
                     x = tf.nn.conv1d(input, w, 1, "SAME", data_format=self.data_format)
                     bn = tf.keras.layers.BatchNormalization()
                     x = bn(x, training=is_training)
@@ -1492,7 +1491,7 @@ class EnasConv1dDAG:
 
             start_idx = 0
             for layer_id in range(self.num_layers):
-                with tf.variable_scope("layer_{0}".format(layer_id)):
+                with F.variable_scope("layer_{0}".format(layer_id)):
                     x = self._layer(arc_seq, layer_id, layers, start_idx, out_filters[layer_id], is_training)
                     if is_training:
                         dropout_placeholders.append(
@@ -1505,7 +1504,7 @@ class EnasConv1dDAG:
                         layers.append(x)
                     self.layers.append(x)
                     if (self.with_skip_connection is True) and (layer_id in self.pool_layers):
-                        with tf.variable_scope("pool_at_{0}".format(layer_id)):
+                        with F.variable_scope("pool_at_{0}".format(layer_id)):
                             pooled_layers = []
                             for i, layer in enumerate(layers):
                                 if self.train_fixed_arc and self.skip_max_depth[i] < layer_id:
@@ -1513,7 +1512,7 @@ class EnasConv1dDAG:
                                     layer_id, i, self.skip_max_depth[i]))
                                     x = layer
                                 else:
-                                    with tf.variable_scope("from_{0}".format(i)):
+                                    with F.variable_scope("from_{0}".format(i)):
                                         x = self._refactorized_channels_for_skipcon(
                                             layer, out_filters[layer_id + 1], is_training)
                                 pooled_layers.append(x)
@@ -1536,23 +1535,23 @@ class EnasConv1dDAG:
                     tf.placeholder_with_default(1 - self.keep_prob, shape=(), name="last_conv_dropout")
                 )
                 x = tf.nn.dropout(x, rate=dropout_placeholders[-1])
-            with tf.variable_scope("fc"):
+            with F.variable_scope("fc"):
                 fc_units = self.stem_config['fc_units'] if 'fc_units' in self.stem_config else 1000
                 if flatten_op == 'global_avg_pool' or flatten_op == 'gap':
                     try:
                         inp_c = x.get_shape()[-1].value
                     except AttributeError:
                         inp_c = x.get_shape()[-1]
-                    w = create_parameter("w_fc", [inp_c, fc_units])
+                    w = F.create_parameter("w_fc", [inp_c, fc_units])
                 elif flatten_op == 'flatten':
                     try:
                         inp_c = np.prod(x.get_shape()[1:]).value
                     except AttributeError:
                         inp_c = np.prod(x.get_shape()[1:])
-                    w = create_parameter("w_fc", [inp_c, fc_units])
+                    w = F.create_parameter("w_fc", [inp_c, fc_units])
                 else:
                     raise Exception("Unknown fc string: %s" % flatten_op)
-                b = create_parameter("b_fc", shape=[fc_units], initializer='zeros')
+                b = F.create_parameter("b_fc", shape=[fc_units], initializer='zeros')
                 x = tf.matmul(x, w) + b
                 x = tf.nn.relu(x)
                 if is_training:
@@ -1561,9 +1560,9 @@ class EnasConv1dDAG:
                     )
                     x = tf.nn.dropout(x, rate=dropout_placeholders[-1])
 
-                w_out = create_parameter("w_out", [fc_units, self.output_node.Layer_attributes['units']])
-                b_out = create_parameter("b_out", shape=[self.output_node.Layer_attributes['units']], initializer='zeros')
-                model_output = get_layer(
+                w_out = F.create_parameter("w_out", [fc_units, self.output_node.Layer_attributes['units']])
+                b_out = F.create_parameter("b_out", shape=[self.output_node.Layer_attributes['units']], initializer='zeros')
+                model_output = F.get_layer(
                     x=tf.matmul(x, w_out) + b_out,
                     op=Operation("Activation", activation=self.output_node.Layer_attributes['activation'])
                 )
@@ -1584,8 +1583,8 @@ class EnasConv1dDAG:
                 inp_c = layer.get_shape()[1]
             actual_data_format = 'channels_first'
 
-        with tf.variable_scope("path1_conv"):
-            w = create_parameter("w", [1, inp_c, out_filters])
+        with F.variable_scope("path1_conv"):
+            w = F.create_parameter("w", [1, inp_c, out_filters])
             x = tf.nn.conv1d(layer, filters=w, stride=1, padding="SAME")
             x = tf.layers.max_pooling1d(
                 x, self.reduction_factor, self.reduction_factor, "SAME", data_format=actual_data_format)
@@ -1618,7 +1617,7 @@ class EnasConv1dDAG:
             if self.train_fixed_arc and i != count:
                 continue
 
-            with tf.variable_scope("branch_%i" % i):
+            with F.variable_scope("branch_%i" % i):
                 if self.model_space[layer_id][i].Layer_type == 'conv1d':
                     # print('%i, conv1d'%layer_id)
                     y = self._conv_branch(inputs, layer_attr=self.model_space[layer_id][i].Layer_attributes,
@@ -1664,7 +1663,7 @@ class EnasConv1dDAG:
         if self.with_skip_connection is True and layer_id > 0:
             skip_start = start_idx + 1
             skip = arc_seq[skip_start: skip_start + layer_id]
-            with tf.variable_scope("skip"):
+            with F.variable_scope("skip"):
                 # might be the cause of oom.. zz 2020.1.6
                 res_layers = []
                 for i in range(layer_id):
@@ -1695,12 +1694,12 @@ class EnasConv1dDAG:
                 inp_c = inputs.get_shape()[1].value
             except AttributeError:
                 inp_c = inputs.get_shape()[1]
-        w = create_parameter("w", [kernel_size, inp_c, filters])
+        w = F.create_parameter("w", [kernel_size, inp_c, filters])
         x = tf.nn.conv1d(inputs, filters=w, stride=1, padding="SAME", dilations=dilation)
         bn = tf.keras.layers.BatchNormalization()
         x = bn(x, training=is_training)
-        b = create_parameter("b", shape=[1], initializer='zeros')
-        x = get_layer(
+        b = F.create_parameter("b", shape=[1], initializer='zeros')
+        x = F.get_layer(
             x=x+b,
             op=Operation("Activation", activation=activation_fn))
         return lambda: x
@@ -1725,15 +1724,15 @@ class EnasConv1dDAG:
             raise Exception("Unknown data format: %s" % self.data_format)
 
         if self.add_conv1_under_pool:
-            with tf.variable_scope("conv_1"):
-                w = create_parameter("w", [1, inp_c, filters])
+            with F.variable_scope("conv_1"):
+                w = F.create_parameter("w", [1, inp_c, filters])
                 x = tf.nn.conv1d(inputs, w, 1, "SAME", data_format=self.data_format)
                 bn = tf.keras.layers.BatchNormalization()
                 x = bn(x, training=is_training)
                 x = tf.nn.relu(x)
         else:
             x = inputs
-        with tf.variable_scope("pool"):
+        with F.variable_scope("pool"):
             if avg_or_max == "avg":
                 x = tf.layers.average_pooling1d(
                     x, pool_size, strides, "SAME", data_format=actual_data_format)

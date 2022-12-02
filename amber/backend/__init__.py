@@ -30,11 +30,13 @@ def load_backend(mod_name):
         mod = torch
     elif mod_name == "tensorflow_1":
         import tensorflow  #type: ignore
-        assert version_parse(tensorflow.__version__) < version_parse("2.0")
+        assert version_parse(tensorflow.__version__) < version_parse("2.0"), \
+            "You specified tensorflow_1 backend for AMBER, but tf2 is found"
         mod = tensorflow
     elif mod_name == "tensorflow_2":
         import tensorflow  #type: ignore
-        assert version_parse(tensorflow.__version__) >= version_parse("2.0")
+        assert version_parse(tensorflow.__version__) >= version_parse("2.0"), \
+                        "You specified tensorflow_2 backend for AMBER, but tf1 is found"
         mod = tensorflow
     else:
         raise NotImplementedError("Unsupported backend: %s" % mod_name)
@@ -93,5 +95,5 @@ def get_preferred_backend():
         set_default_backend(default_dir, "tensorflow_1")  # type: ignore
         return "tensorflow_1"
 
-
-load_backend(get_preferred_backend())
+mod_name = get_preferred_backend()
+load_backend(mod_name=mod_name)
