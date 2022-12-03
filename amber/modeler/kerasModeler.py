@@ -1,20 +1,20 @@
-from abc import ABC
-
 from ..architect.modelSpace import Operation
 from .. import backend as F
 from ..backend import get_layer, Model  # type: ignore
 import numpy as np
 from .base import ModelBuilder
-import tensorflow as tf
 from .architectureDecoder import MultiIOArchitecture, ResConvNetArchitecture
-from tensorflow.keras.layers import Concatenate, Add, Dense, Conv1D, MaxPooling1D, AveragePooling1D, \
-    GlobalAveragePooling1D, Flatten, BatchNormalization, LeakyReLU, Dropout, Activation, Lambda
-from tensorflow.keras import regularizers
-from tensorflow.keras import constraints
-from tensorflow.keras.models import Model
 import copy
 from ..architect.modelSpace import BranchedModelSpace
-
+try:
+    import tensorflow as tf
+    from tensorflow.keras.layers import Concatenate, Add, Dense, Conv1D, MaxPooling1D, AveragePooling1D, \
+        GlobalAveragePooling1D, Flatten, BatchNormalization, LeakyReLU, Dropout, Activation, Lambda
+    from tensorflow.keras import regularizers
+    from tensorflow.keras import constraints
+    from tensorflow.keras.models import Model
+except ImportError:
+    pass
 
 class KerasModelBuilder(ModelBuilder):
     def __init__(self, inputs_op, output_op, model_compile_dict,

@@ -5,7 +5,7 @@ Child model classes wrapped above Keras.Model API for more complex child
 network manipulations
 """
 
-# Author: ZZJ
+# Author: zzjfrank
 # Initial date: 10.1.2019
 
 
@@ -14,10 +14,7 @@ import warnings
 from tqdm import tqdm
 import h5py
 import numpy as np
-from ..utils import corrected_tf as tf
-from keras.callbacks import CallbackList, BaseLogger, History
-from tensorflow.keras.models import Model
-from keras.utils.data_utils import GeneratorEnqueuer
+from .. import backend as F
 from tqdm import trange
 from .base import GeneralChild
 from ..architect.commonOps import batchify, numpy_shuffle_in_unison
@@ -87,28 +84,28 @@ class EnasAnnModel:
         """
         Parameters
         ----------
-        inputs: tf.Tensor
+        inputs: amber.backend.Tensor
             input tensors/placeholders
-        outputs: tf.Tensor
+        outputs: amber.backend.Tensor
             output tensors
-        session: tf.Session
+        session: amber.backend.Session
             tensorflow Session for use
         name: str
-            name for tf.variable_scope; default is "EnasDAG"
+            name for amber.backend.variable_scope; default is "EnasDAG"
         """
-        assert type(inputs) in (tf.Tensor, list), "get unexpected inputs types: %s" % type(inputs)
-        assert type(outputs) in (tf.Tensor, list), "get unexpected outputs types: %s" % type(outputs)
+        assert type(inputs) in (F.TensorType, list), "get unexpected inputs types: %s" % type(inputs)
+        assert type(outputs) in (F.TensorType, list), "get unexpected outputs types: %s" % type(outputs)
         self.arc_seq = arc_seq
         self.dag = dag
-        self.inputs = [inputs] if type(inputs) is tf.Tensor else inputs
-        self.outputs = [outputs] if type(outputs) is tf.Tensor else outputs
+        self.inputs = [inputs] if type(inputs) is F.TensorType else inputs
+        self.outputs = [outputs] if type(outputs) is F.TensorType else outputs
         labels = dag.child_model_label
-        self.labels = [labels] if type(labels) is tf.Tensor else labels
+        self.labels = [labels] if type(labels) is F.TensorType else labels
         self.session = session
         self.dropouts = dropouts
         self.dropout_placeholders = None
         self.name = name
-        self.trainable_var = [var for var in tf.trainable_variables() if var.name.startswith(self.name)]
+        self.trainable_var = [var for var in F.trainable_variables(scope=self.name) ]
         self.train_op = None
         self.optimizer = None
         self.optimizer_ = None
@@ -248,6 +245,7 @@ class EnasAnnModel:
                       use_multiprocessing=False,
                       shuffle=True):
         if workers > 0:
+            from keras.utils.data_utils import GeneratorEnqueuer
             enqueuer = GeneratorEnqueuer(
                 generator,
                 use_multiprocessing=use_multiprocessing)
@@ -257,7 +255,7 @@ class EnasAnnModel:
         else:
             output_generator = generator
 
-        callback_list = CallbackList(callbacks=callbacks)
+        callback_list = F.get_callback('CallbackList')(callbacks=callbacks)
         callback_list.set_model(self)
         callback_list.on_train_begin()
 
@@ -357,9 +355,9 @@ class EnasAnnModel:
                     curr_loss = batch_loss if curr_loss is None else curr_loss * 0.95 + batch_loss * 0.05
                     if verbose == 1:
                         t.set_postfix(loss="%.4f" % curr_loss)
-                except tf.errors.OutOfRangeError:
+                except Exception as e:
                     self.reinitialize_train_pipe = True
-                    warnings.warn("train pipe out of range")
+                    warnings.warn("train pipe out of range; %s"%e)
                     break
 
             hist['loss'].append(curr_loss)
@@ -380,7 +378,7 @@ class EnasAnnModel:
         total_len = len(y[0]) if type(y) is list else len(y)
         if nsteps is None:
             nsteps = total_len // batch_size
-        callback_list = CallbackList(callbacks=callbacks)
+        callback_list = F.get_callback('CallbackList')(callbacks=callbacks)
         callback_list.set_model(self)
         callback_list.on_train_begin()
         assert epochs > 0
@@ -559,9 +557,9 @@ class EnasAnnModel:
         weights_vars = list(zip(self.dag.w, self.dag.b)) + list(zip(self.dag.w_out, self.dag.b_out))
         for i in range(len(weights)):
             # weight
-            assign_ops.append(tf.assign(weights_vars[i][0], weights[i][0]))
+            assign_ops.append(F.assign(weights_vars[i][0], weights[i][0]))
             # bias
-            assign_ops.append(tf.assign(weights_vars[i][1], weights[i][1]))
+            assign_ops.append(F.assign(weights_vars[i][1], weights[i][1]))
         self.session.run(assign_ops)
 
 
@@ -578,19 +576,19 @@ class EnasCnnModel:
 
     def __init__(self, inputs, outputs, labels, arc_seq, dag, session, dropouts=None, use_pipe=None, name='EnasModel',
                  **kwargs):
-        assert type(inputs) in (tf.Tensor, list), "get unexpected inputs types: %s" % type(inputs)
-        assert type(outputs) in (tf.Tensor, list), "get unexpected outputs types: %s" % type(outputs)
+        assert type(inputs) in (F.TensorType, list), "get unexpected inputs types: %s" % type(inputs)
+        assert type(outputs) in (F.TensorType, list), "get unexpected outputs types: %s" % type(outputs)
         self.arc_seq = arc_seq
         self.dag = dag
-        self.inputs = [inputs] if type(inputs) is tf.Tensor else inputs
-        self.outputs = [outputs] if type(outputs) is tf.Tensor else outputs
+        self.inputs = [inputs] if type(inputs) is F.TensorType else inputs
+        self.outputs = [outputs] if type(outputs) is F.TensorType else outputs
         self.callbacks = None
-        self.labels = [labels] if type(labels) is tf.Tensor else labels
+        self.labels = [labels] if type(labels) is F.TensorType else labels
         self.session = session
         self.dropouts = dropouts
         self.dropout_placeholders = None
         self.name = name
-        self.trainable_var = [var for var in tf.trainable_variables() if var.name.startswith(self.name)]
+        self.trainable_var = [var for var in F.trainable_variables(scope=self.name)]
         self.train_op = None
         self.optimizer = None
         self.optimizer_ = None
@@ -649,7 +647,7 @@ class EnasCnnModel:
         if metrics:
             metrics = [metrics] if type(metrics) is not list else metrics
             self.metrics_name = [str(m) for m in metrics]
-        self.weights = [v for v in tf.trainable_variables() if v.name.startswith(self.name)]
+        self.weights = [v for v in F.trainable_variables(scope=self.name)]
         self.is_compiled = True
 
     def _make_feed_dict(self, x=None, y=None, is_training_phase=False):
@@ -689,19 +687,19 @@ class EnasCnnModel:
             total_len = len(y[0]) if type(y) is list else len(y)
             nsteps = total_len // batch_size
         # BaseLogger should always be the first metric since it computes the stats on epoch end
-        base_logger = BaseLogger(stateful_metrics=["val_%s" % m for m in self.metrics_name] + ['val_loss', 'size'])
+        base_logger = F.get_callback('BaseLogger')(stateful_metrics=["val_%s" % m for m in self.metrics_name] + ['val_loss', 'size'])
         base_logger_params = {'metrics': ['loss'] + self.metrics_name}
         if validation_data:
             base_logger_params['metrics'] += ['val_%s' % m for m in base_logger_params['metrics']]
         base_logger.set_params(base_logger_params)
-        hist = History()
+        hist = F.get_callback('History')()
         if callbacks is None:
             callbacks = [base_logger] + [hist]
         elif type(callbacks) is list:
             callbacks = [base_logger] + callbacks + [hist]
         else:
             callbacks = [base_logger] + [callbacks] + [hist]
-        callback_list = CallbackList(callbacks=callbacks)
+        callback_list = F.get_callback('CallbackList')(callbacks=callbacks)
         callback_list.set_model(self)
         callback_list.on_train_begin()
         self.callbacks = callback_list
@@ -829,5 +827,5 @@ class EnasCnnModel:
     def set_weights(self, weights, **kwargs):
         assign_ops = []
         for i in range(len(self.weights)):
-            assign_ops.append(tf.assign(self.weights[i], weights[i]))
+            assign_ops.append(F.assign(self.weights[i], weights[i]))
         self.session.run(assign_ops)

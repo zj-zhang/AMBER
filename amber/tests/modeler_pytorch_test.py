@@ -2,7 +2,6 @@
 Test modeler DAGs (underlying modelers)
 """
 
-import tensorflow as tf
 import sys
 import numpy as np
 from tqdm import tqdm
@@ -10,7 +9,8 @@ from amber.utils import testing_utils
 from amber import modeler
 from amber import architect
 from amber import backend
-from amber.modeler.dag_pytorch import EnasConv1dDAGpyTorch
+from amber import backend as F
+from amber.modeler.dag import EnasConv1dDAG
 import logging, sys
 logging.disable(sys.maxsize)
 import unittest
@@ -28,10 +28,7 @@ except ImportError:
 @unittest.skipIf(backend.mod_name!="pytorch", reason="skipped because non-pytorch backend")
 class TestEnasPyTorchConvDAG(testing_utils.TestCase):
     def setUp(self):
-        try:
-            self.session = tf.Session()
-        except AttributeError:
-            self.session = tf.compat.v1.Session()
+        self.session = F.Session()
 
         input_op = architect.Operation('input', shape=(100, 4), name="input")
         output_op = architect.Operation('dense', units=1, activation='sigmoid', name="output")
@@ -120,7 +117,7 @@ class TestPyTorchResConvModelBuilder(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    tf.test.main()
+    unittest.test.main()
 
 
 

@@ -76,7 +76,7 @@ We strongly encourage you to create a new conda environment, regardless of the b
 In the command-line terminal, type the following commands to get it installed:
 
 ```{bash}
-conda create -n amber -c anaconda tensorflow-gpu=1.15.0 keras numpy~=1.18.5 h5py~=2.10.0
+conda create -n amber -c anaconda tensorflow-gpu=1.15.0 keras scikit-learn numpy~=1.18.5 h5py~=2.10.0 matplotlib seaborn
 conda activate amber
 pip install amber-automl
 # if you plan to run tests
@@ -84,8 +84,10 @@ pip install pytest coverage parameterized pydot graphviz
 ```
 
 ### Installing with PyTorch/Lightning
-TODO
-
+```{bash}
+conda create -n amber-torch -c anaconda pytorch scikit-learn numpy scipy matplotlib seaborn tqdm h5py pytorch-lightning
+conda activate amber-torch
+```
 
 ### Get the latest source code
 First, clone the Github Repository; if you have previous versions, make sure you pull the latest commits/changes:

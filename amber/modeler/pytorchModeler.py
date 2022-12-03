@@ -1,9 +1,10 @@
 from .base import ModelBuilder, BaseTorchModel
 from .architectureDecoder import ResConvNetArchitecture
-from .dag_pytorch import LambdaLayer, ConcatLayer, GlobalAveragePooling1DLayer, get_torch_layer
 try:
     import torch
     has_torch = True
+    from .supernet.dynamic import LambdaLayer, ConcatLayer, GlobalAveragePooling1DLayer, get_torch_layer
+
 except ImportError:
     has_torch = False
 

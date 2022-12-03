@@ -11,11 +11,11 @@ from .... import backend as F
 from ....backend import create_parameter, get_layer  # type: ignore
 from amber.architect.modelSpace import Operation
 from amber.architect.buffer import MultiManagerBuffer
-import tensorflow as tf
-from tensorflow.keras.regularizers import L1L2
-if tf.__version__.startswith('2'):
-    tf.compat.v1.disable_eager_execution()
-    import tensorflow.compat.v1 as tf
+from ....utils import corrected_tf as tf
+try:
+    from tensorflow.keras.regularizers import L1L2
+except ImportError:
+    pass
 
 
 class ZeroShotController(GeneralController):

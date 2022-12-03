@@ -82,6 +82,7 @@ class TestEnasConvModeler(testing_utils.TestCase):
         model2.fit(self.x, self.y, batch_size=1, epochs=100, verbose=0)
         # loss should reduce
         new_loss = model.evaluate(self.x, self.y)['val_loss']
+        # XXX: this will often fail - may indicate dropouts are not turned off.
         self.assertLess(new_loss, old_loss)
         # fixed preds should still be identical
         fix_preds = [model.predict(self.x).flatten()[0] for _ in range(self.num_samps)]
@@ -100,7 +101,7 @@ class TestEnasAnnDAG(testing_utils.TestCase):
     with_skip_connection = True
     num_inputs = 4
     dag_func = 'InputBlockDAG'
-    model_compile_dict = {'optimizer': 'adam', 'loss': 'mse', 'metrics': ['mae']}
+    model_compile_dict = {'optimizer': 'sgd', 'loss': 'mse', 'metrics': ['mae']}
 
     def setUp(self):
         if self.with_input_blocks:
@@ -229,9 +230,10 @@ class TestEnasAnnDAG(testing_utils.TestCase):
             m = model_fn()
             old_loss = m.evaluate(*self.traindata)
             train_loss, test_loss = self.model_fit(m)
+            new_loss = m.evaluate(*self.traindata)
             # sampled graph should also decrease loss over training, though it
-            # may fail due to randomness
-            self.assertLess(train_loss[0], old_loss[0])
+            # may fail due to randomness in dropout
+            self.assertLess(new_loss[0], old_loss[0])
 
 
 if __name__ == '__main__':

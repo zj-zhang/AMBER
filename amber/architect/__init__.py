@@ -8,7 +8,7 @@ from .controller import BaseController, GeneralController, MultiInputController,
 from .modelSpace import State, ModelSpace
 from .manager import GeneralManager, EnasManager, DistributedGeneralManager
 from .trainEnv import ControllerTrainEnvironment, EnasTrainEnv, MultiManagerEnvironment, ParallelMultiManagerEnvironment
-from . import buffer, store, reward, trainEnv, modelSpace, controller, pmbga
+from . import buffer, store, reward, trainEnv, modelSpace, optim
 
 # alias
 Operation = State
@@ -34,7 +34,6 @@ __all__ = [
     'trainEnv',
     'modelSpace',
     'controller',
-    'pmbga',
     # For legacy use
     'OperationController',
 ]

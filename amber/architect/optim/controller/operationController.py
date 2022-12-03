@@ -11,11 +11,14 @@ A pure Keras-implementation of NAS
 import os
 
 from ....utils import corrected_tf as tf
-import tensorflow.keras.backend as K
 import numpy as np
-from tensorflow.keras import optimizers
-from tensorflow.keras.layers import Input, Lambda, Dense, Activation, LSTM
-from tensorflow.keras.models import Model
+try:
+    import tensorflow.keras.backend as K
+    from tensorflow.keras import optimizers
+    from tensorflow.keras.layers import Input, Lambda, Dense, Activation, LSTM
+    from tensorflow.keras.models import Model
+except ImportError:
+    pass
 
 from amber.architect.buffer import Buffer
 from .generalController import BaseController

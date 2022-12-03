@@ -7,7 +7,7 @@ from amber.utils import testing_utils
 from amber import modeler
 from amber import architect
 from amber import backend
-import logging, sys
+import logging, sys, unittest
 logging.disable(sys.maxsize)
 
 

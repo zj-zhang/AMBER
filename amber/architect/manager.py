@@ -12,11 +12,7 @@ import os, sys
 import warnings
 
 import numpy as np
-import tensorflow.keras as keras
-from ..utils import corrected_tf as tf
-from tensorflow.keras import backend as K
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from tensorflow.keras.models import Model
+from .. import backend as F
 from packaging import version
 import time
 from datetime import datetime
@@ -182,18 +178,12 @@ class GeneralManager(BaseNetworkManager):
             The reward signal as determined by ``reward_fn(model, val_data)``
 
         loss_and_metrics : dict
-            A dictionary of auxillary information for this model, such as loss, and other metrics (as in ``tf.keras.metrics``)
+            A dictionary of auxillary information for this model, such as loss, and other metrics
         """
         # print('-'*80, model_arc, '-'*80)
-        tf.reset_default_graph()
-        train_graph = tf.Graph()
-        train_sess = tf.Session(graph=train_graph)
-        with train_graph.as_default(), train_sess.as_default():
-            try:
-                K.set_session(train_sess)
-            except (RuntimeError, AttributeError): # keras 2.3.1 `set_session` not available for tf2.0
-                assert version.parse(keras.__version__) > version.parse('2.2.5')
-                pass
+        train_sess = F.Session()
+        with F.session_scope(train_sess):
+            F.set_session(train_sess)
             model = self.model_fn(model_arc)  # a compiled keras Model
             if model is None:
                 assert hasattr(self.reward_fn, "min"), "model_fn of type %s returned a non-valid model, but the given " \
@@ -219,10 +209,10 @@ class GeneralManager(BaseNetworkManager):
                                  verbose=self.verbose,
                                  #shuffle=True,
                                  validation_data=self.validation_data,
-                                 callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
+                                 callbacks=[F.get_callback('ModelCheckpoint')(os.path.join(self.working_dir, 'temp_network.h5'),
                                                             monitor='val_loss', verbose=self.verbose,
                                                             save_best_only=True),
-                                            EarlyStopping(monitor='val_loss', patience=self._earlystop_patience, verbose=self.verbose)],
+                                            F.get_callback('EarlyStopping')(monitor='val_loss', patience=self._earlystop_patience, verbose=self.verbose)],
                                  **self.fit_kwargs
                                  )
                 # load best performance epoch in this training session
@@ -236,8 +226,8 @@ class GeneralManager(BaseNetworkManager):
                 # evaluate the model by `reward_fn`
                 this_reward, loss_and_metrics, reward_metrics = \
                     self.reward_fn(model, self.validation_data,
-                                   session=train_sess,
-                                   graph=train_graph)
+                                   session=train_sess,)
+                                   #graph=train_graph)
                 loss = loss_and_metrics.pop(0)
                 loss_and_metrics = {str(self.model_compile_dict['metrics'][i]): loss_and_metrics[i] for i in
                                     range(len(loss_and_metrics))}
@@ -264,13 +254,7 @@ class GeneralManager(BaseNetworkManager):
         # clean up resources and GPU memory
         del model
         del hist
-        try:
-            K.clear_session()
-        except (RuntimeError, AttributeError): # keras 2.3.1 `set_session` not available for tf2.0
-            assert version.parse(keras.__version__) > version.parse('2.2.5')
-            pass
-
-        gc.collect()
+        F.clear_session()
         return this_reward, loss_and_metrics
 
 
@@ -302,17 +286,10 @@ class DistributedGeneralManager(GeneralManager):
             self.file_connected = False
 
     def get_rewards(self, trial, model_arc, remap_device=None, **kwargs):
-        # TODO: use tensorflow distributed strategy
-        #strategy = tf2.distribute.MirroredStrategy(devices=self.devices)
-        #print('Number of devices: {} - {}'.format(strategy.num_replicas_in_sync, self.devices))
-        #with strategy.scope():
         pid = os.getpid()
         sys.stderr.write("[%s][%s] Preprocessing.."%(pid, datetime.now().strftime("%H:%M:%S") ))
         start_time = time.time()
-        train_graph = tf.Graph()
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
-        train_sess = tf.Session(graph=train_graph, config=config)
+        train_sess = F.Session()
         # remap device will overwrite the manager device
         if remap_device is not None:
             target_device = remap_device
@@ -325,13 +302,10 @@ class DistributedGeneralManager(GeneralManager):
             sys.stderr.write("[%s] Auto-assign device: %s" % (pid, target_device) )
         else:
             target_device = self.devices[0]
-        with train_graph.as_default(), train_sess.as_default():
-            with tf.device(target_device):
-                try:
-                    K.set_session(train_sess)
-                except (RuntimeError, AttributeError): # keras 2.3.1 `set_session` not available for tf2.0
-                    pass
-                model = self.model_fn(model_arc)  # a compiled keras Model
+        with F.session_scope(train_sess):
+            with F.device_scope(target_device):
+                F.set_session(train_sess)
+                model = self.model_fn(model_arc)  # a compiled Model
 
                 # unpack the dataset
                 if not self.file_connected:
@@ -415,12 +389,12 @@ class DistributedGeneralManager(GeneralManager):
         sys.stderr.write("[%s] Cleaning up.."%pid)
         try:
             del train_sess
-            del train_graph
+            #del train_graph
             del model
             del hist
         except UnboundLocalError:
             pass
-        gc.collect()
+        F.clear_session()
         elapse_time = time.time() - start_time
         sys.stderr.write("  %.3f sec\n"%elapse_time)
         return this_reward, loss_and_metrics
@@ -531,9 +505,7 @@ class EnasManager(GeneralManager):
             The reward signal as determined by ``reward_fn(model, val_data)``
 
         loss_and_metrics : dict
-            A dictionary of auxillary information for this model, such as loss, and other metrics (as in ``tf.keras.metrics``)
-
-
+            A dictionary of auxillary information for this model, such as loss, and other metrics
         """
         if self.model is None:
             self.model = self.model_fn()
@@ -551,7 +523,7 @@ class EnasManager(GeneralManager):
                                   epochs=self.epochs,
                                   verbose=self.verbose,
                                   # comment out because of temporary
-                                  # incompatibility with tf.data.Dataset
+                                  # incompatibility with Dataset
                                   # validation_data=(X_val, y_val),
                                   )
 

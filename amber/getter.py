@@ -169,7 +169,7 @@ def get_train_env(env_type, controller, manager, *args, **kwargs):
 
 # controller; needs model_space
 def get_controller(controller_type, model_space, session, **kwargs):
-    """Serialize a controller of given type, using the specified model space, and a tf session if needed (can be None otherwise)
+    """Serialize a controller of given type, using the specified model space, and a session if needed (can be None otherwise)
 
     This step constructs the neural network architecture search algorithm, one of the two components in the final
     training environment.
@@ -185,7 +185,7 @@ def get_controller(controller_type, model_space, session, **kwargs):
         string for the controller type
     model_space : amber.architect.ModelSpace
         a model space instance for the search algorithms
-    session : tf.Session, or None
+    session : amber.backend.Session, or None
         a tensorflow session
     kwargs : dict
         keyword arguments for controller, such as buffer type
@@ -389,7 +389,7 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
         string for the model builder type
     model_space : amber.architect.ModelSpace
         model space where the search algorithms sample models
-    session : tf.Session
+    session : amber.backend.Session
         tensorflow session, can be None if not applicable for certain model builders
     """
     from .modeler import ModelBuilder
