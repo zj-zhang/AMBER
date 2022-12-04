@@ -2,21 +2,13 @@
 Testing utilities for amber
 """
 
-import tensorflow as tf
-try:
-    import keras
-except ImportError:
-    from tensorflow import keras as keras
+import unittest
+from .. import backend as F
 from .. import architect
 
-
-class TestCase(tf.test.TestCase):
+class TestCase(F.TestCase):
     def tearDown(self):
-        tf.keras.backend.clear_session()
-        try:
-            keras.backend.clear_session()
-        except AttributeError:
-            pass
+        F.clear_session()
         super(TestCase, self).tearDown()
 
 
@@ -54,10 +46,10 @@ class PseudoConv1dModelBuilder:
         self.session = None
 
     def __call__(self, *args, **kwargs):
-        model = tf.keras.models.Sequential()
-        model.add(tf.keras.layers.Conv1D(filters=4, kernel_size=1, input_shape=self.input_shape))
-        model.add(tf.keras.layers.Flatten())
-        model.add(tf.keras.layers.Dense(units=self.output_units))
+        model = F.Sequential()
+        model.add(F.get_layer(op=F.Operation('Conv1D', filters=4, kernel_size=1, input_shape=self.input_shape)))
+        model.add(F.get_layer(op=F.Operation('Flatten')))
+        model.add(F.get_layer(op=F.Operation('Dense', units=self.output_units)))
         model.compile(**self.model_compile_dict)
         return model
 

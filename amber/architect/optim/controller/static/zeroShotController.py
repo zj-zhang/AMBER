@@ -7,11 +7,11 @@ ZZ, May 13, 2020
 """
 
 from .generalController import GeneralController
-from .... import backend as F
-from ....backend import create_parameter, get_layer  # type: ignore
+from amber import backend as F
+from amber.backend import create_parameter, get_layer
 from amber.architect.modelSpace import Operation
 from amber.architect.buffer import MultiManagerBuffer
-from ....utils import corrected_tf as tf
+from amber.utils import static_tf as tf
 try:
     from tensorflow.keras.regularizers import L1L2
 except ImportError:

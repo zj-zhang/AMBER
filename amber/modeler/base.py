@@ -7,7 +7,7 @@ from argparse import Namespace
 from typing import Optional, Union, List, Dict, Any
 
 import pandas as pd
-
+from .. import backend as F
 import copy
 try:
     from tensorflow.keras.models import Model
@@ -16,16 +16,16 @@ except ImportError:
     Model = object
     has_tf = False
 
-try:
+if F.mod_name == 'pytorch':
     import pytorch_lightning as pl
     from pytorch_lightning import LightningModule
     import torch
-    import torch.nn.functional as F
+    import torch.nn.functional
     from pytorch_lightning.loggers.base import LightningLoggerBase, rank_zero_experiment
     from pytorch_lightning.utilities.logger import _add_prefix, _convert_params
     from pytorch_lightning.utilities.rank_zero import rank_zero_only
     has_torch = True
-except ImportError:
+else:
     LightningModule = object
     LightningLoggerBase = object
     rank_zero_only = lambda f: f

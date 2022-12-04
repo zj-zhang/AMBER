@@ -2,13 +2,13 @@
 """
 
 try:
-    import tensorflow as corrected_tf
-    if corrected_tf.__version__.startswith("2"):
+    import tensorflow as static_tf
+    if static_tf.__version__.startswith("2"):
         print("detected tf2 - using compatibility mode")
-        corrected_tf.compat.v1.disable_eager_execution()
-        import tensorflow.compat.v1 as corrected_tf
+        static_tf.compat.v1.disable_eager_execution()
+        import tensorflow.compat.v1 as static_tf
 except ImportError:
-    corrected_tf = object
+    static_tf = object
 
 def run_from_ipython():
     try:

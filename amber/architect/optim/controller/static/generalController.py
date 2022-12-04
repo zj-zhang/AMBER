@@ -2,53 +2,19 @@
 General controller for searching computational operation per layer, and residual connection
 """
 
-# Author       : ZZJ
+# Author       : zzjfrank
 # Last Update  : Aug. 16, 2020
 
 import os
 import sys
 import numpy as np
 import h5py
-from ....utils import corrected_tf as tf
-from .... import backend as F
+from ..... import backend as F
+from ..base import BaseController
 from amber.architect.buffer import get_buffer
 from amber.architect.commonOps import get_kl_divergence_n_entropy
 from amber.architect.commonOps import proximal_policy_optimization_loss
 from amber.architect.commonOps import stack_lstm
-
-
-class BaseController(object):
-    """abstract class for controllers
-    """
-
-    def __init__(self, *args, **kwargs):
-        # Abstract
-        pass
-
-    def __str__(self):
-        return "AMBER Controller for architecture searching"
-
-    def _create_weight(self, *args, **kwargs):
-        raise NotImplementedError("Abstract method.")
-
-    def _build_sampler(self, *args, **kwargs):
-        raise NotImplementedError("Abstract method.")
-
-    def _build_trainer(self, *args, **kwargs):
-        raise NotImplementedError("Abstract method.")
-
-    def store(self, *args, **kwargs):
-        raise NotImplementedError("Abstract method.")
-
-    def train(self, *args, **kwargs):
-        raise NotImplementedError("Abstract method.")
-
-    def remove_files(self, *args, **kwargs):
-        raise NotImplementedError("Abstract method.")
-    
-    @property
-    def search_space_size(self):
-        raise NotImplementedError()
 
 
 class GeneralController(BaseController):
@@ -96,7 +62,7 @@ class GeneralController(BaseController):
     batch_size : int
         How many architectures in a batch to train the controller
 
-    session : tf.Session
+    session : F.Session
         The session where the controller tensors is placed
 
     train_pi_iter : int
@@ -112,7 +78,7 @@ class GeneralController(BaseController):
         keep_prob = 1 - dropout probability for stacked LSTM.
 
     tanh_constant : float
-        If not None, the logits for each multivariate classification will be transformed by ``tf.tanh`` then multiplied by
+        If not None, the logits for each multivariate classification will be transformed by ``F.tanh`` then multiplied by
         tanh_constant. This can avoid over-confident controllers asserting probability=1 or 0 caused by logit going to +/- inf.
         Default is None.
 
@@ -131,14 +97,14 @@ class GeneralController(BaseController):
         The weight for skip connection kl-divergence from the expected `skip_target`
 
     name : str
-        The name for this Controller instance; all ``tf.Tensors`` will be placed under this VariableScope. This name
+        The name for this Controller instance; all ``F.Tensors`` will be placed under this VariableScope. This name
         determines which tensors will be initialized when a new Controller instance is created.
 
 
     Attributes
     ----------
-    weights : list of tf.Variable
-        The list of all trainable ``tf.Variable`` in this controller
+    weights : list of F.Variable
+        The list of all trainable ``F.Variable`` in this controller
 
     model_space : amber.architect.ModelSpace
         The model space which the controller will be searching from.
@@ -146,10 +112,8 @@ class GeneralController(BaseController):
     buffer : amber.architect.Buffer
         The Buffer object stores the history architectures, computes the rewards, and gets feed dict for training.
 
-    session : tf.Session
+    session : F.Session
         The reference to the session that hosts this controller instance.
-
-
 
     """
 
@@ -182,7 +146,7 @@ class GeneralController(BaseController):
 
         # need to use the same session throughout one App; ZZ 2020.3.2
         assert session is not None
-        self.session = session if session else tf.Session()
+        self.session = session if session else F.Session()
         self.train_pi_iter = train_pi_iter
         self.use_ppo_loss = use_ppo_loss
         self.kl_threshold = kl_threshold
@@ -202,86 +166,19 @@ class GeneralController(BaseController):
         self.name = name
         self.loss = 0
 
-        with tf.device("/cpu:0"):
-            with tf.variable_scope(self.name):
+        with F.device_scope("/cpu:0"):
+            with F.variable_scope(self.name):
                 self._create_weight()
                 self._build_sampler()
                 self._build_trainer()
                 self._build_train_op()
         # initialize variables in this scope
-        self.weights = [var for var in tf.trainable_variables() if var.name.startswith(self.name)]
-        self.session.run(tf.variables_initializer(self.weights))
+        self.weights = [var for var in F.trainable_variables(scope=self.name)]
+        F.init_all_params(sess=self.session)
 
     def __str__(self):
         s = "GeneralController '%s' for %s" % (self.name, self.model_space)
         return s
-
-    def _create_weight(self):
-        """Private method for creating tensors; called at initialization"""
-        initializer = tf.random_uniform_initializer(minval=-0.1, maxval=0.1)
-        with tf.variable_scope("create_weights", initializer=initializer):
-            with tf.variable_scope("lstm", reuse=False):
-                self.w_lstm = []
-                for layer_id in range(self.lstm_num_layers):
-                    with tf.variable_scope("lstm_layer_{}".format(layer_id)):
-                        w = tf.get_variable(
-                            "w", [2 * self.lstm_size, 4 * self.lstm_size])
-                        self.w_lstm.append(w)
-
-            # g_emb: initial controller hidden state tensor; to be learned
-            self.g_emb = tf.get_variable("g_emb", [1, self.lstm_size])
-
-            # w_emb: embedding for computational operations
-            self.w_emb = {"start": []}
-
-            with tf.variable_scope("emb"):
-                for layer_id in range(self.num_layers):
-                    with tf.variable_scope("layer_{}".format(layer_id)):
-                        if self.share_embedding:
-                            if layer_id not in self.share_embedding:
-                                self.w_emb["start"].append(tf.get_variable(
-                                    "w_start", [self.num_choices_per_layer[layer_id], self.lstm_size]))
-                            else:
-                                shared_id = self.share_embedding[layer_id]
-                                assert shared_id < layer_id, \
-                                    "You turned on `share_embedding`, but specified the layer %i " \
-                                    "to be shared with layer %i, which is not built yet" % (layer_id, shared_id)
-                                self.w_emb["start"].append(self.w_emb["start"][shared_id])
-
-                        else:
-                            self.w_emb["start"].append(tf.get_variable(
-                                "w_start", [self.num_choices_per_layer[layer_id], self.lstm_size]))
-
-            # w_soft: dictionary of tensors for transforming RNN hiddenstates to softmax classifier
-            self.w_soft = {"start": []}
-            with tf.variable_scope("softmax"):
-                for layer_id in range(self.num_layers):
-                    if self.share_embedding:
-                        if layer_id not in self.share_embedding:
-                            with tf.variable_scope("layer_{}".format(layer_id)):
-                                self.w_soft["start"].append(tf.get_variable(
-                                    "w_start", [self.lstm_size, self.num_choices_per_layer[layer_id]]))
-                        else:
-                            shared_id = self.share_embedding[layer_id]
-                            assert shared_id < layer_id, \
-                                "You turned on `share_embedding`, but specified the layer %i " \
-                                "to be shared with layer %i, which is not built yet" % (layer_id, shared_id)
-                            self.w_soft["start"].append(self.w_soft['start'][shared_id])
-                    else:
-                        with tf.variable_scope("layer_{}".format(layer_id)):
-                            self.w_soft["start"].append(tf.get_variable(
-                                "w_start", [self.lstm_size, self.num_choices_per_layer[layer_id]]))
-
-            #  w_attn_1/2, v_attn: for sampling skip connections
-            if self.with_skip_connection:
-                with tf.variable_scope("attention"):
-                    self.w_attn_1 = tf.get_variable("w_1", [self.lstm_size, self.lstm_size])
-                    self.w_attn_2 = tf.get_variable("w_2", [self.lstm_size, self.lstm_size])
-                    self.v_attn = tf.get_variable("v", [self.lstm_size, 1])
-            else:
-                self.w_attn_1 = None
-                self.w_attn_2 = None
-                self.v_attn = None
 
     def _build_sampler(self):
         """Build the sampler ops and the log_prob ops.
@@ -300,14 +197,14 @@ class GeneralController(BaseController):
         skip_count = []
         skip_penaltys = []
 
-        prev_c = [tf.zeros([1, self.lstm_size], tf.float32) for _ in
+        prev_c = [F.zeros([1, self.lstm_size], F.float32) for _ in
                   range(self.lstm_num_layers)]
-        prev_h = [tf.zeros([1, self.lstm_size], tf.float32) for _ in
+        prev_h = [F.zeros([1, self.lstm_size], F.float32) for _ in
                   range(self.lstm_num_layers)]
 
         inputs = self.g_emb
-        skip_targets = tf.constant([1.0 - self.skip_target, self.skip_target],
-                                   dtype=tf.float32)
+        skip_targets = F.Variable([1.0 - self.skip_target, self.skip_target], trainable=False, shape=(2,),
+                                   dtype=F.float32)
         skip_conn_record = []
 
         for layer_id in range(self.num_layers):
@@ -316,23 +213,24 @@ class GeneralController(BaseController):
             prev_c, prev_h = next_c, next_h
             hidden_states.append(prev_h)
 
-            logit = tf.matmul(next_h[-1], self.w_soft["start"][layer_id])  # out_filter x 1
+            logit = F.matmul(next_h[-1], self.w_soft["start"][layer_id])  # out_filter x 1
             if self.temperature is not None:
                 logit /= self.temperature
             if self.tanh_constant is not None:
-                logit = self.tanh_constant * tf.tanh(logit)
-            probs_.append(tf.nn.softmax(logit))
-            start = tf.multinomial(logit, 1)
-            start = tf.to_int32(start)
-            start = tf.reshape(start, [1])
+                logit = self.tanh_constant * F.tanh(logit)
+            probs_.append(F.softmax(logit))
+            start = F.multinomial(logit, 1)
+            start = F.cast(start, F.int32)
+            start = F.reshape(start, [1])
             arc_seq.append(start)
-            log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                logits=logit, labels=start)
+            #log_prob = F.nn.sparse_softmax_cross_entropy_with_logits(
+            #    logits=logit, labels=start)
+            log_prob = F.get_loss('NLLLoss_with_logits', y_true=start, y_pred=logit)
             log_probs.append(log_prob)
-            entropy = tf.stop_gradient(log_prob * tf.exp(-log_prob))
+            entropy = F.stop_gradient(log_prob * F.exp(-log_prob))
             entropys.append(entropy)
             # inputs: get a row slice of [out_filter[i], lstm_size]
-            inputs = tf.nn.embedding_lookup(self.w_emb["start"][layer_id], start)
+            inputs = F.embedding_lookup(self.w_emb["start"][layer_id], start)
             # END STEP 1
 
             # STEP 2: sample the connections, unless the first layer
@@ -343,55 +241,56 @@ class GeneralController(BaseController):
                     prev_c, prev_h = next_c, next_h
                     hidden_states.append(prev_h)
 
-                    query = tf.concat(anchors_w_1, axis=0)  # layer_id x lstm_size
+                    query = F.concat(anchors_w_1, axis=0)  # layer_id x lstm_size
                     # w_attn_2: lstm_size x lstm_size
-                    query = tf.tanh(query + tf.matmul(next_h[-1], self.w_attn_2))  # query: layer_id x lstm_size
+                    query = F.tanh(query + F.matmul(next_h[-1], self.w_attn_2))  # query: layer_id x lstm_size
                     # P(Layer j is an input to layer i) = sigmoid(v^T %*% tanh(W_prev ∗ h_j + W_curr ∗ h_i))
-                    query = tf.matmul(query, self.v_attn)  # query: layer_id x 1
+                    query = F.matmul(query, self.v_attn)  # query: layer_id x 1
                     if self.skip_connection_unique_connection:
-                        mask = tf.stop_gradient(tf.reduce_sum(tf.stack(skip_conn_record), axis=0))
-                        mask = tf.slice(mask, begin=[0], size=[layer_id])
-                        mask1 = tf.greater(mask, 0)
-                        query = tf.where(mask1, y=query, x=tf.fill(tf.shape(query), -10000.))
-                    logit = tf.concat([-query, query], axis=1)  # logit: layer_id x 2
+                        mask = F.stop_gradient(F.reduce_sum(F.stack(skip_conn_record), axis=0))
+                        mask = F.slice(mask, begin=[0], size=[layer_id])
+                        mask1 = F.greater(mask, 0)
+                        query = F.where(mask1, y=query, x=F.fill(F.shape(query), -10000.))
+                    logit = F.concat([-query, query], axis=1)  # logit: layer_id x 2
                     if self.temperature is not None:
                         logit /= self.temperature
                     if self.tanh_constant is not None:
-                        logit = self.tanh_constant * tf.tanh(logit)
+                        logit = self.tanh_constant * F.tanh(logit)
 
-                    probs_.append(tf.expand_dims(tf.nn.softmax(logit), axis=0))
-                    skip = tf.multinomial(logit, 1)  # layer_id x 1 of booleans
-                    skip = tf.to_int32(skip)
-                    skip = tf.reshape(skip, [layer_id])
+                    probs_.append(F.expand_dims(F.softmax(logit), axis=0))
+                    skip = F.multinomial(logit, 1)  # layer_id x 1 of booleans
+                    skip = F.cast(skip, F.int32)
+                    skip = F.reshape(skip, [layer_id])
                     arc_seq.append(skip)
                     skip_conn_record.append(
-                        tf.concat([tf.cast(skip, tf.float32), tf.zeros(self.num_layers - layer_id)], axis=0))
+                        F.concat([F.cast(skip, F.float32), F.zeros(self.num_layers - layer_id)], axis=0))
 
-                    skip_prob = tf.sigmoid(logit)
-                    kl = skip_prob * tf.log(skip_prob / skip_targets)
-                    kl = tf.reduce_sum(kl)
+                    skip_prob = F.sigmoid(logit)
+                    kl = skip_prob * F.log(skip_prob / skip_targets)
+                    kl = F.reduce_sum(kl)
                     skip_penaltys.append(kl)
 
-                    log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                        logits=logit, labels=skip)
-                    log_probs.append(tf.reshape(tf.reduce_sum(log_prob), [-1]))
+                    #log_prob = F.nn.sparse_softmax_cross_entropy_with_logits(
+                    #    logits=logit, labels=skip)
+                    log_prob = F.get_loss('NLLLoss_with_logits', y_true=skip, y_pred=logit)
+                    log_probs.append(F.reshape(F.reduce_sum(log_prob), [-1]))
 
-                    entropy = tf.stop_gradient(
-                        tf.reshape(tf.reduce_sum(log_prob * tf.exp(-log_prob)), [-1]))
+                    entropy = F.stop_gradient(
+                        F.reshape(F.reduce_sum(log_prob * F.exp(-log_prob)), [-1]))
                     entropys.append(entropy)
 
-                    skip = tf.to_float(skip)
-                    skip = tf.reshape(skip, [1, layer_id])
-                    skip_count.append(tf.reduce_sum(skip))
-                    inputs = tf.matmul(skip, tf.concat(anchors, axis=0))
-                    inputs /= (1.0 + tf.reduce_sum(skip))
+                    skip = F.cast(skip, F.float32)
+                    skip = F.reshape(skip, [1, layer_id])
+                    skip_count.append(F.reduce_sum(skip))
+                    inputs = F.matmul(skip, F.concat(anchors, axis=0))
+                    inputs /= (1.0 + F.reduce_sum(skip))
                 else:
-                    skip_conn_record.append(tf.zeros(self.num_layers, 1))
+                    skip_conn_record.append(F.zeros(self.num_layers, 1))
 
                 anchors.append(next_h[-1])
                 # next_h: 1 x lstm_size
                 # anchors_w_1: 1 x lstm_size
-                anchors_w_1.append(tf.matmul(next_h[-1], self.w_attn_1))
+                anchors_w_1.append(F.matmul(next_h[-1], self.w_attn_1))
                 # added Sep.28.2019; removed as inputs for next layer, Nov.21.2019
                 # next_c, next_h = stack_lstm(inputs, prev_c, prev_h, self.w_lstm)
                 # prev_c, prev_h = next_c, next_h
@@ -405,22 +304,22 @@ class GeneralController(BaseController):
         self.sample_hidden_states = hidden_states
 
         # for class attr.
-        arc_seq = tf.concat(arc_seq, axis=0)
-        self.sample_arc = tf.reshape(arc_seq, [-1])
-        entropys = tf.stack(entropys)
-        self.sample_entropy = tf.reduce_sum(entropys)
-        log_probs = tf.stack(log_probs)
-        self.sample_log_prob = tf.reduce_sum(log_probs)
-        skip_count = tf.stack(skip_count)
-        self.skip_count = tf.reduce_sum(skip_count)
-        skip_penaltys = tf.stack(skip_penaltys)
-        self.skip_penaltys = tf.reduce_mean(skip_penaltys)
+        arc_seq = F.concat(arc_seq, axis=0)
+        self.sample_arc = F.reshape(arc_seq, [-1])
+        entropys = F.stack(entropys)
+        self.sample_entropy = F.reduce_sum(entropys)
+        log_probs = F.stack(log_probs)
+        self.sample_log_prob = F.reduce_sum(log_probs)
+        skip_count = F.stack(skip_count)
+        self.skip_count = F.reduce_sum(skip_count)
+        skip_penaltys = F.stack(skip_penaltys)
+        self.skip_penaltys = F.reduce_mean(skip_penaltys)
         self.sample_probs = probs_
 
     def _build_trainer(self):
         """"Build the trainer ops and the log_prob ops.
 
-        For trainer, the input architectures are ``tf.placeholder`` to receive previous architectures from buffer.
+        For trainer, the input architectures are ``F.placeholder`` to receive previous architectures from buffer.
         It also supports batch computation.
         """
         anchors = []
@@ -433,28 +332,28 @@ class GeneralController(BaseController):
             [ops_each_layer + i * self.with_skip_connection for i in range(1, self.num_layers)]  # rest layers
         )
         self.total_arc_len = total_arc_len
-        self.input_arc = [tf.placeholder(shape=(None, 1), dtype=tf.int32, name='arc_{}'.format(i))
+        self.input_arc = [F.placeholder(shape=(None, 1), dtype=F.int32, name='arc_{}'.format(i))
                           for i in range(total_arc_len)]
 
-        batch_size = tf.shape(self.input_arc[0])[0]
+        batch_size = F.shape(self.input_arc[0])[0]
         entropys = []
         log_probs = []
         skip_count = []
         skip_penaltys = []
 
-        prev_c = [tf.zeros([batch_size, self.lstm_size], tf.float32) for _ in
+        prev_c = [F.zeros([batch_size, self.lstm_size], F.float32) for _ in
                   range(self.lstm_num_layers)]
-        prev_h = [tf.zeros([batch_size, self.lstm_size], tf.float32) for _ in
+        prev_h = [F.zeros([batch_size, self.lstm_size], F.float32) for _ in
                   range(self.lstm_num_layers)]
         # only expand `g_emb` if necessary
         g_emb_nrow = self.g_emb.shape[0] if type(self.g_emb.shape[0]) in (int, type(None)) \
             else self.g_emb.shape[0].value
         if self.g_emb.shape[0] is not None and g_emb_nrow == 1:
-            inputs = tf.matmul(tf.ones((batch_size, 1)), self.g_emb)
+            inputs = F.matmul(F.ones((batch_size, 1)), self.g_emb)
         else:
             inputs = self.g_emb
-        skip_targets = tf.constant([1.0 - self.skip_target, self.skip_target],
-                                   dtype=tf.float32)
+        skip_targets = F.Variable([1.0 - self.skip_target, self.skip_target], shape=(2,), trainable=False,
+                                   dtype=F.float32)
 
         arc_pointer = 0
         skip_conn_record = []
@@ -466,23 +365,24 @@ class GeneralController(BaseController):
             prev_c, prev_h = next_c, next_h
             hidden_states.append(prev_h)
 
-            logit = tf.matmul(next_h[-1], self.w_soft["start"][layer_id])  # batch_size x num_choices_layer_i
+            logit = F.matmul(next_h[-1], self.w_soft["start"][layer_id])  # batch_size x num_choices_layer_i
             if self.temperature is not None:
                 logit /= self.temperature
             if self.tanh_constant is not None:
-                logit = self.tanh_constant * tf.tanh(logit)
+                logit = self.tanh_constant * F.tanh(logit)
             start = self.input_arc[arc_pointer]
-            start = tf.reshape(start, [batch_size])
-            probs_.append(tf.nn.softmax(logit))
+            start = F.reshape(start, [batch_size])
+            probs_.append(F.softmax(logit))
 
-            log_prob1 = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                logits=logit, labels=start)
+            #log_prob1 = F.nn.sparse_softmax_cross_entropy_with_logits(
+            #    logits=logit, labels=start)
+            log_prob1 = F.get_loss('NLLLoss_with_logits', y_true=start, y_pred=logit)
             log_probs.append(log_prob1)
-            entropy = tf.stop_gradient(log_prob1 * tf.exp(-log_prob1))
+            entropy = F.stop_gradient(log_prob1 * F.exp(-log_prob1))
             entropys.append(entropy)
             # inputs: get a row slice of [out_filter[i], lstm_size]
-            # inputs = tf.nn.embedding_lookup(self.w_emb["start"][branch_id], start)
-            inputs = tf.nn.embedding_lookup(self.w_emb["start"][layer_id], start)
+            # inputs = F.embedding_lookup(self.w_emb["start"][branch_id], start)
+            inputs = F.embedding_lookup(self.w_emb["start"][layer_id], start)
             # END STEP 1
 
             # STEP 2: compute log-prob for skip connections, unless the first layer
@@ -493,67 +393,68 @@ class GeneralController(BaseController):
                     prev_c, prev_h = next_c, next_h
                     hidden_states.append(prev_h)
 
-                    query = tf.transpose(tf.stack(anchors_w_1), [1, 0, 2])  # batch_size x layer_id x lstm_size
+                    query = F.transpose(F.stack(anchors_w_1), [1, 0, 2])  # batch_size x layer_id x lstm_size
                     # w_attn_2: lstm_size x lstm_size
                     # P(Layer j is an input to layer i) = sigmoid(v^T %*% tanh(W_prev ∗ h_j + W_curr ∗ h_i))
-                    query = tf.tanh(
-                        query + tf.expand_dims(tf.matmul(next_h[-1], self.w_attn_2),
+                    query = F.tanh(
+                        query + F.expand_dims(F.matmul(next_h[-1], self.w_attn_2),
                                                axis=1))  # query: layer_id x lstm_size
-                    query = tf.reshape(query, (batch_size * layer_id, self.lstm_size))
-                    query = tf.matmul(query, self.v_attn)  # query: batch_size*layer_id x 1
+                    query = F.reshape(query, (batch_size * layer_id, self.lstm_size))
+                    query = F.matmul(query, self.v_attn)  # query: batch_size*layer_id x 1
 
                     if self.skip_connection_unique_connection:
-                        mask = tf.stop_gradient(tf.reduce_sum(tf.stack(skip_conn_record), axis=0))
-                        mask = tf.slice(mask, begin=[0, 0], size=[batch_size, layer_id])
-                        mask = tf.reshape(mask, (batch_size * layer_id, 1))
-                        mask1 = tf.greater(mask, 0)
-                        query = tf.where(mask1, y=query, x=tf.fill(tf.shape(query), -10000.))
+                        mask = F.stop_gradient(F.reduce_sum(F.stack(skip_conn_record), axis=0))
+                        mask = F.slice(mask, begin=[0, 0], size=[batch_size, layer_id])
+                        mask = F.reshape(mask, (batch_size * layer_id, 1))
+                        mask1 = F.greater(mask, 0)
+                        query = F.where(mask1, y=query, x=F.fill(F.shape(query), -10000.))
 
-                    logit = tf.concat([-query, query], axis=1)  # logit: batch_size*layer_id x 2
+                    logit = F.concat([-query, query], axis=1)  # logit: batch_size*layer_id x 2
                     if self.temperature is not None:
                         logit /= self.temperature
                     if self.tanh_constant is not None:
-                        logit = self.tanh_constant * tf.tanh(logit)
+                        logit = self.tanh_constant * F.tanh(logit)
 
-                    probs_.append(tf.reshape(tf.nn.softmax(logit), [batch_size, layer_id, 2]))
+                    probs_.append(F.reshape(F.softmax(logit), [batch_size, layer_id, 2]))
 
                     skip = self.input_arc[(arc_pointer + ops_each_layer): (arc_pointer + ops_each_layer + layer_id)]
                     # print(layer_id, (arc_pointer+2), (arc_pointer+2 + layer_id), skip)
-                    skip = tf.reshape(tf.transpose(skip), [batch_size * layer_id])
-                    skip = tf.to_int32(skip)
+                    skip = F.reshape(F.transpose(skip), [batch_size * layer_id])
+                    skip = F.cast(skip, F.int32)
 
-                    skip_prob = tf.sigmoid(logit)
-                    kl = skip_prob * tf.log(skip_prob / skip_targets)  # (batch_size*layer_id, 2)
-                    kl = tf.reduce_sum(kl, axis=1)    # (batch_size*layer_id,)
-                    kl = tf.reshape(kl, [batch_size, -1])  # (batch_size, layer_id)
+                    skip_prob = F.sigmoid(logit)
+                    kl = skip_prob * F.log(skip_prob / skip_targets)  # (batch_size*layer_id, 2)
+                    kl = F.reduce_sum(kl, axis=1)    # (batch_size*layer_id,)
+                    kl = F.reshape(kl, [batch_size, -1])  # (batch_size, layer_id)
                     skip_penaltys.append(kl)
 
-                    log_prob3 = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                        logits=logit, labels=skip)
-                    log_prob3 = tf.reshape(log_prob3, [batch_size, -1])
-                    log_probs.append(tf.reduce_sum(log_prob3, axis=1))
+                    #log_prob3 = F.nn.sparse_softmax_cross_entropy_with_logits(
+                    #    logits=logit, labels=skip)
+                    log_prob3 = F.get_loss('NLLLoss_with_logits', y_true=skip, y_pred=logit)
+                    log_prob3 = F.reshape(log_prob3, [batch_size, -1])
+                    log_probs.append(F.reduce_sum(log_prob3, axis=1))
 
-                    entropy = tf.stop_gradient(
-                        tf.reduce_sum(log_prob3 * tf.exp(-log_prob3), axis=1))
+                    entropy = F.stop_gradient(
+                        F.reduce_sum(log_prob3 * F.exp(-log_prob3), axis=1))
                     entropys.append(entropy)
 
-                    skip = tf.to_float(skip)
-                    skip = tf.reshape(skip, [batch_size, 1, layer_id])
-                    skip_count.append(tf.reduce_sum(skip, axis=2))
+                    skip = F.cast(skip, F.float32)
+                    skip = F.reshape(skip, [batch_size, 1, layer_id])
+                    skip_count.append(F.reduce_sum(skip, axis=2))
 
-                    anchors_ = tf.stack(anchors)
-                    anchors_ = tf.transpose(anchors_, [1, 0, 2])  # batch_size, layer_id, lstm_size
-                    inputs = tf.matmul(skip, anchors_)  # batch_size, 1, lstm_size
-                    inputs = tf.squeeze(inputs, axis=1)
-                    inputs /= (1.0 + tf.reduce_sum(skip, axis=2))  # batch_size, lstm_size
+                    anchors_ = F.stack(anchors)
+                    anchors_ = F.transpose(anchors_, [1, 0, 2])  # batch_size, layer_id, lstm_size
+                    inputs = F.matmul(skip, anchors_)  # batch_size, 1, lstm_size
+                    inputs = F.squeeze(inputs, axis=1)
+                    inputs /= (1.0 + F.reduce_sum(skip, axis=2))  # batch_size, lstm_size
 
                 else:
-                    skip_conn_record.append(tf.zeros((batch_size, self.num_layers)))
+                    skip_conn_record.append(F.zeros((batch_size, self.num_layers)))
 
                 # next_h: batch_size x lstm_size
                 anchors.append(next_h[-1])
                 # anchors_w_1: batch_size x lstm_size
-                anchors_w_1.append(tf.matmul(next_h[-1], self.w_attn_1))
+                anchors_w_1.append(F.matmul(next_h[-1], self.w_attn_1))
                 # added 9.28.2019; removed 11.21.2019
                 # next_c, next_h = stack_lstm(inputs, prev_c, prev_h, self.w_lstm)
                 # prev_c, prev_h = next_c, next_h
@@ -565,29 +466,29 @@ class GeneralController(BaseController):
         self.train_hidden_states = hidden_states
 
         # for class attributes
-        self.entropys = tf.stack(entropys)
+        self.entropys = F.stack(entropys)
         self.onehot_probs = probs_
-        log_probs = tf.stack(log_probs)
-        self.onehot_log_prob = tf.reduce_sum(log_probs, axis=0)
-        skip_count = tf.stack(skip_count)
-        self.onehot_skip_count = tf.reduce_sum(skip_count, axis=0)
-        skip_penaltys_flat = [tf.reduce_mean(x, axis=1) for x in skip_penaltys] # from (num_layer-1, batch_size, layer_id) to (num_layer-1, batch_size); layer_id makes each tensor of varying lengths in the list
-        self.onehot_skip_penaltys = tf.reduce_mean(skip_penaltys_flat, axis=0)  # (batch_size,)
+        log_probs = F.stack(log_probs)
+        self.onehot_log_prob = F.reduce_sum(log_probs, axis=0)
+        skip_count = F.stack(skip_count)
+        self.onehot_skip_count = F.reduce_sum(skip_count, axis=0)
+        skip_penaltys_flat = [F.reduce_mean(x, axis=1) for x in skip_penaltys] # from (num_layer-1, batch_size, layer_id) to (num_layer-1, batch_size); layer_id makes each tensor of varying lengths in the list
+        self.onehot_skip_penaltys = F.reduce_mean(skip_penaltys_flat, axis=0)  # (batch_size,)
 
     def _build_train_op(self):
         """build train_op based on either REINFORCE or PPO
         """
-        self.advantage = tf.placeholder(shape=(None, 1), dtype=tf.float32, name="advantage")
-        self.reward = tf.placeholder(shape=(None, 1), dtype=tf.float32, name="reward")
+        self.advantage = F.placeholder(shape=(None, 1), dtype=F.float32, name="advantage")
+        self.reward = F.placeholder(shape=(None, 1), dtype=F.float32, name="reward")
 
-        normalize = tf.to_float(self.num_layers * (self.num_layers - 1) / 2)
-        self.skip_rate = tf.to_float(self.skip_count) / normalize
+        normalize = F.cast(self.num_layers * (self.num_layers - 1) / 2, F.float32)
+        self.skip_rate = F.cast(self.skip_count, F.float32) / normalize
 
         self.input_arc_onehot = self.convert_arc_to_onehot(self)
-        self.old_probs = [tf.placeholder(shape=self.onehot_probs[i].shape, dtype=tf.float32, name="old_prob_%i" % i) for
+        self.old_probs = [F.placeholder(shape=self.onehot_probs[i].shape, dtype=F.float32, name="old_prob_%i" % i) for
                           i in range(len(self.onehot_probs))]
         if self.skip_weight is not None:
-            self.loss += self.skip_weight * tf.reduce_mean(self.onehot_skip_penaltys)
+            self.loss += self.skip_weight * F.reduce_mean(self.onehot_skip_penaltys)
         if self.use_ppo_loss:
             self.loss += proximal_policy_optimization_loss(
                 curr_prediction=self.onehot_probs,
@@ -598,16 +499,16 @@ class GeneralController(BaseController):
                 advantage=self.advantage,
                 clip_val=0.2)
         else:
-            self.loss += tf.reshape(tf.tensordot(self.onehot_log_prob, self.advantage, axes=1), [])
+            self.loss += F.reshape(F.tensordot(self.onehot_log_prob, self.advantage, axes=1), [])
 
         self.kl_div, self.ent = get_kl_divergence_n_entropy(curr_prediction=self.onehot_probs,
                                                             old_prediction=self.old_probs,
                                                             curr_onehot=self.input_arc_onehot,
                                                             old_onehotpred=self.input_arc_onehot)
-        self.train_step = tf.Variable(
-            0, dtype=tf.int32, trainable=False, name="train_step")
+        self.train_step = F.Variable(
+            0, shape=(), dtype=F.int32, trainable=False, name="train_step")
         tf_variables = [var
-                        for var in tf.trainable_variables() if var.name.startswith(self.name)]
+                        for var in F.trainable_variables(scope=self.name)]
 
         self.train_op, self.lr, self.optimizer = F.get_train_op(
             loss=self.loss,
@@ -650,7 +551,6 @@ class GeneralController(BaseController):
         ----------
         episode : int
             Total number of epochs to train the controller. Each epoch will iterate over all architectures stored in buffer.
-
         working_dir : str
             Filepath to working directory to store (possible) intermediate results
 
@@ -705,60 +605,6 @@ class GeneralController(BaseController):
                 )
 
         return aloss / g_t
-
-    def store(self, state, prob, action, reward, *args, **kwargs):
-        """Store all necessary information and rewards for a given architecture
-
-        This is the receiving method for controller to interact with manager by storing the rewards for a given architecture.
-        The architecture and its probabilities can be generated by ``get_action()`` method.
-
-        Parameters
-        ----------
-        state : list
-            The state for which the action and probabilities are drawn.
-
-        prob : list of ndarray
-            A list of probabilities for each operation and skip connections.
-
-        action : list
-            A list of architecture tokens ordered as::
-
-                [categorical_operation_0,
-                categorical_operation_1, binary_skip_0,
-                categorical_operation_2, binary_skip_0, binary_skip_1,
-                ...]
-
-        reward : float
-            Reward for this architecture, as evaluated by ``amber.architect.manager``
-
-        Returns
-        -------
-        None
-
-        """
-        self.buffer.store(state=state, prob=prob, action=action, reward=reward)
-        return
-
-    @staticmethod
-    def remove_files(files, working_dir='.'):
-        """Static method for removing files
-
-        Parameters
-        ----------
-        files : list of str
-            files to be removed
-
-        working_dir : str
-            filepath to working directory
-
-        Returns
-        -------
-        None
-        """
-        for file in files:
-            file = os.path.join(working_dir, file)
-            if os.path.exists(file):
-                os.remove(file)
 
     def save_weights(self, filepath, **kwargs):
         """Save current controller weights to a hdf5 file
@@ -825,7 +671,7 @@ class GeneralController(BaseController):
         """
         assign_ops = []
         for i in range(len(self.weights)):
-            assign_ops.append(tf.assign(self.weights[i], weights[i]))
+            assign_ops.append(F.assign(self.weights[i], weights[i]))
         self.session.run(assign_ops)
 
     @staticmethod
@@ -855,29 +701,21 @@ class GeneralController(BaseController):
         arc_pointer = 0
         for layer_id in range(len(model_space)):
             # print("layer_type ",arc_pointer)
-            onehot_list.append(tf.squeeze(tf.one_hot(arc_seq[arc_pointer], depth=len(model_space[layer_id])), axis=1))
+            onehot_list.append(F.squeeze(F.one_hot(tensor=arc_seq[arc_pointer], num_classes=len(model_space[layer_id])), axis=1))
             if with_input_blocks:
                 inp_blocks_idx = arc_pointer + 1, arc_pointer + 1 + num_input_blocks * with_input_blocks
                 tmp = []
                 for i in range(inp_blocks_idx[0], inp_blocks_idx[1]):
                     # print("input block ",i)
-                    tmp.append(tf.squeeze(tf.one_hot(arc_seq[i], 2), axis=1))
-                onehot_list.append(tf.transpose(tf.stack(tmp), [1, 0, 2]))
+                    tmp.append(F.squeeze(F.one_hot(arc_seq[i], 2), axis=1))
+                onehot_list.append(F.transpose(F.stack(tmp), [1, 0, 2]))
             if layer_id > 0 and with_skip_connection:
                 skip_con_idx = arc_pointer + 1 + num_input_blocks * with_input_blocks, \
                                arc_pointer + 1 + num_input_blocks * with_input_blocks + layer_id * with_skip_connection
                 tmp = []
                 for i in range(skip_con_idx[0], skip_con_idx[1]):
                     # print("skip con ",i)
-                    tmp.append(tf.squeeze(tf.one_hot(arc_seq[i], 2), axis=1))
-                onehot_list.append(tf.transpose(tf.stack(tmp), [1, 0, 2]))
+                    tmp.append(F.squeeze(F.one_hot(arc_seq[i], 2), axis=1))
+                onehot_list.append(F.transpose(F.stack(tmp), [1, 0, 2]))
             arc_pointer += 1 + num_input_blocks * with_input_blocks + layer_id * with_skip_connection
         return onehot_list
-    
-    @property
-    def search_space_size(self):
-        input_blocks, output_blocks, num_layers, num_choices_per_layer = self.input_blocks, self.output_blocks, len(self.model_space), np.mean([len(layer) for layer in self.model_space])
-        s = np.log10(num_choices_per_layer) * num_layers
-        s += np.log10(2) * (num_layers-1)*num_layers/2
-        s += np.log10(input_blocks) * num_layers + np.log10(output_blocks) * num_layers
-        return s

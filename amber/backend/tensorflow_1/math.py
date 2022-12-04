@@ -24,6 +24,9 @@ def sigmoid(x):
 def tanh(x):
     return tf.tanh(x)
 
+def softmax(x, axis=None):
+    return tf.nn.softmax(x, axis=axis)
+
 def minimum(x,y):
     return tf.minimum(x, y)
 
@@ -48,6 +51,9 @@ def range(start, limit, delta=1, dtype=None, name='range'):
 def less(x,y):
     return tf.less(x, y)
 
+def greater(x,y):
+    return tf.greater(x,y)
+
 def equal(x, y):
     return tf.equal(x, y)
 
@@ -57,5 +63,8 @@ def pow(x, y):
 def case(pred_fn_pairs, default=None, exclusive=False, strict=False, name='case'):
     return tf.case(pred_fn_pairs=pred_fn_pairs, default=default, exclusive=exclusive, strict=strict, name=name)
 
+def tensordot(a, b, axes, name=None):
+    return tf.tensordot(a, b, axes=axes, name=name)
 
-
+def multinomial(logits, num_samples):
+    return tf.multinomial(logits=logits, num_samples=num_samples)

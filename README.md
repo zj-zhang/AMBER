@@ -85,8 +85,11 @@ pip install pytest coverage parameterized pydot graphviz
 
 ### Installing with PyTorch/Lightning
 ```{bash}
-conda create -n amber-torch -c anaconda pytorch scikit-learn numpy scipy matplotlib seaborn tqdm h5py pytorch-lightning
+conda create -n amber-torch -c conda-forge pytorch=1.11.0 scikit-learn numpy scipy matplotlib seaborn tqdm h5py
 conda activate amber-torch
+pip install pytorch-lightning==1.6.5 amber-automl
+# if you plan to run tests
+pip install pytest coverage parameterized expecttest hypothesis
 ```
 
 ### Get the latest source code

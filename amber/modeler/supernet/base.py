@@ -94,7 +94,7 @@ class BaseEnasConv1dDAG:
             self.controller = controller
             self._build_sample_arc()
         self._build_fixed_arc()
-        F.init_all_params(sess=self.session)
+        #F.init_all_params(sess=self.session)
 
     def _verify_args(self):
         out_filters = []

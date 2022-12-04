@@ -84,5 +84,12 @@ class ResConvNetArchitecture:
             arc_seq.extend(res)
         return arc_seq
 
-
+    def sample(self):
+        ops = []
+        for _ in range(self._num_layers):
+            ops.append(np.random.randint(len(self.model_space[_])))
+        res_con = []
+        for _ in range(1, self._num_layers):
+            res_con.append( np.random.binomial(n=1, p=0.5, size=_).tolist())
+        return self.encode(operations=ops, res_con=res_con)
 

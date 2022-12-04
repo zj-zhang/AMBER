@@ -19,6 +19,9 @@ from typing import List, Tuple, Callable, Dict, Union, Generator
 def Model(inputs, outputs):
     pass
 
+def Sequential(layers) -> Callable: # type:ignore
+    pass
+
 def trainable_variables(scope: str) -> Union[List, Tuple]: # type:ignore
     pass
 
@@ -53,13 +56,16 @@ def placeholder(shape, dtype, name=None) -> Union[float, np.ndarray]: # type:ign
 def assign(x, y) -> Callable: # type:ignore
     pass
 
-def ones(shape, dtype) -> np.ndarray: # type:ignore
+def ones(shape, dtype=None) -> np.ndarray: # type:ignore
     pass
 
-def zeros(shape, dtype) -> np.ndarray: # type:ignore
+def zeros(shape, dtype=None) -> np.ndarray: # type:ignore
     pass
 
 def zeros_like(input) -> np.ndarray: #type:ignore
+    pass
+
+def one_hot(tensor, num_classes=-1) -> np.ndarray: # type:ignore
     pass
 
 def create_parameter(name, shape, dtype='float32', initializer=None, trainable=True, seed=None) -> np.ndarray: # type: ignore
@@ -109,6 +115,12 @@ def stop_gradient(input) -> np.ndarray: # type:ignore
 def embedding_lookup(params, ids) -> np.array: # type:ignore
     pass
 
+def transpose(x, perm=None) -> np.ndarray: # type:ignore
+    pass
+
+def stack(x) -> np.ndarray: # type:ignore
+    pass
+
 # math
 def abs(x) -> np.ndarray: # type: ignore
     pass
@@ -119,7 +131,10 @@ def minimum(x,y) -> np.ndarray: # type: ignore
 def maximum(x,y) -> np.ndarray: # type: ignore
     pass
 
-def less(x,y) -> np.ndarray: # type:ignore
+def less(x,y) -> Union[float, np.ndarray]: # type:ignore
+    pass
+
+def greater(x,y) -> Union[float, np.ndarray]: # type:ignore
     pass
 
 def equal(x,y) -> np.bool: # type:ignore
@@ -158,6 +173,9 @@ def tanh(x) -> Union[float, np.ndarray]: # type: ignore
 def relu(x) -> Union[float, np.ndarray]: # type: ignore
     pass
 
+def softmax(x, axis=None) -> Union[float, np.ndarray]: # type: ignore
+    pass
+
 def boolean_mask(tensor, mask, axis=None, name='boolean_mask') -> np.array: # type:ignore
     pass
 
@@ -167,8 +185,17 @@ def logical_and(x, y) -> np.array: # type:ignore
 def range(start, limit, delta=1, dtype=None, name='range') -> np.ndarray: # type:ignore
     pass
 
+def tensordot(a, b, axes, name=None) -> np.ndarray: # type:ignore
+    pass
+
+def multinomial(logits, num_samples) -> np.ndarray: # type:ignore
+    pass
+
 # session
 def Session(): # type:ignore
+    pass
+
+def TestCase(): # type:ignore
     pass
 
 def session_cache() -> Dict: # type:ignore

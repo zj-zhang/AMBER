@@ -15,6 +15,11 @@ def placeholder(shape, dtype=None, name=None):
     dtype = dtype or tf.float32
     return tf.placeholder(shape=shape, dtype=dtype, name=name)
 
+
+def one_hot(tensor, num_classes=-1):
+    return tf.one_hot(indices=tensor, depth=num_classes)
+
+
 def create_parameter(name, shape, dtype=tf.float32, initializer=None, trainable=True, seed=None):
     if initializer is None:
         try:
@@ -24,7 +29,8 @@ def create_parameter(name, shape, dtype=tf.float32, initializer=None, trainable=
     elif type(initializer) is str:
         initializer = tf.constant_initializer(0.0) if initializer == 'zeros' else \
                       tf.initializers.he_normal(seed=seed) if initializer == 'he_normal' else \
-                      tf.initializers.uniform(-0.1, 0.1)
+                      tf.random_uniform_initializer(-0.1, 0.1) if initializer == 'uniform' else \
+                        Exception('str initializer not understood')
     return tf.get_variable(name, shape, initializer=initializer, trainable=trainable, dtype=dtype)
 
 def get_params_name(x):
@@ -33,7 +39,8 @@ def get_params_name(x):
 def get_shape(x):
     return np.array([x.value for x in x.get_shape()])
 
-shape = get_shape
+def shape(x):
+    return tf.shape(x)
 
 def assign(x, y):
     return tf.assign(x, y)
@@ -65,10 +72,12 @@ def fill(dims, value):
 def map_fn(f, x):
     return tf.map_fn(f, x)
 
-def ones(shape, dtype):
+def ones(shape, dtype=None):
+    dtype = dtype or tf.float32
     return tf.ones(shape, dtype=dtype)
 
-def zeros(shape, dtype):
+def zeros(shape, dtype=None):
+    dtype = dtype or tf.float32
     return tf.zeros(shape, dtype=dtype)
 
 def zeros_like(input):
@@ -82,3 +91,10 @@ def cond(pred, true_fn=None, false_fn=None, name=None):
 
 def stop_gradient(input):
     return tf.stop_gradient(input)
+
+def transpose(x, perm=None):
+    return tf.transpose(x, perm=perm)
+
+def stack(x):
+    return tf.stack(x)
+

@@ -1,4 +1,4 @@
-from ....utils import corrected_tf as tf
+from amber.utils import static_tf as tf
 from .generalController import GeneralController, stack_lstm
 
 

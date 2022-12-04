@@ -4,7 +4,7 @@ expected behaviors
 """
 
 import os
-from amber.utils import corrected_tf as tf
+from amber.utils import static_tf as tf
 import keras.backend as K
 import numpy as np
 import tempfile

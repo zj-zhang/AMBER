@@ -2,6 +2,7 @@
 """
 
 import tensorflow as tf
+from tensorflow.test import TestCase
 import gc
 
 session_cache = {}
@@ -17,6 +18,7 @@ def set_session(sess):
 def clear_session():
     tf.keras.backend.clear_session()
     gc.collect()
+
 
 def init_all_params(sess, var_scope=None):
     var_scope = var_scope or ''

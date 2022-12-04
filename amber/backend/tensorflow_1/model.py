@@ -147,6 +147,8 @@ def get_loss(loss, y_true, y_pred):
             loss_ = tf.reduce_mean(tf.keras.losses.categorical_crossentropy(y_true, y_pred))
         elif loss == 'binary_crossentropy':
             loss_ = tf.reduce_mean(tf.keras.losses.binary_crossentropy(y_true, y_pred))
+        elif loss == 'nllloss_with_logits':
+            loss_ = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=y_pred, labels=y_true)
         else:
             raise Exception("cannot understand string loss: %s" % loss)
     elif type(loss) is callable:
@@ -228,3 +230,4 @@ def get_train_op(loss, variables, optimizer, **kwargs):
 
 # alias
 Model = tf.keras.models.Model
+Sequential = tf.keras.models.Sequential

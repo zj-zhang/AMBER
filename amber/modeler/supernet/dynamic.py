@@ -8,7 +8,7 @@ import numpy as np
 import warnings
 import torch
 from torch.nn import Module
-
+from ... import backend as F
 # for general child
 from .base import BaseEnasConv1dDAG
 from ..architectureDecoder import ResConvNetArchitecture
@@ -54,7 +54,7 @@ class GlobalAveragePooling1DLayer(Module):
         return torch.mean(x, dim=-1)
 
 
-class EnasConv1dDAGpyTorch(Module, BaseEnasConv1dDAG):
+class EnasConv1dDAG(Module, BaseEnasConv1dDAG):
     def __init__(
         self,
         model_space,
@@ -119,18 +119,14 @@ class EnasConv1dDAGpyTorch(Module, BaseEnasConv1dDAG):
         """
         # init Modules, and manually call EnasConv1dDAG
         super().__init__()
-        EnasConv1dDAG.__init__(
+        BaseEnasConv1dDAG.__init__(
             self,
             model_space=model_space,
             input_node=input_node,
             output_node=output_node,
-            session=tf.Session(),
+            session=F.Session(),
             model_compile_dict={},
             reduction_factor=reduction_factor,
-        )
-        # ensure no tf variables are created
-        assert (
-            len(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.name)) == 0
         )
         layers = self._build_dag()
         # register with ModuleDict in PyTorch
@@ -196,7 +192,7 @@ class EnasConv1dDAGpyTorch(Module, BaseEnasConv1dDAG):
         if has_stem_conv:
             stem_kernel_size = self.stem_config.get("stem_kernel_size", 8)
             stem_filters = self.out_filters[0]
-            layers["stem"] = torch.nn.Sequential(
+            layers["stem"] = F.Sequential([
                 torch.nn.Conv1d(
                     in_channels=self.input_node.Layer_attributes["shape"][1],
                     out_channels=stem_filters,
@@ -204,9 +200,9 @@ class EnasConv1dDAGpyTorch(Module, BaseEnasConv1dDAG):
                     padding="same",
                 ),
                 torch.nn.BatchNorm1d(num_features=stem_filters),
-            )
+            ])
         else:
-            layers["stem"] = torch.nn.Sequential()
+            layers["stem"] = F.Sequential()
 
         refactorized_layers = {}
         for layer_id in range(self.num_layers):
@@ -256,22 +252,22 @@ class EnasConv1dDAGpyTorch(Module, BaseEnasConv1dDAG):
         fc_units = (
             self.stem_config["fc_units"] if "fc_units" in self.stem_config else 1000
         )
-        layers["fc"] = torch.nn.Sequential(
+        layers["fc"] = F.Sequential([
             torch.nn.Dropout(1 - self.keep_prob),
             torch.nn.Linear(inp_c, fc_units),
             torch.nn.BatchNorm1d(fc_units),
             torch.nn.ReLU(),
             torch.nn.Dropout(1 - self.keep_prob),
-        )
-        layers["out"] = torch.nn.Sequential(
+        ])
+        layers["out"] = F.Sequential([
             torch.nn.Linear(fc_units, self.output_node.Layer_attributes["units"]),
             get_torch_layer(self.output_node.Layer_attributes["activation"]),
-        )
+        ])
         return layers
 
     def _refactorized_channels_for_skipcon(self, in_channels, out_channels):
         """for dealing with mismatch-dimensions in skip connections: use a linear transformation"""
-        x = torch.nn.Sequential(
+        x = F.Sequential([
             torch.nn.Conv1d(
                 in_channels=in_channels,
                 out_channels=out_channels,
@@ -281,7 +277,7 @@ class EnasConv1dDAGpyTorch(Module, BaseEnasConv1dDAG):
             torch.nn.MaxPool1d(
                 kernel_size=self.reduction_factor, stride=self.reduction_factor
             ),
-        )
+        ])
         return x
 
     def _layer(self, layer_id):
@@ -339,7 +335,7 @@ class EnasConv1dDAGpyTorch(Module, BaseEnasConv1dDAG):
         activation_fn = layer_attr["activation"]
         dilation = layer_attr.get("dilation", 1)
         filters = layer_attr["filters"]
-        x = torch.nn.Sequential(
+        x = F.Sequential([
             torch.nn.Conv1d(
                 in_channels=in_channels,
                 out_channels=filters,
@@ -349,7 +345,7 @@ class EnasConv1dDAGpyTorch(Module, BaseEnasConv1dDAG):
             ),
             torch.nn.BatchNorm1d(filters),
             get_torch_layer(activation_fn),
-        )
+        ])
         return x
 
     def _pool_branch(self, in_channels, avg_or_max, layer_attr):
@@ -387,11 +383,11 @@ class EnasConv1dDAGpyTorch(Module, BaseEnasConv1dDAG):
             )
         else:
             raise ValueError("Unknown pool {}".format(avg_or_max))
-        x = torch.nn.Sequential(*x)
+        x = F.Sequential(x)
         return x
     
     def _identity_branch(self):
-        return torch.nn.Sequential()
+        return F.Sequential()
     
     def _verify_args(self):
         super()._verify_args()

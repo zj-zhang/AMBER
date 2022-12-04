@@ -10,7 +10,7 @@ A pure Keras-implementation of NAS
 
 import os
 
-from ....utils import corrected_tf as tf
+from amber.utils import static_tf as tf
 import numpy as np
 try:
     import tensorflow.keras.backend as K
