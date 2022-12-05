@@ -15,6 +15,8 @@ def reduce_sum(x, axis=None, keepdim=False):
         return torch.sum(x, dim=axis, keepdim=keepdim)
 
 def reduce_mean(x, axis=None):
+    if type(x) in (list, tuple):
+        x = torch.concat(x)
     if axis is None:
         return torch.mean(x)
     else:
@@ -33,7 +35,8 @@ def tanh(x):
     return torch.tanh(x)
 
 def softmax(x, axis=None):
-    return torch.nn.Softmax(dim=axis)(x)
+    axis = axis or -1
+    return torch.softmax(x, dim=axis)
 
 def minimum(x,y):
     return torch.minimum(x, y)

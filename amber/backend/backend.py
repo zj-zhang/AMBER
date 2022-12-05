@@ -25,6 +25,9 @@ def Sequential(layers) -> Callable: # type:ignore
 def trainable_variables(scope: str) -> Union[List, Tuple]: # type:ignore
     pass
 
+def get_optimizer(opt, parameters, opt_config=None):
+    pass
+
 def get_loss(loss, y_true, y_pred) -> float:  # type: ignore
     pass
 
@@ -42,6 +45,9 @@ def get_layer(x, op) -> Callable: # type: ignore
 
 # tensor
 def data_type_dict() -> Dict: # type: ignore
+    pass
+
+def tensor_cache() -> Dict: # type:ignore
     pass
 
 def TensorType(): # type:ignore

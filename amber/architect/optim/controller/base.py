@@ -59,6 +59,7 @@ class BaseController(object):
     """
 
     def __init__(self, model_space, *args, **kwargs):
+        super().__init__()
         self.model_space = model_space
         #self.decoder = get_decoder(arc_decoder)
 
@@ -81,6 +82,8 @@ class BaseController(object):
             # g_emb: initial controller hidden state tensor; to be learned
             self.g_emb = F.create_parameter("g_emb", [1, self.lstm_size], initializer='uniform')
 
+            # XXX: all torch.nn.Parameters not directly assigned as a class.attribute
+            # XXX: are not registered nor recognized by self.parameters()
             # w_emb: embedding for computational operations
             self.w_emb = {"start": []}
 
@@ -237,7 +240,7 @@ class BaseController(object):
                     probs_.append(F.reshape(F.softmax(logit), [batch_size, layer_id, 2]))
 
                     if is_training:
-                        skip = self.input_arc[(arc_pointer + ops_each_layer): (arc_pointer + ops_each_layer + layer_id)]
+                        skip = input_arc[(arc_pointer + ops_each_layer): (arc_pointer + ops_each_layer + layer_id)]
                     else:
                         skip = F.multinomial(logit, 1)  # layer_id x 1 of booleans
                     skip = F.reshape(F.transpose(skip), [batch_size * layer_id])

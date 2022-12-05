@@ -1,9 +1,10 @@
 import torch
 import numpy as np
 
+tensor_cache = {}
+
 def data_type_dict():
     return { 'float16' : torch.float16, 'float32' : torch.float32, 'int8': torch.int8, 'int16': torch.int16, 'int32': torch.int32, 'bool': torch.bool}
-
 
 TensorType = torch.Tensor
 
@@ -34,6 +35,7 @@ def create_parameter(name, shape, dtype=None, initializer=None, trainable=True, 
             torch.nn.init.uniform_(param, -0.1, 0.1)
         else:
             raise Exception('str initializer not understood')
+    tensor_cache[param] = name
     return param
 
 def get_params_name(x):
@@ -74,7 +76,10 @@ def where(condition, x=None, y=None, name=None):
     return torch.where(condition=condition, x=x, y=y)
 
 def cast(x, dtype):
-    return x.type(dtype)
+    if type(x) is TensorType:
+        return x.type(dtype)
+    else:
+        return torch.tensor(x, dtype=dtype)
 
 def fill(dims, value):
     return torch.fill(dims, value)

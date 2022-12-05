@@ -6,8 +6,8 @@ import os
 import sys
 import numpy as np
 import h5py
-from ..... import backend as F
-from ..base import BaseController, stack_lstm, proximal_policy_optimization_loss
+from amber import backend as F
+from amber.architect.optim.controller.base import BaseController, proximal_policy_optimization_loss
 from amber.architect.buffer import get_buffer
 from amber.architect.commonOps import get_kl_divergence_n_entropy
 
@@ -21,7 +21,7 @@ dynamic graphs still need a sampler and a trainer:
 
 
 # dynamic graphs
-class GeneralController(BaseController):
+class GeneralController(BaseController, F.Model):
     """
     GeneralController for neural architecture search
 
@@ -126,8 +126,8 @@ class GeneralController(BaseController):
                  batch_size=5, session=None, train_pi_iter=20, lstm_size=32, lstm_num_layers=2, lstm_keep_prob=1.0,
                  tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=None,
                  rescale_advantage_by_reward=False, name="controller", verbose=0, **kwargs):
-        super().__init__(model_space=model_space, **kwargs)
-
+        super().__init__(model_space=model_space, name=name, **kwargs)
+        F.Model.__init__(self)
         self.model_space = model_space
         # -----
         # FOR LEGACY ATTRIBUTES
@@ -177,6 +177,10 @@ class GeneralController(BaseController):
         # initialize variables in this scope
         #self.weights = [var for var in F.trainable_variables(scope=self.name)]
         #F.init_all_params(sess=self.session)
+        self.params = [var
+                        for var in F.trainable_variables(scope=self)]
+            
+        self.optimizer = F.get_optimizer(self.optim_algo, self.params, opt_config={'lr':0.001})
 
     def __str__(self):
         s = "GeneralController '%s' for %s" % (self.name, self.model_space)
@@ -206,49 +210,42 @@ class GeneralController(BaseController):
         self.entropys = F.stack(entropys)
         self.onehot_probs = probs_
         log_probs = F.stack(log_probs)
-        self.onehot_log_prob = F.reshape(F.reduce_sum(log_probs, axis=0), [-1]) # (batch_size,)
+        onehot_log_prob = F.reshape(F.reduce_sum(log_probs, axis=0), [-1]) # (batch_size,)
+        self.onehot_log_prob = onehot_log_prob
         skip_count = F.stack(skip_count)
         self.onehot_skip_count = F.reduce_sum(skip_count, axis=0)
         skip_penaltys_flat = [F.reduce_mean(x, axis=1) for x in skip_penaltys] # from (num_layer-1, batch_size, layer_id) to (num_layer-1, batch_size); layer_id makes each tensor of varying lengths in the list
         self.onehot_skip_penaltys = F.reduce_mean(skip_penaltys_flat, axis=0)  # (batch_size,)
+        return onehot_log_prob, probs_
 
-    def _build_train_op(self, advantage, reward):
+    def _build_train_op(self, input_arc, advantage):
         """build train_op based on either REINFORCE or PPO
         """
+        self._build_trainer(input_arc=input_arc)
         normalize = F.cast(self.num_layers * (self.num_layers - 1) / 2, F.float32)
         self.skip_rate = F.cast(self.skip_count, F.float32) / normalize
 
-        self.input_arc_onehot = self.convert_arc_to_onehot(self)
-        self.old_probs = [F.placeholder(shape=self.onehot_probs[i].shape, dtype=F.float32, name="old_prob_%i" % i) for
-                          i in range(len(self.onehot_probs))]
+        #self.input_arc_onehot = self.convert_arc_to_onehot(self)
+        #self.old_probs = [F.placeholder(shape=self.onehot_probs[i].shape, dtype=F.float32, name="old_prob_%i" % i) for
+        #                  i in range(len(self.onehot_probs))]
+        loss = 0
         if self.skip_weight is not None:
-            self.loss += self.skip_weight * F.reduce_mean(self.onehot_skip_penaltys)
+            loss += self.skip_weight * F.reduce_mean(self.onehot_skip_penaltys)
         if self.use_ppo_loss:
-            self.loss += proximal_policy_optimization_loss(
-                curr_prediction=self.onehot_probs,
-                curr_onehot=self.input_arc_onehot,
-                old_prediction=self.old_probs,
-                old_onehotpred=self.input_arc_onehot,
-                rewards=self.reward,
-                advantage=self.advantage,
-                clip_val=0.2)
+            raise NotImplementedError(f"No PPO support for {F.mod_name} yet")
         else:
-            self.loss += F.reshape(F.tensordot(self.onehot_log_prob, self.advantage, axes=1), [])
+            loss += F.reshape(F.tensordot(self.onehot_log_prob, advantage, axes=1), [])
 
-        self.kl_div, self.ent = get_kl_divergence_n_entropy(curr_prediction=self.onehot_probs,
-                                                            old_prediction=self.old_probs,
-                                                            curr_onehot=self.input_arc_onehot,
-                                                            old_onehotpred=self.input_arc_onehot)
-        self.train_step = F.Variable(
-            0, shape=(), dtype=F.int32, trainable=False, name="train_step")
-        tf_variables = [var
-                        for var in F.trainable_variables(scope=self.name)]
-
-        self.train_op, self.lr, self.optimizer = F.get_train_op(
-            loss=self.loss,
-            variables=tf_variables,
-            optimizer=self.optim_algo
+        #self.kl_div, self.ent = get_kl_divergence_n_entropy(curr_prediction=self.onehot_probs,
+        #                                                    old_prediction=self.old_probs,
+        #                                                    curr_onehot=self.input_arc_onehot,
+        #                                                    old_onehotpred=self.input_arc_onehot)
+        F.get_train_op(
+            loss=loss,
+            variables=self.params,
+            optimizer=self.optimizer
         )
+        return loss
 
     def get_action(self, *args, **kwargs):
         """Get a sampled architecture/action and its corresponding probabilities give current controller policy parameters.
