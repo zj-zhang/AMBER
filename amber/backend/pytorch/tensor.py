@@ -17,9 +17,8 @@ def Variable(initial_value, shape=None, dtype=None, trainable=True, name=None):
         tensor = torch.tensor(initial_value, requires_grad=trainable, dtype=dtype)
     return tensor
 
-def one_hot(tensor, num_classes=-1):
-    return torch.nn.functional.one_hot(tensor=tensor, depth=num_classes)
-
+def to_numpy(tensor):
+    return tensor.detach().cpu().numpy()
 
 def create_parameter(name, shape, dtype=None, initializer=None, trainable=True, seed=None):
     dtype = dtype or torch.float32
@@ -44,6 +43,9 @@ def get_shape(x):
     return np.array([x for x in x.size()])
 
 shape = get_shape
+
+def one_hot(tensor, num_classes=-1):
+    return torch.nn.functional.one_hot(tensor=tensor, depth=num_classes)
 
 def assign(x, y):
     assert type(x) is TensorType

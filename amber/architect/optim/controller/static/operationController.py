@@ -21,8 +21,8 @@ except ImportError:
     pass
 
 from amber.architect.buffer import Buffer
-from .generalController import BaseController
-from amber.architect.commonOps import get_kl_divergence_n_entropy, proximal_policy_optimization_loss
+from .generalController import BaseController, proximal_policy_optimization_loss
+from amber.architect.commonOps import get_kl_divergence_n_entropy
 
 
 def get_optimizer(name: str, lr: float, decay: float = 0.995):

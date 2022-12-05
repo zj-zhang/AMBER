@@ -7,11 +7,9 @@ import sys
 import numpy as np
 import h5py
 from ..... import backend as F
-from ..base import BaseController
+from ..base import BaseController, stack_lstm, proximal_policy_optimization_loss
 from amber.architect.buffer import get_buffer
 from amber.architect.commonOps import get_kl_divergence_n_entropy
-from amber.architect.commonOps import proximal_policy_optimization_loss
-from amber.architect.commonOps import stack_lstm
 
 """
 dynamic graphs still need a sampler and a trainer:
@@ -128,7 +126,7 @@ class GeneralController(BaseController):
                  batch_size=5, session=None, train_pi_iter=20, lstm_size=32, lstm_num_layers=2, lstm_keep_prob=1.0,
                  tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=None,
                  rescale_advantage_by_reward=False, name="controller", verbose=0, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(model_space=model_space, **kwargs)
 
         self.model_space = model_space
         # -----
@@ -183,130 +181,10 @@ class GeneralController(BaseController):
     def __str__(self):
         s = "GeneralController '%s' for %s" % (self.name, self.model_space)
         return s
-
+    
     def _build_sampler(self):
-        """Build the sampler ops and the log_prob ops.
-
-        For sampler, the architecture sequence is randomly sampled, and only sample one architecture at each call to
-        fill in self.sample_arc
-        """
-        anchors = []
-        anchors_w_1 = []
-
-        arc_seq = []
-        hidden_states = []
-        entropys = []
-        probs_ = []
-        log_probs = []
-        skip_count = []
-        skip_penaltys = []
-
-        prev_c = [F.zeros([1, self.lstm_size], F.float32) for _ in
-                  range(self.lstm_num_layers)]
-        prev_h = [F.zeros([1, self.lstm_size], F.float32) for _ in
-                  range(self.lstm_num_layers)]
-
-        inputs = self.g_emb
-        skip_targets = F.Variable([1.0 - self.skip_target, self.skip_target], trainable=False, shape=(2,),
-                                   dtype=F.float32)
-        skip_conn_record = []
-
-        for layer_id in range(self.num_layers):
-            # STEP 1: for each layer, sample operations first
-            next_c, next_h = stack_lstm(inputs, prev_c, prev_h, self.w_lstm)
-            prev_c, prev_h = next_c, next_h
-            hidden_states.append(prev_h)
-
-            logit = F.matmul(next_h[-1], self.w_soft["start"][layer_id])  # out_filter x 1
-            if self.temperature is not None:
-                logit /= self.temperature
-            if self.tanh_constant is not None:
-                logit = self.tanh_constant * F.tanh(logit)
-            probs_.append(F.softmax(logit))
-            start = F.multinomial(logit, 1)
-            start = F.cast(start, F.int32)
-            start = F.reshape(start, [1])
-            arc_seq.append(start)
-            #log_prob = F.nn.sparse_softmax_cross_entropy_with_logits(
-            #    logits=logit, labels=start)
-            log_prob = F.get_loss('NLLLoss_with_logits', y_true=start, y_pred=logit)
-            log_probs.append(log_prob)
-            entropy = F.stop_gradient(log_prob * F.exp(-log_prob))
-            entropys.append(entropy)
-            # inputs: get a row slice of [out_filter[i], lstm_size]
-            inputs = F.embedding_lookup(self.w_emb["start"][layer_id], start)
-            # END STEP 1
-
-            # STEP 2: sample the connections, unless the first layer
-            # the number `skip` of each layer grows as layer_id grows
-            if self.with_skip_connection:
-                if layer_id > 0:
-                    next_c, next_h = stack_lstm(inputs, prev_c, prev_h, self.w_lstm)
-                    prev_c, prev_h = next_c, next_h
-                    hidden_states.append(prev_h)
-
-                    query = F.concat(anchors_w_1, axis=0)  # layer_id x lstm_size
-                    # w_attn_2: lstm_size x lstm_size
-                    query = F.tanh(query + F.matmul(next_h[-1], self.w_attn_2))  # query: layer_id x lstm_size
-                    # P(Layer j is an input to layer i) = sigmoid(v^T %*% tanh(W_prev ∗ h_j + W_curr ∗ h_i))
-                    query = F.matmul(query, self.v_attn)  # query: layer_id x 1
-                    if self.skip_connection_unique_connection:
-                        mask = F.stop_gradient(F.reduce_sum(F.stack(skip_conn_record), axis=0))
-                        mask = F.slice(mask, begin=[0], size=[layer_id])
-                        mask1 = F.greater(mask, 0)
-                        query = F.where(mask1, y=query, x=F.fill(F.shape(query), -10000.))
-                    logit = F.concat([-query, query], axis=1)  # logit: layer_id x 2
-                    if self.temperature is not None:
-                        logit /= self.temperature
-                    if self.tanh_constant is not None:
-                        logit = self.tanh_constant * F.tanh(logit)
-
-                    probs_.append(F.expand_dims(F.softmax(logit), axis=0))
-                    skip = F.multinomial(logit, 1)  # layer_id x 1 of booleans
-                    skip = F.cast(skip, F.int32)
-                    skip = F.reshape(skip, [layer_id])
-                    arc_seq.append(skip)
-                    skip_conn_record.append(
-                        F.concat([F.cast(skip, F.float32), F.zeros(self.num_layers - layer_id)], axis=0))
-
-                    skip_prob = F.sigmoid(logit)
-                    kl = skip_prob * F.log(skip_prob / skip_targets)
-                    kl = F.reduce_sum(kl)
-                    skip_penaltys.append(kl)
-
-                    #log_prob = F.nn.sparse_softmax_cross_entropy_with_logits(
-                    #    logits=logit, labels=skip)
-                    log_prob = F.get_loss('NLLLoss_with_logits', y_true=skip, y_pred=logit)
-                    log_probs.append(F.reduce_sum(log_prob))
-
-                    entropy = F.stop_gradient(
-                        F.reduce_sum(log_prob * F.exp(-log_prob)))
-                    entropys.append(entropy)
-
-                    skip = F.cast(skip, F.float32)
-                    skip = F.reshape(skip, [1, layer_id])
-                    skip_count.append(F.reduce_sum(skip))
-                    inputs = F.matmul(skip, F.concat(anchors, axis=0))
-                    inputs /= (1.0 + F.reduce_sum(skip))
-                else:
-                    skip_conn_record.append(F.zeros(shape=(self.num_layers, 1)))
-
-                anchors.append(next_h[-1])
-                # next_h: 1 x lstm_size
-                # anchors_w_1: 1 x lstm_size
-                anchors_w_1.append(F.matmul(next_h[-1], self.w_attn_1))
-                # added Sep.28.2019; removed as inputs for next layer, Nov.21.2019
-                # next_c, next_h = stack_lstm(inputs, prev_c, prev_h, self.w_lstm)
-                # prev_c, prev_h = next_c, next_h
-                # hidden_states.append(prev_h)
-
-            # END STEP 2
-
-        # for DEBUG use
-        self.anchors = anchors
-        self.anchors_w_1 = anchors_w_1
+        arc_seq, probs_, log_probs, hidden_states, entropys, skip_count, skip_penaltys = self.forward(input_arc=None)
         self.sample_hidden_states = hidden_states
-
         # for class attr.
         arc_seq = F.concat(arc_seq, axis=0)
         self.sample_arc = F.reshape(arc_seq, [-1])
@@ -319,172 +197,24 @@ class GeneralController(BaseController):
         skip_penaltys = F.stack(skip_penaltys)
         self.skip_penaltys = F.reduce_mean(skip_penaltys)
         self.sample_probs = probs_
-
-    def _build_trainer(self):
-        """"Build the trainer ops and the log_prob ops.
-
-        For trainer, the input architectures are ``F.placeholder`` to receive previous architectures from buffer.
-        It also supports batch computation.
-        """
-        anchors = []
-        anchors_w_1 = []
-        probs_ = []
-
-        ops_each_layer = 1
-        total_arc_len = sum(
-            [ops_each_layer] +   # first layer
-            [ops_each_layer + i * self.with_skip_connection for i in range(1, self.num_layers)]  # rest layers
-        )
-        self.total_arc_len = total_arc_len
-        self.input_arc = [F.placeholder(shape=(None, 1), dtype=F.int32, name='arc_{}'.format(i))
-                          for i in range(total_arc_len)]
-
-        batch_size = F.shape(self.input_arc[0])[0]
-        entropys = []
-        log_probs = []
-        skip_count = []
-        skip_penaltys = []
-
-        prev_c = [F.zeros([batch_size, self.lstm_size], F.float32) for _ in
-                  range(self.lstm_num_layers)]
-        prev_h = [F.zeros([batch_size, self.lstm_size], F.float32) for _ in
-                  range(self.lstm_num_layers)]
-        # only expand `g_emb` if necessary
-        g_emb_nrow = self.g_emb.shape[0] if type(self.g_emb.shape[0]) in (int, type(None)) \
-            else self.g_emb.shape[0].value
-        if self.g_emb.shape[0] is not None and g_emb_nrow == 1:
-            inputs = F.matmul(F.ones((batch_size, 1)), self.g_emb)
-        else:
-            inputs = self.g_emb
-        skip_targets = F.Variable([1.0 - self.skip_target, self.skip_target], shape=(2,), trainable=False,
-                                   dtype=F.float32)
-
-        arc_pointer = 0
-        skip_conn_record = []
-        hidden_states = []
-        for layer_id in range(self.num_layers):
-
-            # STEP 1: compute log-prob for operations
-            next_c, next_h = stack_lstm(inputs, prev_c, prev_h, self.w_lstm)
-            prev_c, prev_h = next_c, next_h
-            hidden_states.append(prev_h)
-
-            logit = F.matmul(next_h[-1], self.w_soft["start"][layer_id])  # batch_size x num_choices_layer_i
-            if self.temperature is not None:
-                logit /= self.temperature
-            if self.tanh_constant is not None:
-                logit = self.tanh_constant * F.tanh(logit)
-            start = self.input_arc[arc_pointer]
-            start = F.reshape(start, [batch_size])
-            probs_.append(F.softmax(logit))
-
-            #log_prob1 = F.nn.sparse_softmax_cross_entropy_with_logits(
-            #    logits=logit, labels=start)
-            log_prob1 = F.get_loss('NLLLoss_with_logits', y_true=start, y_pred=logit)
-            log_probs.append(log_prob1)
-            entropy = F.stop_gradient(log_prob1 * F.exp(-log_prob1))
-            entropys.append(entropy)
-            # inputs: get a row slice of [out_filter[i], lstm_size]
-            # inputs = F.embedding_lookup(self.w_emb["start"][branch_id], start)
-            inputs = F.embedding_lookup(self.w_emb["start"][layer_id], start)
-            # END STEP 1
-
-            # STEP 2: compute log-prob for skip connections, unless the first layer
-            if self.with_skip_connection:
-                if layer_id > 0:
-
-                    next_c, next_h = stack_lstm(inputs, prev_c, prev_h, self.w_lstm)
-                    prev_c, prev_h = next_c, next_h
-                    hidden_states.append(prev_h)
-
-                    query = F.transpose(F.stack(anchors_w_1), [1, 0, 2])  # batch_size x layer_id x lstm_size
-                    # w_attn_2: lstm_size x lstm_size
-                    # P(Layer j is an input to layer i) = sigmoid(v^T %*% tanh(W_prev ∗ h_j + W_curr ∗ h_i))
-                    query = F.tanh(
-                        query + F.expand_dims(F.matmul(next_h[-1], self.w_attn_2),
-                                               axis=1))  # query: layer_id x lstm_size
-                    query = F.reshape(query, (batch_size * layer_id, self.lstm_size))
-                    query = F.matmul(query, self.v_attn)  # query: batch_size*layer_id x 1
-
-                    if self.skip_connection_unique_connection:
-                        mask = F.stop_gradient(F.reduce_sum(F.stack(skip_conn_record), axis=0))
-                        mask = F.slice(mask, begin=[0, 0], size=[batch_size, layer_id])
-                        mask = F.reshape(mask, (batch_size * layer_id, 1))
-                        mask1 = F.greater(mask, 0)
-                        query = F.where(mask1, y=query, x=F.fill(F.shape(query), -10000.))
-
-                    logit = F.concat([-query, query], axis=1)  # logit: batch_size*layer_id x 2
-                    if self.temperature is not None:
-                        logit /= self.temperature
-                    if self.tanh_constant is not None:
-                        logit = self.tanh_constant * F.tanh(logit)
-
-                    probs_.append(F.reshape(F.softmax(logit), [batch_size, layer_id, 2]))
-
-                    skip = self.input_arc[(arc_pointer + ops_each_layer): (arc_pointer + ops_each_layer + layer_id)]
-                    # print(layer_id, (arc_pointer+2), (arc_pointer+2 + layer_id), skip)
-                    skip = F.reshape(F.transpose(skip), [batch_size * layer_id])
-                    skip = F.cast(skip, F.int32)
-
-                    skip_prob = F.sigmoid(logit)
-                    kl = skip_prob * F.log(skip_prob / skip_targets)  # (batch_size*layer_id, 2)
-                    kl = F.reduce_sum(kl, axis=1)    # (batch_size*layer_id,)
-                    kl = F.reshape(kl, [batch_size, -1])  # (batch_size, layer_id)
-                    skip_penaltys.append(kl)
-
-                    #log_prob3 = F.nn.sparse_softmax_cross_entropy_with_logits(
-                    #    logits=logit, labels=skip)
-                    log_prob3 = F.get_loss('NLLLoss_with_logits', y_true=skip, y_pred=logit)
-                    log_prob3 = F.reshape(log_prob3, [batch_size, -1])
-                    log_probs.append(F.reduce_sum(log_prob3, axis=1))
-
-                    entropy = F.stop_gradient(
-                        F.reduce_sum(log_prob3 * F.exp(-log_prob3), axis=1))
-                    entropys.append(entropy)
-
-                    skip = F.cast(skip, F.float32)
-                    skip = F.reshape(skip, [batch_size, 1, layer_id])
-                    skip_count.append(F.reduce_sum(skip, axis=2))
-
-                    anchors_ = F.stack(anchors)
-                    anchors_ = F.transpose(anchors_, [1, 0, 2])  # batch_size, layer_id, lstm_size
-                    inputs = F.matmul(skip, anchors_)  # batch_size, 1, lstm_size
-                    inputs = F.squeeze(inputs, axis=1)
-                    inputs /= (1.0 + F.reduce_sum(skip, axis=2))  # batch_size, lstm_size
-
-                else:
-                    skip_conn_record.append(F.zeros((batch_size, self.num_layers)))
-
-                # next_h: batch_size x lstm_size
-                anchors.append(next_h[-1])
-                # anchors_w_1: batch_size x lstm_size
-                anchors_w_1.append(F.matmul(next_h[-1], self.w_attn_1))
-                # added 9.28.2019; removed 11.21.2019
-                # next_c, next_h = stack_lstm(inputs, prev_c, prev_h, self.w_lstm)
-                # prev_c, prev_h = next_c, next_h
-
-            arc_pointer += ops_each_layer + layer_id * self.with_skip_connection
-        # END STEP 2
-
-        # for DEBUG use
+    
+    def _build_trainer(self, input_arc):
+        if type(input_arc) is not F.TensorType:
+            input_arc = F.Variable(input_arc, trainable=False)
+        arc_seq, probs_, log_probs, hidden_states, entropys, skip_count, skip_penaltys = self.forward(input_arc=input_arc)
         self.train_hidden_states = hidden_states
-
-        # for class attributes
         self.entropys = F.stack(entropys)
         self.onehot_probs = probs_
         log_probs = F.stack(log_probs)
-        self.onehot_log_prob = F.reduce_sum(log_probs, axis=0)
+        self.onehot_log_prob = F.reshape(F.reduce_sum(log_probs, axis=0), [-1]) # (batch_size,)
         skip_count = F.stack(skip_count)
         self.onehot_skip_count = F.reduce_sum(skip_count, axis=0)
         skip_penaltys_flat = [F.reduce_mean(x, axis=1) for x in skip_penaltys] # from (num_layer-1, batch_size, layer_id) to (num_layer-1, batch_size); layer_id makes each tensor of varying lengths in the list
         self.onehot_skip_penaltys = F.reduce_mean(skip_penaltys_flat, axis=0)  # (batch_size,)
 
-    def _build_train_op(self):
+    def _build_train_op(self, advantage, reward):
         """build train_op based on either REINFORCE or PPO
         """
-        self.advantage = F.placeholder(shape=(None, 1), dtype=F.float32, name="advantage")
-        self.reward = F.placeholder(shape=(None, 1), dtype=F.float32, name="reward")
-
         normalize = F.cast(self.num_layers * (self.num_layers - 1) / 2, F.float32)
         self.skip_rate = F.cast(self.skip_count, F.float32) / normalize
 
@@ -525,27 +255,13 @@ class GeneralController(BaseController):
 
         The generated architecture is the out-going information from controller to manager. which in turn will feedback
         the reward signal for storage and training by the controller.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        ----------
-        onehots : list
-            The sampled architecture sequence. In particular, the architecture sequence is ordered as::
-
-                [categorical_operation_0,
-                categorical_operation_1, binary_skip_0,
-                categorical_operation_2, binary_skip_0, binary_skip_1,
-                ...]
-
-
-        probs : list of ndarray
-            The probabilities associated with each sampled operation and residual connection. Shapes will vary depending
-            on each layer's specification in ModelSpace for operation, and the layer number for residual connections.
         """
-        probs, onehots = self.session.run([self.sample_probs, self.sample_arc])
+
+        # run forward pass
+        self._build_sampler()
+        # get updated tensor values
+        onehots = F.to_numpy(self.sample_arc)
+        probs = [F.to_numpy(x) for x in self.sample_probs]
         return onehots, probs
 
     def train(self, episode, working_dir):
@@ -610,116 +326,4 @@ class GeneralController(BaseController):
 
         return aloss / g_t
 
-    def save_weights(self, filepath, **kwargs):
-        """Save current controller weights to a hdf5 file
 
-        Parameters
-        ----------
-        filepath : str
-            file path to save the weights
-
-        Returns
-        -------
-        None
-        """
-        weights = self.get_weights()
-        with h5py.File(filepath, "w") as hf:
-            for i, d in enumerate(weights):
-                hf.create_dataset(name=self.weights[i].name, data=d)
-
-    def load_weights(self, filepath, **kwargs):
-        """Load the controller weights from a hdf5 file
-
-        Parameters
-        ----------
-        filepath : str
-            file path to saved weights
-
-        Returns
-        -------
-        None
-        """
-        weights = []
-        with h5py.File(filepath, 'r') as hf:
-            for i in range(len(self.weights)):
-                key = self.weights[i].name
-                weights.append(hf.get(key).value)
-        self.set_weights(weights)
-
-    def get_weights(self, **kwargs):
-        """Get the current controller weights in a numpy array
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        weights : list
-            A list of numpy array for each weights in controller
-        """
-        weights = self.session.run(self.weights)
-        return weights
-
-    def set_weights(self, weights, **kwargs):
-        """Set the current controller weights
-
-        Parameters
-        ----------
-        weights : list of numpy.ndarray
-            A list of numpy array for each weights in controller
-
-        Returns
-        -------
-        None
-        """
-        assign_ops = []
-        for i in range(len(self.weights)):
-            assign_ops.append(F.assign(self.weights[i], weights[i]))
-        self.session.run(assign_ops)
-
-    @staticmethod
-    def convert_arc_to_onehot(controller):
-        """Convert a categorical architecture sequence to a one-hot encoded architecture sequence
-
-        Parameters
-        ----------
-        controller : amber.architect.controller
-            An instance of controller
-
-        Returns
-        -------
-        onehot_list : list
-            a one-hot encoded architecture sequence
-        """
-        with_skip_connection = controller.with_skip_connection
-        if hasattr(controller, 'with_input_blocks'):
-            with_input_blocks = controller.with_input_blocks
-            num_input_blocks = controller.num_input_blocks
-        else:
-            with_input_blocks = False
-            num_input_blocks = 1
-        arc_seq = controller.input_arc
-        model_space = controller.model_space
-        onehot_list = []
-        arc_pointer = 0
-        for layer_id in range(len(model_space)):
-            # print("layer_type ",arc_pointer)
-            onehot_list.append(F.squeeze(F.one_hot(tensor=arc_seq[arc_pointer], num_classes=len(model_space[layer_id])), axis=1))
-            if with_input_blocks:
-                inp_blocks_idx = arc_pointer + 1, arc_pointer + 1 + num_input_blocks * with_input_blocks
-                tmp = []
-                for i in range(inp_blocks_idx[0], inp_blocks_idx[1]):
-                    # print("input block ",i)
-                    tmp.append(F.squeeze(F.one_hot(arc_seq[i], 2), axis=1))
-                onehot_list.append(F.transpose(F.stack(tmp), [1, 0, 2]))
-            if layer_id > 0 and with_skip_connection:
-                skip_con_idx = arc_pointer + 1 + num_input_blocks * with_input_blocks, \
-                               arc_pointer + 1 + num_input_blocks * with_input_blocks + layer_id * with_skip_connection
-                tmp = []
-                for i in range(skip_con_idx[0], skip_con_idx[1]):
-                    # print("skip con ",i)
-                    tmp.append(F.squeeze(F.one_hot(arc_seq[i], 2), axis=1))
-                onehot_list.append(F.transpose(F.stack(tmp), [1, 0, 2]))
-            arc_pointer += 1 + num_input_blocks * with_input_blocks + layer_id * with_skip_connection
-        return onehot_list

@@ -24,7 +24,8 @@ def get_loss(loss, y_true, y_pred):
         elif loss == 'binary_crossentropy':
             pass
         elif loss == 'nllloss_with_logits':
-            loss_ = torch.nn.NLLLoss()(input=torch.nn.LogSoftmax(dim=-1)(y_pred), target=y_true.long())
+            #loss_ = torch.nn.NLLLoss()(input=torch.nn.LogSoftmax(dim=-1)(y_pred), target=y_true.long())
+            loss_ = torch.nn.CrossEntropyLoss()(input=torch.nn.LogSoftmax(dim=-1)(y_pred), target=y_true.long())
         else:
             raise Exception("cannot understand string loss: %s" % loss)
     elif type(loss) is callable:

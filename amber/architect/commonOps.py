@@ -65,38 +65,6 @@ def count_model_params(model_params):
     return num_vars
 
 
-def proximal_policy_optimization_loss(curr_prediction, curr_onehot, old_prediction, old_onehotpred, rewards, advantage, clip_val, beta=None):
-    rewards_ = F.squeeze(rewards, axis=1)
-    advantage_ = F.squeeze(advantage, axis=1)
-
-    entropy = 0
-    r = 1
-    for t, (p, onehot, old_p, old_onehot) in \
-            enumerate(zip(curr_prediction, curr_onehot, old_prediction, old_onehotpred)):
-        # print(t)
-        # print("p", p)
-        # print("old_p", old_p)
-        # print("old_onehot", old_onehot)
-        ll_t = F.log(F.reduce_sum(old_onehot * p))
-        ll_0 = F.log(F.reduce_sum(old_onehot * old_p))
-        r_t = F.exp(ll_t - ll_0)
-        r = r * r_t
-        # approx entropy
-        entropy += -F.reduce_mean(F.log(F.reduce_sum(onehot * p, axis=1)))
-
-    surr_obj = F.reduce_mean(F.abs(1 / (rewards_ + 1e-8)) *
-                              F.minimum(r * advantage_,
-                                         F.clip_by_value(r,
-                                                          clip_value_min=1 - clip_val,
-                                                          clip_value_max=1 + clip_val) * advantage_)
-                              )
-    if beta:
-        # maximize surr_obj for learning and entropy for regularization
-        return - surr_obj + beta * (- entropy)
-    else:
-        return - surr_obj
-
-
 def get_kl_divergence_n_entropy(curr_prediction, curr_onehot, old_prediction, old_onehotpred):
     """compute approx
     return kl, ent
@@ -110,24 +78,3 @@ def get_kl_divergence_n_entropy(curr_prediction, curr_onehot, old_prediction, ol
         ent.append(F.reshape(F.get_loss('binary_crossentropy', y_true=onehot, y_pred=p), [-1]))
     return F.reduce_mean(F.concat(kl, axis=0)), F.reduce_mean(F.concat(ent, axis=0))
 
-
-def lstm(x, prev_c, prev_h, w):
-    ifog = F.matmul(F.concat([x, prev_h], axis=1), w)
-    i, f, o, g = F.split(ifog, 4, axis=1)
-    i = F.sigmoid(i)
-    f = F.sigmoid(f)
-    o = F.sigmoid(o)
-    g = F.tanh(g)
-    next_c = i * g + f * prev_c
-    next_h = o * F.tanh(next_c)
-    return next_c, next_h
-
-
-def stack_lstm(x, prev_c, prev_h, w):
-    next_c, next_h = [], []
-    for layer_id, (_c, _h, _w) in enumerate(zip(prev_c, prev_h, w)):
-        inputs = x if layer_id == 0 else next_h[-1]
-        curr_c, curr_h = lstm(inputs, _c, _h, _w)
-        next_c.append(curr_c)
-        next_h.append(curr_h)
-    return next_c, next_h

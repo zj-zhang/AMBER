@@ -50,6 +50,9 @@ def TensorType(): # type:ignore
 def Variable(initial_value, dtype, shape, trainable=True, name=None): # type:ignore
     pass
 
+def to_numpy(tensor) -> np.ndarray: #type:ignore
+    pass
+
 def placeholder(shape, dtype, name=None) -> Union[float, np.ndarray]: # type:ignore
     pass
 

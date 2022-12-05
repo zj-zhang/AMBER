@@ -6,13 +6,13 @@ def abs(x):
 def matmul(x, y):
     return torch.matmul(x, y)
 
-def reduce_sum(x, axis=None):
+def reduce_sum(x, axis=None, keepdim=False):
     if type(x) in (list, tuple):
         x = torch.concat(x)
     if axis is None:
         return torch.sum(x)
     else:
-        return torch.sum(x, dim=axis)
+        return torch.sum(x, dim=axis, keepdim=keepdim)
 
 def reduce_mean(x, axis=None):
     if axis is None:

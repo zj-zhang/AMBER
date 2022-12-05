@@ -30,20 +30,20 @@ class TestModelSpace(testing_utils.TestCase):
         # init
         for i in range(num_layers):
             model_space.add_layer(i, copy.copy(layer_ops))
-        assert(len(model_space) == num_layers)
-        assert(len(model_space[0]) == 4)
+        self.assertLen(model_space, num_layers)
+        self.assertLen(model_space[0], 4)
         # Add layer
         model_space.add_layer(2, copy.copy(layer_ops))
-        assert(len(model_space) == num_layers + 1)
+        self.assertLen(model_space, num_layers + 1)
         # Add op
         model_space.add_state(2, architect.Operation('identity', filters=out_filters))
-        assert(len(model_space[2]) == 5)
+        self.assertLen(model_space[2], 5)
         # Delete op
         model_space.delete_state(2, 4)
-        assert(len(model_space[2]) == 4)
+        self.assertLen(model_space[2], 4)
         # Delete layer
         model_space.delete_layer(2)
-        assert(len(model_space) == num_layers)
+        self.assertLen(model_space, num_layers)
 
 
 class TestGeneralController(testing_utils.TestCase):
@@ -84,21 +84,37 @@ class TestGeneralController(testing_utils.TestCase):
                 self.assertAllClose(pr.flatten(), [0.5] * len(pr.flatten()), atol=0.05)
                 i += 1
             i += 1
-
-    def test_optimize(self):
-        act, prob = self.controller.get_action()
-        feed_dict = {self.controller.input_arc[i]: [[act[i]]]
-                     for i in range(len(act))}
-        feed_dict.update({self.controller.advantage: [[1]]})
-        feed_dict.update({self.controller.old_probs[i]: prob[i]
-                          for i in range(len(self.controller.old_probs))})
-        feed_dict.update({self.controller.reward: [[1]]})
-        for _ in range(100):
+    
+    @unittest.skipIf(F.mod_name!='tensorflow_1', "only implemented in TF1 backend")
+    def test_optimize_static(self):
+        a1, p1 = self.controller.get_action()
+        a2, p2 = self.controller.get_action()
+        a_batch = np.array([a1, a2])
+        p_batch = [np.concatenate(x) for x in zip(*[p1, p2])]
+        feed_dict = {self.controller.input_arc[i]: a_batch[:, [i]]
+                     for i in range(a_batch.shape[1])}
+        feed_dict.update({self.controller.old_probs[i]: p_batch[i]
+                    for i in range(len(self.controller.old_probs))})             
+        # add a pseudo reward - the first arc is 1. ; second arc is -1.
+        feed_dict.update({self.controller.advantage: np.array([1., -1.]).reshape((2, 1))})
+        feed_dict.update({self.controller.reward: np.array([1., 1.]).reshape((2, 1))})
+        old_loss = self.session.run(self.controller.onehot_log_prob, feed_dict)
+        losses = []
+        max_iter = 100
+        for i in range(max_iter):
             self.session.run(self.controller.train_op, feed_dict=feed_dict)
-        act2, prob2 = self.controller.get_action()
-        self.assertAllEqual(act, act2)
+            if i % (max_iter//5) == 0:
+                losses.append(self.session.run(self.controller.loss, feed_dict))
+        new_loss = self.session.run(self.controller.onehot_log_prob, feed_dict)
+        # loss should decrease over time
+        self.assertLess(losses[-1], losses[0])
+        # 1st index positive reward should decrease/minimize its loss
+        self.assertLess(new_loss[0], old_loss[0])
+        # 2nd index negative reward should increase/increase the loss
+        self.assertLess(old_loss[1], new_loss[1])
 
-@unittest.skip
+
+@unittest.skipIf(F.mod_name!='tensorflow_1', "only implemented in TF1 backend")
 class TestOperationController(testing_utils.TestCase):
     def setUp(self):
         super(TestOperationController, self).setUp()
@@ -130,11 +146,10 @@ class TestOperationController(testing_utils.TestCase):
         self.tempdir.cleanup()
 
 
-#@parameterized_class(attrs=('controller_getter', 'decoder_getter'), input_values=[
-#    (architect.MultiInputController, architectureDecoder.MultiIOArchitecture),
-#    (architect.MultiIOController, architectureDecoder.MultiIOArchitecture)
-#])
-@unittest.skip
+@parameterized_class(attrs=('controller_getter', 'decoder_getter'), input_values=[
+    (architect.MultiInputController, architectureDecoder.MultiIOArchitecture),
+    (architect.MultiIOController, architectureDecoder.MultiIOArchitecture)
+])
 class TestMultiIOController(testing_utils.TestCase):
     def setUp(self):
         super(TestMultiIOController, self).setUp()
@@ -165,6 +180,7 @@ class TestMultiIOController(testing_utils.TestCase):
         if getattr(self.controller, "output_block_unique_connection", False) is True:
             self.assertEqual(np.sum(outputs), self.controller.num_output_blocks)
 
+    @unittest.skipIf(F.mod_name!='tensorflow_1', "only implemented in TF1 backend")
     def test_optimize(self):
         a1, p1 = self.controller.get_action()
         a2, p2 = self.controller.get_action()
@@ -172,10 +188,10 @@ class TestMultiIOController(testing_utils.TestCase):
         p_batch = [np.concatenate(x) for x in zip(*[p1, p2])]
         feed_dict = {self.controller.input_arc[i]: a_batch[:, [i]]
                      for i in range(a_batch.shape[1])}
+        feed_dict.update({self.controller.old_probs[i]: p_batch[i]
+                    for i in range(len(self.controller.old_probs))})             
         # add a pseudo reward - the first arc is 1. ; second arc is -1.
         feed_dict.update({self.controller.advantage: np.array([1., -1.]).reshape((2, 1))})
-        feed_dict.update({self.controller.old_probs[i]: p_batch[i]
-                          for i in range(len(self.controller.old_probs))})
         feed_dict.update({self.controller.reward: np.array([1., 1.]).reshape((2, 1))})
         old_loss = self.sess.run(self.controller.onehot_log_prob, feed_dict)
         losses = []
@@ -192,14 +208,13 @@ class TestMultiIOController(testing_utils.TestCase):
         # 2nd index negative reward should increase/increase the loss
         self.assertLess(old_loss[1], new_loss[1])
 
+
     def tearDown(self):
         super(TestMultiIOController, self).tearDown()
         self.tempdir.cleanup()
         self.sess.close()
 
-@unittest.skip
-class TestAmbientController:
-#class TestAmbientController(TestMultiIOController):
+class TestAmbientController(TestMultiIOController):
     def setUp(self):
         data_description_len = 2
         use_ppo_loss = False
@@ -233,7 +248,8 @@ class TestAmbientController:
             verbose=False
         )
         self.tempdir = tempfile.TemporaryDirectory()
-
+    
+    @unittest.skipIf(F.mod_name!='tensorflow_1', "only implemented in TF1 backend")
     def test_train(self):
         # random store some entries
         for _ in range(10):
@@ -245,7 +261,8 @@ class TestAmbientController:
         old_loss = self.controller.train(episode=0, working_dir=self.tempdir.name)
         new_loss = self.controller.train(episode=1, working_dir=self.tempdir.name)
         self.assertLess(new_loss, old_loss)
-
+    
+    @unittest.skipIf(F.mod_name!='tensorflow_1', "only implemented in TF1 backend")
     def test_optimize(self):
         a_batch = []
         p_batch = []

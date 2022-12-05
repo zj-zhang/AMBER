@@ -6,8 +6,8 @@ def abs(x):
 def matmul(x, y):
     return tf.matmul(x, y)
 
-def reduce_sum(x, axis=None):
-    return tf.reduce_sum(x, axis=axis)
+def reduce_sum(x, axis=None, keepdim=False):
+    return tf.reduce_sum(x, axis=axis, keepdims=keepdim)
 
 def reduce_mean(x, axis=None):
     return tf.reduce_mean(x, axis=axis)

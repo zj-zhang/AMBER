@@ -10,6 +10,20 @@ Classes for breaking down an architecture sequence into a more structured format
 import numpy as np
 
 
+def get_decoder(m):
+    if callable(m):
+        return m
+    elif type(m) is str:
+        if m == 'MultiIOArchitecture':
+            return MultiIOArchitecture
+        elif m == 'ResConvNetArchitecture':
+            return ResConvNetArchitecture
+        else:
+            raise Exception('Unknown decoder %s' % m)        
+    else:
+        raise Exception('Unknown decoder %s' % m)
+
+
 class MultiIOArchitecture:
     def __init__(self, num_layers, num_inputs, num_outputs):
         #self.model_space = model_space
