@@ -11,17 +11,9 @@ from amber.architect.optim.controller.base import BaseController, proximal_polic
 from amber.architect.buffer import get_buffer
 from amber.architect.commonOps import get_kl_divergence_n_entropy
 
-"""
-dynamic graphs still need a sampler and a trainer:
-- for sampler forward pass, each op token will be sampled
-- for trainer forward pass, each op token is fixed
-
-
-"""
-
 
 # dynamic graphs
-class GeneralController(BaseController, F.Model):
+class GeneralController(BaseController):
     """
     GeneralController for neural architecture search
 
@@ -178,8 +170,7 @@ class GeneralController(BaseController, F.Model):
         #self.weights = [var for var in F.trainable_variables(scope=self.name)]
         #F.init_all_params(sess=self.session)
         self.params = [var
-                        for var in F.trainable_variables(scope=self)]
-            
+                        for var in F.trainable_variables(scope=self.name)]       
         self.optimizer = F.get_optimizer(self.optim_algo, self.params, opt_config={'lr':0.001})
 
     def __str__(self):
@@ -218,16 +209,14 @@ class GeneralController(BaseController, F.Model):
         self.onehot_skip_penaltys = F.reduce_mean(skip_penaltys_flat, axis=0)  # (batch_size,)
         return onehot_log_prob, probs_
 
-    def _build_train_op(self, input_arc, advantage):
+    def _build_train_op(self, input_arc, advantage, old_probs):
         """build train_op based on either REINFORCE or PPO
         """
+        advantage = F.cast(advantage, F.float32)
+        old_probs = [F.cast(p, F.float32) for p in old_probs]
         self._build_trainer(input_arc=input_arc)
         normalize = F.cast(self.num_layers * (self.num_layers - 1) / 2, F.float32)
         self.skip_rate = F.cast(self.skip_count, F.float32) / normalize
-
-        #self.input_arc_onehot = self.convert_arc_to_onehot(self)
-        #self.old_probs = [F.placeholder(shape=self.onehot_probs[i].shape, dtype=F.float32, name="old_prob_%i" % i) for
-        #                  i in range(len(self.onehot_probs))]
         loss = 0
         if self.skip_weight is not None:
             loss += self.skip_weight * F.reduce_mean(self.onehot_skip_penaltys)
@@ -236,16 +225,18 @@ class GeneralController(BaseController, F.Model):
         else:
             loss += F.reshape(F.tensordot(self.onehot_log_prob, advantage, axes=1), [])
 
-        #self.kl_div, self.ent = get_kl_divergence_n_entropy(curr_prediction=self.onehot_probs,
-        #                                                    old_prediction=self.old_probs,
-        #                                                    curr_onehot=self.input_arc_onehot,
-        #                                                    old_onehotpred=self.input_arc_onehot)
+        self.input_arc = input_arc
+        input_arc_onehot = self.convert_arc_to_onehot(self)
+        kl_div, ent = get_kl_divergence_n_entropy(curr_prediction=self.onehot_probs,
+                                                            old_prediction=old_probs,
+                                                            curr_onehot=input_arc_onehot,
+                                                            old_onehotpred=input_arc_onehot)
         F.get_train_op(
             loss=loss,
             variables=self.params,
             optimizer=self.optimizer
         )
-        return loss
+        return loss, kl_div, ent
 
     def get_action(self, *args, **kwargs):
         """Get a sampled architecture/action and its corresponding probabilities give current controller policy parameters.
@@ -295,15 +286,11 @@ class GeneralController(BaseController, F.Model):
             ent_sum = 0
             # get data from buffer
             for s_batch, p_batch, a_batch, ad_batch, nr_batch in self.buffer.get_data(self.batch_size):
-                feed_dict = {self.input_arc[i]: a_batch[:, [i]]
-                             for i in range(a_batch.shape[1])}
-                feed_dict.update({self.advantage: ad_batch})
-                feed_dict.update({self.old_probs[i]: p_batch[i]
-                                  for i in range(len(self.old_probs))})
-                feed_dict.update({self.reward: nr_batch})
-
-                self.session.run(self.train_op, feed_dict=feed_dict)
-                curr_loss, curr_kl, curr_ent = self.session.run([self.loss, self.kl_div, self.ent], feed_dict=feed_dict)
+                input_arc = a_batch.T
+                curr_loss, curr_kl, curr_ent = self._build_train_op(
+                    input_arc=input_arc, 
+                    advantage=ad_batch, 
+                    old_probs=p_batch)
                 aloss += curr_loss
                 kl_sum += curr_kl
                 ent_sum += curr_ent

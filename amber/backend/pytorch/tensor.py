@@ -1,7 +1,6 @@
 import torch
 import numpy as np
-
-tensor_cache = {}
+from .cache import *
 
 def data_type_dict():
     return { 'float16' : torch.float16, 'float32' : torch.float32, 'int8': torch.int8, 'int16': torch.int16, 'int32': torch.int32, 'bool': torch.bool}
@@ -19,11 +18,19 @@ def Variable(initial_value, shape=None, dtype=None, trainable=True, name=None):
     return tensor
 
 def to_numpy(tensor):
-    return tensor.detach().cpu().numpy()
+    if type(tensor) is TensorType:
+        return tensor.detach().cpu().numpy()
+    elif hasattr(tensor, '__iter__'):
+        return [to_numpy(t) for t in tensor]
+    else:
+        raise TypeError(f"unknown type for {tensor}")
 
 def create_parameter(name, shape, dtype=None, initializer=None, trainable=True, seed=None):
     dtype = dtype or torch.float32
-    param = torch.nn.Parameter(data=torch.zeros(shape, dtype=dtype), requires_grad=trainable)
+    param = torch.nn.Parameter(
+        data=torch.zeros(shape, dtype=dtype), 
+        requires_grad=trainable,
+    )
     if initializer is None:
          torch.nn.init.uniform_(param, -0.1, 0.1)
     elif type(initializer) is str:
@@ -35,7 +42,10 @@ def create_parameter(name, shape, dtype=None, initializer=None, trainable=True, 
             torch.nn.init.uniform_(param, -0.1, 0.1)
         else:
             raise Exception('str initializer not understood')
-    tensor_cache[param] = name
+    device=GLOBAL_DEFAULT_GRAPH.get_device()
+    if device != 'cpu':
+        param = param.to(device)
+    GLOBAL_DEFAULT_GRAPH.add_param(name=name, param=param)
     return param
 
 def get_params_name(x):
@@ -47,7 +57,9 @@ def get_shape(x):
 shape = get_shape
 
 def one_hot(tensor, num_classes=-1):
-    return torch.nn.functional.one_hot(tensor=tensor, depth=num_classes)
+    if type(tensor) is not TensorType:
+        tensor = torch.tensor(tensor, dtype=torch.long)
+    return torch.nn.functional.one_hot(tensor, num_classes)
 
 def assign(x, y):
     assert type(x) is TensorType

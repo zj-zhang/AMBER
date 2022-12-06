@@ -9,7 +9,7 @@ Name                                                                            
 /Users/zzjfrank/workspace/AMBER/amber/architect/modelSpace.py                                       87     38    56%   51, 65, 76-79, 132, 160-164, 174-177, 201, 220-244, 248, 252
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/__init__.py                                    0      0   100%
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/__init__.py                        17      4    76%   29-32, 39
-/Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/base.py                           225     14    94%   54, 67, 231-234, 337, 341-345, 391, 394
+/Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/base.py                           225     14    94%   54, 67, 233-236, 339, 343-347, 393, 396
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/static/__init__.py                  4      0   100%
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/static/generalController.py       148     19    87%   178-179, 234, 305-307, 333-334, 337, 373-378, 403-406
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/static/multiioController.py       348     32    91%   129, 131, 172, 174, 209-212, 219, 221, 321, 323, 363, 365, 413-417, 424, 426, 433, 540-541, 571, 573, 616, 618, 643-646
@@ -22,7 +22,7 @@ Name                                                                            
 /Users/zzjfrank/workspace/AMBER/amber/architect/trainEnv.py                                        546    204    63%   28, 32-33, 37-41, 159, 164, 169-171, 176, 181, 184, 189-190, 193-199, 205, 229, 259, 286, 314, 350-352, 357-358, 371, 404, 409, 416, 424, 430-435, 441, 475, 494-495, 498-504, 508-509, 525, 584, 632, 649-650, 653-658, 663-664, 689, 698-700, 711-717, 721-745, 749-913, 916-923
 /Users/zzjfrank/workspace/AMBER/amber/backend/__init__.py                                           65     17    74%   19, 30-31, 37-43, 57, 76, 83-86, 91-97
 /Users/zzjfrank/workspace/AMBER/amber/backend/amber_ops.py                                          50      3    94%   27, 29, 52
-/Users/zzjfrank/workspace/AMBER/amber/backend/backend.py                                           152     76    50%   20, 23, 26, 29, 32, 35, 38, 41, 44, 48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84, 87-89, 92, 95, 98, 101, 104, 107, 110, 113, 116, 119, 122, 125, 128-130, 135, 138, 141, 144, 147, 150, 153, 156, 159, 162, 165, 168, 171, 174, 177, 180, 183, 186, 189, 192, 195, 198-200, 205, 208, 211, 214, 217, 220-222, 227, 229-230, 235, 237-240
+/Users/zzjfrank/workspace/AMBER/amber/backend/backend.py                                           150     72    52%   20, 23, 26, 29, 32, 35, 38, 41, 44, 48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84, 89, 92, 95, 98, 101, 104, 107, 110, 113, 116, 119, 122, 125, 128, 132, 135, 138, 141, 144, 147, 150, 153, 156, 159, 162, 165, 168, 171, 174, 177, 180, 183, 186, 189, 192, 195, 198, 202, 205, 208, 211, 214, 217, 221, 225, 227, 229, 233, 235, 237
 /Users/zzjfrank/workspace/AMBER/amber/backend/set_default_backend.py                                15     10    33%   7-11, 21-35
 /Users/zzjfrank/workspace/AMBER/amber/backend/tensorflow_1/__init__.py                               7      0   100%
 /Users/zzjfrank/workspace/AMBER/amber/backend/tensorflow_1/_operators/__init__.py                    4      0   100%
@@ -60,11 +60,11 @@ Name                                                                            
 __init__.py                                                                                          0      0   100%
 architect_env_test.py                                                                               91      3    97%   217-218, 254
 architect_helper_test.py                                                                           163      1    99%   306
-architect_optimize_test.py                                                                         210     30    86%   90-112, 199-207, 343
+architect_optimize_test.py                                                                         206     26    87%   90-111, 198-206, 342
 architect_pmbga_test.py                                                                             50      1    98%   71
 integration_bionas_test.py                                                                          56      1    98%   119
 modeler_keras_test.py                                                                               89      3    97%   80, 111, 189
 modeler_pytorch_test.py                                                                             92     59    36%   20, 25, 33-40, 43-49, 52-68, 74-79, 87-91, 101-110, 113-121, 125
 modeler_tensorflow_test.py                                                                         118      7    94%   20-21, 110, 131-133, 240
 ------------------------------------------------------------------------------------------------------------------------------
-TOTAL                                                                                             7783   2663    66%
+TOTAL                                                                                             7777   2655    66%

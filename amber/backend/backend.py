@@ -47,9 +47,6 @@ def get_layer(x, op) -> Callable: # type: ignore
 def data_type_dict() -> Dict: # type: ignore
     pass
 
-def tensor_cache() -> Dict: # type:ignore
-    pass
-
 def TensorType(): # type:ignore
     pass
 
