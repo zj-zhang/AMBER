@@ -3,17 +3,19 @@ This is different from other helper tests, because train environment's work depe
 expected behaviors
 """
 
+import logging
 import os
-from amber.utils import static_tf as tf
-import keras.backend as K
-import numpy as np
+import sys
 import tempfile
-from parameterized import parameterized_class
-from amber.utils import testing_utils
-from amber import modeler
-from amber import architect
 import unittest
-import logging, sys
+
+import numpy as np
+from parameterized import parameterized_class
+
+import amber.backend as F
+from amber import architect, modeler
+from amber.utils import testing_utils
+
 logging.disable(sys.maxsize)
 
 
@@ -55,7 +57,7 @@ class TestEnvDryRun(testing_utils.TestCase):
 
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
-        self.sess = tf.Session()
+        self.sess = F.Session()
         self.controller = self.controller_getter(
             model_space=self.model_space,
             buffer_type='ordinal',
@@ -108,7 +110,10 @@ class TestEnvDryRun(testing_utils.TestCase):
 
     def tearDown(self):
         super(TestEnvDryRun, self).tearDown()
-        self.sess.close()
+        try:
+            self.sess.close()
+        except:
+            pass
         self.tempdir.cleanup()
 
     def test_build(self):
@@ -211,11 +216,8 @@ class TestMultiManagerEnv(TestEnvDryRun):
 
     def test_build(self):
         is_enas = self.modeler_getter in (modeler.EnasAnnModelBuilder, modeler.EnasCnnModelBuilder)
-        sess = tf.Session()
-        try:
-            K.set_session(sess)
-        except RuntimeError:
-            pass
+        sess = F.Session()
+        F.set_session(sess)
         controller = self.get_controller(sess=sess)
         managers = []
         for dataset_key in self.datasets:
@@ -251,4 +253,4 @@ class TestMultiManagerEnv(TestEnvDryRun):
 
 
 if __name__ == '__main__':
-    tf.test.main()
+    unittest.main()

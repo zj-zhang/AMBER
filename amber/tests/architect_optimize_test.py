@@ -1,18 +1,21 @@
 """Test architect optimizer"""
 
-import numpy as np
 import copy
+import logging
+import sys
 import tempfile
-from amber.utils import testing_utils
-from amber.utils import static_tf as tf
-from amber import backend as F
 import unittest
+
+import numpy as np
 from parameterized import parameterized_class
+
 from amber import architect
+from amber import backend as F
 # need to test for seamlessly connecting to manager's architectureDecoder as well. FZZ 2022.5.4
 from amber.modeler import architectureDecoder
-import unittest
-import logging, sys
+from amber.utils import static_tf as tf
+from amber.utils import testing_utils
+
 logging.disable(sys.maxsize)
 
 
@@ -90,8 +93,7 @@ class TestGeneralController(testing_utils.TestCase):
                 i += 1
             i += 1
 
-    #@unittest.skipIf(F.mod_name!='pytorch', "only implemented in PyTorch backend")
-    @unittest.skip  
+    @unittest.skipIf(F.mod_name!='pytorch', "only implemented in PyTorch backend")
     def test_optimizer_dynamic(self):
         a1, p1 = self.controller.get_action()
         a2, p2 = self.controller.get_action()

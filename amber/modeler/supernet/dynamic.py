@@ -133,6 +133,9 @@ class EnasConv1dDAG(Module, BaseEnasConv1dDAG):
         self.layers = torch.nn.ModuleDict(layers)
         # helpers
         self.decoder = ResConvNetArchitecture(model_space=self.model_space)
+    
+    def __call__(self, arc_seq):
+        return self
 
     def forward(self, arc_seq, x):
         """use forward to compute predictions on the given arc_seq and

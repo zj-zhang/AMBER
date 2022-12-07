@@ -5,13 +5,13 @@ import numpy as np
 from .cache import *
 session_cache = {}
 
-def Session():
+def Session(*args):
     pass
 
-def clear_session():
+def clear_session(*args):
     pass
 
-def set_session():
+def set_session(*args):
     pass
 
 class device_scope:

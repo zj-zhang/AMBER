@@ -284,7 +284,7 @@ class BaseController(object):
             # END STEP 2
         return arc_seq, probs_, log_probs, hidden_states, entropys, skip_count, skip_penaltys
     
-    def store(self, prob, action, reward, *args, **kwargs):
+    def store(self, state=None, prob=None, action=None, reward=None, *args, **kwargs):
         """Store all necessary information and rewards for a given architecture
 
         This is the receiving method for controller to interact with manager by storing the rewards for a given architecture.
@@ -314,7 +314,8 @@ class BaseController(object):
         None
 
         """
-        self.buffer.store(state=[[[0]]], prob=prob, action=action, reward=reward)
+        state = [[[0]]] if state is None else state
+        self.buffer.store(state=state, prob=prob, action=action, reward=reward)
         return
 
     @staticmethod

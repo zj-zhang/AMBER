@@ -184,7 +184,7 @@ class GeneralManager(BaseNetworkManager):
         train_sess = F.Session()
         with F.session_scope(train_sess):
             F.set_session(train_sess)
-            model = self.model_fn(model_arc)  # a compiled keras Model
+            model = self.model_fn(model_arc)  # a compiled amber.backend.Model
             if model is None:
                 assert hasattr(self.reward_fn, "min"), "model_fn of type %s returned a non-valid model, but the given " \
                                                        "reward_fn of type %s does not have .min() method" % (type(
