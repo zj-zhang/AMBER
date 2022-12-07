@@ -119,7 +119,6 @@ class GeneralController(BaseController):
                  tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=None,
                  rescale_advantage_by_reward=False, name="controller", verbose=0, **kwargs):
         super().__init__(model_space=model_space, name=name, **kwargs)
-        F.Model.__init__(self)
         self.model_space = model_space
         # -----
         # FOR LEGACY ATTRIBUTES
@@ -310,4 +309,13 @@ class GeneralController(BaseController):
 
         return aloss / g_t
 
+    def save_weights(self, filepath):
+        #weights = self.get_weights()
+        with h5py.File(filepath, "w") as hf:
+            pass
+            #for i, d in enumerate(weights):
+            #    hf.create_dataset(name=self.weights[i].name, data=d)
 
+    def get_weights(self):
+        weights = self.session.run(self.weights)
+        return weights

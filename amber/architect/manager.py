@@ -332,10 +332,10 @@ class DistributedGeneralManager(GeneralManager):
                                      epochs=self.epochs,
                                      verbose=self.verbose,
                                      validation_data=self._validation_data_gen,
-                                     callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
+                                     callbacks=[F.get_callback('ModelCheckpoint')(os.path.join(self.working_dir, 'temp_network.h5'),
                                                                 monitor='val_loss', verbose=self.verbose,
                                                                 save_best_only=True),
-                                                EarlyStopping(monitor='val_loss', patience=self._earlystop_patience, verbose=self.verbose)],
+                                                F.get_callback('EarlyStopping')(monitor='val_loss', patience=self._earlystop_patience, verbose=self.verbose)],
                                      **self.fit_kwargs
                                      )
 

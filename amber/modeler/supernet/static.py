@@ -3,6 +3,7 @@ that is, only TF1.X at this point
 """
 
 import numpy as np
+import warnings
 from ..child import DenseAddOutputChild, EnasAnnModel, EnasCnnModel
 from ... import backend as F
 from ...backend import Operation, ComputationNode, get_layer_shortname

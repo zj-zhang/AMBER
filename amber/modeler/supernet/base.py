@@ -1,5 +1,6 @@
 from ... import backend as F
 from ...backend import Operation, ComputationNode, get_layer_shortname
+from ..child import EnasCnnModel
 
 class BaseEnasConv1dDAG:
     def __init__(self,

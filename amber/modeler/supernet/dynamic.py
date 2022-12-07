@@ -6,8 +6,10 @@ architecture selections
 
 import numpy as np
 import warnings
+from tqdm import tqdm
 import torch
 from torch.nn import Module
+import pytorch_lightning as pl
 from ... import backend as F
 # for general child
 from .base import BaseEnasConv1dDAG
@@ -54,7 +56,7 @@ class GlobalAveragePooling1DLayer(Module):
         return torch.mean(x, dim=-1)
 
 
-class EnasConv1dDAG(Module, BaseEnasConv1dDAG):
+class EnasConv1dDAG(F.Model, BaseEnasConv1dDAG):
     def __init__(
         self,
         model_space,
@@ -124,6 +126,7 @@ class EnasConv1dDAG(Module, BaseEnasConv1dDAG):
             model_space=model_space,
             input_node=input_node,
             output_node=output_node,
+            controller=controller,
             session=F.Session(),
             model_compile_dict={},
             reduction_factor=reduction_factor,
@@ -133,8 +136,11 @@ class EnasConv1dDAG(Module, BaseEnasConv1dDAG):
         self.layers = torch.nn.ModuleDict(layers)
         # helpers
         self.decoder = ResConvNetArchitecture(model_space=self.model_space)
+        # for receiving architecture tokens during `fit``
+        self.fixed_arc = None
     
-    def __call__(self, arc_seq):
+    def __call__(self, arc_seq=None):
+        self.fixed_arc = arc_seq
         return self
 
     def forward(self, arc_seq, x):
@@ -183,6 +189,66 @@ class EnasConv1dDAG(Module, BaseEnasConv1dDAG):
         out = self.layers["out"](x)
         return out
 
+    #overwrite
+    def predict(self, data, batch_size=32, verbose=False):
+        self.eval()
+        dataloader = self._make_dataloader(x=data, batch_size=batch_size)
+        if self.fixed_arc is None:
+            assert self.controller is not None, "cannot train sample_arc before set_controller"
+            arc_seq, _ = self.controller.get_action()
+        else:
+            arc_seq = self.fixed_arc
+        with torch.no_grad():
+            preds = []
+            pbar = tqdm(dataloader) if verbose else dataloader
+            for batch in pbar:
+                preds.append(self.forward(arc_seq=arc_seq, x=batch[0]))
+            preds = torch.concat(preds).detach().cpu().numpy()
+        return preds
+
+    #overwrite
+    def evaluate(self, x, y=None, batch_size=32, verbose=False):
+        self.eval()
+        dataloader = self._make_dataloader(x=x, y=y, batch_size=batch_size)
+        trainer = pl.Trainer(
+            accelerator="auto",
+            max_epochs=1,
+            enable_progress_bar=verbose,
+            # deterministic=True,
+        )
+        res = trainer.test(self, dataloader, verbose=verbose)[0]
+        return {k.replace('test', 'val'): v for k,v in res.items()}
+
+    # overwrite
+    def step(self, batch, kind: str) -> dict:
+        # run the model and calculate loss; expect a tuple from DataLoader
+        if type(batch) in (tuple, list):
+            batch_x = batch[0]
+            y_true = batch[1]
+        elif hasattr(batch, 'x') and hasattr(batch, 'y'):
+            batch_x = batch.x
+            y_true = batch.y
+        else:
+            raise TypeError("cannot decipher x and y from batch")
+        if self.fixed_arc is None:
+            assert self.controller is not None, "cannot train sample_arc before set_controller"
+            arc_seq, _ = self.controller.get_action()
+        else:
+            arc_seq = self.fixed_arc
+        y_hat = self.forward(arc_seq=arc_seq, x=batch_x)
+        # be explicit about observation and score
+        loss = self.criterion(input=y_hat, target=y_true)
+        total = len(y_true)
+        batch_dict = {
+            "loss": loss,
+            "total": total,
+        }
+        for metric in self.metrics:
+            batch_dict.update({
+                str(metric): metric.step(input=y_hat, target=y_true)
+            })
+        return batch_dict
+    
     def _build_dag(self, *args, **kwargs):
         """use this to init all torch.nn.Layers based on model_space"""
         # for making connections with name IDs
