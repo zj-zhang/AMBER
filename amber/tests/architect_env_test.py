@@ -35,7 +35,8 @@ def get_class_name(*args):
 
 
 @parameterized_class(attrs=('foo', 'manager_getter', 'controller_getter', 'modeler_getter', 'trainenv_getter'), input_values=[
-    (0, architect.GeneralManager, architect.GeneralController, modeler.KerasResidualCnnBuilder, architect.ControllerTrainEnvironment),
+    #(0, architect.GeneralManager, architect.GeneralController, modeler.KerasResidualCnnBuilder, architect.ControllerTrainEnvironment),
+    (0, architect.GeneralManager, architect.GeneralController, modeler.resnet.ResidualCnnBuilder, architect.ControllerTrainEnvironment),
     (1, architect.EnasManager, architect.GeneralController, modeler.EnasCnnModelBuilder, architect.EnasTrainEnv)
 ], class_name_func=get_class_name)
 class TestEnvDryRun(testing_utils.TestCase):
@@ -44,7 +45,7 @@ class TestEnvDryRun(testing_utils.TestCase):
     """
     manager_getter = architect.GeneralManager
     controller_getter = architect.GeneralController
-    modeler_getter = modeler.KerasResidualCnnBuilder
+    modeler_getter = modeler.resnet.ResidualCnnBuilder
     trainenv_getter = architect.ControllerTrainEnvironment
 
     def __init__(self, *args, **kwargs):
@@ -124,14 +125,15 @@ class TestEnvDryRun(testing_utils.TestCase):
 
 # https://github.com/zj-zhang/AMBER/blob/89cdd45f8803014cadb131159d8bea804bfefcbc/examples/AMBIENT/sim_data/zero_shot_nas.sim_data.py
 @parameterized_class(attrs=('manager_getter', 'controller_getter', 'modeler_getter', 'trainenv_getter'), input_values=[
-    (architect.GeneralManager, architect.ZeroShotController, modeler.KerasResidualCnnBuilder, architect.MultiManagerEnvironment),
+    (architect.GeneralManager, architect.ZeroShotController, modeler.resnet.ResidualCnnBuilder, architect.MultiManagerEnvironment),
     (architect.EnasManager, architect.ZeroShotController, modeler.EnasCnnModelBuilder, architect.MultiManagerEnvironment),
     #(architect.GeneralManager, architect.ZeroShotController, modeler.KerasResidualCnnBuilder, architect.ParallelMultiManagerEnvironment),
 ])
+@unittest.skipIf(F.mod_name!='tensorflow_1', "only implemented in TF1 backend")
 class TestMultiManagerEnv(TestEnvDryRun):
     manager_getter = architect.GeneralManager
     controller_getter = architect.ZeroShotController
-    modeler_getter = modeler.KerasResidualCnnBuilder
+    modeler_getter = modeler.resnet.ResidualCnnBuilder
     trainenv_getter = architect.MultiManagerEnvironment
     data_description = np.eye(2)
     data_description_len = 2

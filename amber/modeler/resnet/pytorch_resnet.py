@@ -1,15 +1,18 @@
-from .base import ModelBuilder, BaseTorchModel
-from .architectureDecoder import ResConvNetArchitecture
-try:
-    import torch
-    has_torch = True
-    from .supernet.dynamic import LambdaLayer, ConcatLayer, GlobalAveragePooling1DLayer, get_torch_layer
+import pytorch_lightning as pl
+import torch
+from typing import Tuple, List, Union
+from collections import OrderedDict
+import os
+import copy
+from argparse import Namespace
+from typing import Optional, Union, List, Dict, Any
+from ... import backend as F
+from ..base import ModelBuilder
+from ..architectureDecoder import ResConvNetArchitecture
+from ..supernet.dynamic import ConcatLayer, GlobalAveragePooling1DLayer, get_torch_layer
 
-except ImportError:
-    has_torch = False
 
-
-class PytorchResidualCnnBuilder(ModelBuilder):
+class ResidualCnnBuilder(ModelBuilder):
     """Class for converting an architecture sequence tokens to a PyTorch-lightning model
 
     Parameters
@@ -31,7 +34,7 @@ class PytorchResidualCnnBuilder(ModelBuilder):
         
     Returns
     --------
-    amber.modeler.base.BaseTorchModel : 
+    amber.modeler.base.LightningResNet : 
         a pytorch_lightning model
     """
 
@@ -152,7 +155,6 @@ class PytorchResidualCnnBuilder(ModelBuilder):
                 # add residual sum to model, if any
                 if len(skip_layers):
                     res_sum = torch.nn.Sequential(
-                        #LambdaLayer(lambda x: torch.stack(x, dim=0).sum(dim=0)),
                         ConcatLayer(take_sum=True),
                         torch.nn.BatchNorm1d(num_features=out_filters[layer_id]*self.wsf)
                     )
@@ -204,7 +206,7 @@ class PytorchResidualCnnBuilder(ModelBuilder):
             torch.nn.Linear(self.fc_units, self.outputs.Layer_attributes["units"]),
             get_torch_layer(self.outputs.Layer_attributes["activation"]),
         )))
-        model = BaseTorchModel(layers=layers, model_compile_dict=self.model_compile_dict)
+        model = LightningResNet(layers=layers, model_compile_dict=self.model_compile_dict)
         return model
 
 
@@ -280,3 +282,67 @@ class PytorchResidualCnnBuilder(ModelBuilder):
             ),
         )
         return x
+
+
+class LightningResNet(F.Model):
+    """LightningResNet is a subclass of pytorch_lightning.LightningModule
+
+    It implements a basic functions of `step`, `configure_optimizers` but provides a similar
+    user i/o arguments as tensorflow.keras.Model 
+
+    A module builder will add `torch.nn.Module`s to this instance, and define its forward 
+    pass function. Then this instance is responsible for training and evaluations.
+    add module: use torch.nn.Module.add_module
+    define forward pass: private __forward_tracker list
+    """
+    def __init__(self, layers=None, data_format='NWC', *args, **kwargs):
+        super().__init__()
+        self.__forward_pass_tracker = []
+        self.layers = torch.nn.ModuleDict()
+        self.hs = {}
+        self.is_compiled = False
+        self.criterion = None
+        self.optimizer = None
+        self.metrics = {}
+        self.trainer = None
+        self.data_format = data_format
+        layers = layers or []
+        for layer in layers:
+            layer_id, operation, input_ids = layer[0], layer[1], layer[2] if len(layer)>2 else None
+            self.add(layer_id=layer_id, operation=operation, input_ids=input_ids)
+        self.save_hyperparameters()
+    
+    @property
+    def forward_tracker(self):
+        # return a read-only view
+        return copy.copy(self.__forward_pass_tracker)
+    
+    def add(self, layer_id: str, operation, input_ids: Union[str, List, Tuple] = None):
+        self.layers[layer_id] = operation
+        self.__forward_pass_tracker.append((layer_id, input_ids))
+    
+    def forward(self, x, verbose=False):
+        """Scaffold forward-pass function that follows the operations in 
+        the pre-set in self.__forward_pass_tracker
+        """
+        # permute input, if data_format has channel last
+        if self.data_format == 'NWC':
+            x = torch.permute(x, (0,2,1))
+        # intermediate outputs, for branching models
+        self.hs = {}
+        # layer_id : current layer name
+        # input_ids : if None,       take the output from prev layer as input
+        #             if tuple/list, expect a list of layer_ids (str)
+        for layer_id, input_ids in self.__forward_pass_tracker:
+            assert layer_id in self.layers
+            if verbose:
+                print(layer_id)
+                print([self.hs[layer_id].shape for layer_id in self.hs])
+                print(input_ids)
+            this_inputs = x if input_ids is None else self.hs[input_ids] if type(input_ids) is str else [self.hs[i] for i in input_ids]
+            out = self.layers[layer_id](this_inputs)
+            self.hs[layer_id] = out
+            x = out
+        return out
+
+

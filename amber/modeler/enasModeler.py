@@ -23,8 +23,8 @@ class DAGModelBuilder(ModelBuilder):
 
         if type(inputs_op) not in (list, tuple):
             self.inputs_op = [inputs_op]
-            warnings.warn("inputs_op should be list-like; if only one input, try using ``[inputs_op]`` as argument",
-                         stacklevel=2)
+            #warnings.warn("inputs_op should be list-like; if only one input, try using ``[inputs_op]`` as argument",
+            #             stacklevel=2)
         else:
             self.inputs_op = inputs_op
         self.output_op = output_op

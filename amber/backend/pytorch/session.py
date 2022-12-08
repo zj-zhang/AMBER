@@ -1,34 +1,51 @@
 import torch
 from torch.testing._internal.common_utils import TestCase as torch_testCase
-import contextlib
 import numpy as np
-from .cache import *
-session_cache = {}
+from . import cache
+
 
 def Session(*args):
-    pass
+    return cache.compute_graph()
 
 def clear_session(*args):
     pass
 
-def set_session(*args):
-    pass
+def set_session(sess):
+    assert isinstance(sess, cache.compute_graph)
+    cache.CURRENT_GRAPH = sess    
+
+
+class session_scope():
+    def __init__(self, sess=None, *args, **kwargs):
+        sess = sess or cache.compute_graph()
+        self.sess = sess
+        assert isinstance(self.sess, cache.compute_graph)
+        cache.session_cache.append(self.sess)
+    
+    def __enter__(self):
+        cache.CURRENT_GRAPH = self.sess
+
+    def __exit__(self, *args):
+        cache.session_cache = cache.session_cache[:-1]
+        self.sess.tearDown()
+        cache.CURRENT_GRAPH = cache.GLOBAL_DEFAULT_GRAPH
+
 
 class device_scope:
     def __init__(self, device, *args, **kwargs):
         self.device = device
     def __enter__(self):
-        GLOBAL_DEFAULT_GRAPH.set_device(self.device)
+        cache.CURRENT_GRAPH.set_device(self.device)
     def __exit__(self, *args):
-        GLOBAL_DEFAULT_GRAPH.set_device(GLOBAL_DEFAULT_GRAPH.DEFAULT_DEVICE)
+        cache.CURRENT_GRAPH.set_device(cache.CURRENT_GRAPH.DEFAULT_DEVICE)
 
 class variable_scope:
     def __init__(self, name, *args, **kwargs):
         self.name = name
     def __enter__(self):
-        GLOBAL_DEFAULT_GRAPH.append_var_scope(self.name)
+        cache.CURRENT_GRAPH.append_var_scope(self.name)
     def __exit__(self, *args):
-        GLOBAL_DEFAULT_GRAPH.strip_var_scope()
+        cache.CURRENT_GRAPH.strip_var_scope()
  
 
 class TestCase(torch_testCase):

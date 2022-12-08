@@ -1,6 +1,7 @@
 import torch
 import pytorch_lightning as pl
-from .cache import *
+import os
+from . import cache
 from .utils import InMemoryLogger
 from .tensor import TensorType
 
@@ -23,27 +24,34 @@ class Model(pl.LightningModule):
             raise ValueError(f"unknown loss: {loss}")
         self.optimizer = optimizer
         self.metrics = metrics or {}
-        GLOBAL_DEFAULT_GRAPH.add_model(self)
+        cache.CURRENT_GRAPH.add_model(self)
         self.is_compiled = True
     
     @staticmethod
     def _make_dataloader(x, y=None, batch_size=32):
         if isinstance(x, torch.utils.data.DataLoader) and y is None:
             data = x
+            return data
+        if isinstance(x, (tuple, list)) and y is None:
+            x, y = x[0], x[1]
+        x_ = x if type(x) is TensorType else torch.tensor(x, dtype=torch.float32)
+        if y is None:
+            dataset = torch.utils.data.TensorDataset(x_)
         else:
-            x_ = x if type(x) is TensorType else torch.tensor(x, dtype=torch.float32)
-            if y is None:
-                dataset = torch.utils.data.TensorDataset(x_)
-            else:
-                y_ = y if type(y) is TensorType else torch.tensor(y, dtype=torch.float32)
-                dataset = torch.utils.data.TensorDataset(x_, y_)
-            data = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
+            y_ = y if type(y) is TensorType else torch.tensor(y, dtype=torch.float32)
+            dataset = torch.utils.data.TensorDataset(x_, y_)
+        data = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
         return data
     
     def fit(self, x, y=None, validation_data=None, batch_size=32, epochs=1, nsteps=None, callbacks=None, verbose=False):
         assert self.is_compiled, ValueError("this model instance has not been compiled yet")
         self.train()
         train_data = self._make_dataloader(x=x, y=y, batch_size=batch_size)
+        if validation_data is not None:
+            if isinstance(validation_data, (tuple, list)):
+                validation_data = self._make_dataloader(x=validation_data[0], y=validation_data[1], batch_size=batch_size)
+            else:
+                validation_data = self._make_dataloader(x=validation_data, batch_size=batch_size)
         logger = InMemoryLogger()
         trainer = pl.Trainer(
             accelerator="auto",
@@ -56,26 +64,31 @@ class Model(pl.LightningModule):
         trainer.fit(self, train_data, validation_data)
         return logger
     
-    def predict(self, data, batch_size=32):
+    def predict(self, x, y=None, batch_size=32, verbose=False):
         self.eval()
-        dataloader = self._make_dataloader(x=data, batch_size=batch_size)
+        dataloader = self._make_dataloader(x=x, y=None, batch_size=batch_size)
         with torch.no_grad():
             preds = []
             for batch_x in dataloader:
+                if isinstance(batch_x, (list, tuple)):
+                    batch_x = batch_x[0]
                 preds.append(self.forward(batch_x))
             preds = torch.concat(preds).detach().cpu().numpy()
         return preds
 
-    def evaluate(self, data, verbose=False):
+    def evaluate(self, x, y=None, batch_size=32, verbose=False):
         self.eval()
+        data = self._make_dataloader(x=x, y=y, batch_size=batch_size)
         trainer = pl.Trainer(
             accelerator="auto",
             max_epochs=1,
             enable_progress_bar=verbose,
             # deterministic=True,
         )
-        return trainer.test(self, data, verbose=verbose)[0]
-    
+        res = trainer.test(self, data, verbose=verbose)[0]
+        res = {k.replace('test', 'val'):v for k,v in res.items()}
+        return res
+
     def configure_optimizers(self):
         """Set up optimizers and schedulers.
         Uses Adam, learning rate from `self.lr`, and no scheduler by default.
@@ -164,6 +177,8 @@ class Model(pl.LightningModule):
     def test_epoch_end(self, outputs):
         self.epoch_end(outputs, "test")
 
+    def save_weights(self, *args):
+        pass
 
 
 class Sequential(torch.nn.Sequential):
@@ -211,12 +226,32 @@ def get_loss(loss, y_true=None, y_pred=None):
     return loss_
 
 
+def get_callback(m):
+    if callable(m):
+        return m
+    elif m == 'EarlyStopping':
+        from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+        return EarlyStopping
+    elif m == 'ModelCheckpoint':
+        from pytorch_lightning.callbacks import ModelCheckpoint
+        def ModelCheckpoint_(filename, monitor='val_loss', mode='min', save_best_only=True, verbose=False):
+            return ModelCheckpoint(
+                dirpath=os.path.dirname(filename), 
+                filename=os.path.basename(filename),
+                save_top_k=1 if save_best_only else None,
+                monitor=monitor,
+                mode=mode,
+                verbose=verbose
+                )    
+        return ModelCheckpoint_
+
+
 def trainable_variables(scope=None):
     scope = scope or ''
     if isinstance(scope, torch.nn.Module):
         return scope.parameters()
     elif type(scope) is str:
-        return [param for name, param in GLOBAL_DEFAULT_GRAPH.param_cache.items() if scope in name]
+        return [param for name, param in cache.CURRENT_GRAPH.param_cache.items() if scope in name]
 
 
 def get_optimizer(opt, parameters, opt_config=None):

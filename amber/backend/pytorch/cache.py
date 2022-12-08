@@ -1,10 +1,11 @@
 import torch
 from collections import defaultdict
+_global_counter = 0
+session_cache = []
 
-class __default_graph(torch.nn.Module):
+class compute_graph(torch.nn.Module):
     DEFAULT_TENSOR_PREFIX = ''
     DEFAULT_TENSOR_SUFFIX = 0
-    DEFAULT_SESSION = ''
     DEFAULT_DEVICE = 'cuda'
     PREFIX_SPLIT = '/'
     SUFFIX_SPLIT = ':'
@@ -14,10 +15,18 @@ class __default_graph(torch.nn.Module):
             self.DEFAULT_DEVICE = 'cpu'
         self.module_cache = torch.nn.ModuleDict()
         self.param_cache = {}
-        self.session_cache = defaultdict(set)
+        self.model_cache = set([])
         self._current_tensor_prefix = ''
-        self._current_sess = self.DEFAULT_SESSION
         self._current_device = self.DEFAULT_DEVICE
+        global _global_counter
+        self.name = 'sess:%i'%_global_counter
+        _global_counter += 1
+    
+    def tearDown(self):
+        del self.param_cache
+        del self.model_cache
+        del self.module_cache
+        torch.cuda.empty_cache()
     
     def get_device(self):
         return self._current_device
@@ -45,14 +54,10 @@ class __default_graph(torch.nn.Module):
         self._current_tensor_prefix = self.PREFIX_SPLIT.join(new_scopes[:-1])
 
     def add_model(self, model):
-        self.session_cache[self._current_sess].add(model)
-
-    def append_sess_scope(self, sess):
-        self._current_sess += f'{self.PREFIX_SPLIT}{sess}'
-
-    def strip_sess_scope(self):
-        new_sess = self._current_sess.split(self.PREFIX_SPLIT)
-        self._current_sess = self.PREFIX_SPLIT.join(new_sess[:-1])
+        self.model_cache.add(model)
 
 
-GLOBAL_DEFAULT_GRAPH = __default_graph()
+
+GLOBAL_DEFAULT_GRAPH = compute_graph()
+CURRENT_GRAPH = GLOBAL_DEFAULT_GRAPH
+
