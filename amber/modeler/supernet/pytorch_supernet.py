@@ -56,12 +56,12 @@ class GlobalAveragePooling1DLayer(Module):
         return torch.mean(x, dim=-1)
 
 
-class EnasConv1dDAG(F.Model, BaseEnasConv1dDAG):
+class EnasCnnModelBuilder(F.Model, BaseEnasConv1dDAG):
     def __init__(
         self,
         model_space,
-        input_node,
-        output_node,
+        inputs_op,
+        output_op,
         model_compile_dict,
         with_skip_connection=True,
         batch_size=128,
@@ -124,8 +124,8 @@ class EnasConv1dDAG(F.Model, BaseEnasConv1dDAG):
         BaseEnasConv1dDAG.__init__(
             self,
             model_space=model_space,
-            input_node=input_node,
-            output_node=output_node,
+            input_node=inputs_op,
+            output_node=output_op,
             controller=controller,
             session=F.Session(),
             model_compile_dict={},
@@ -135,12 +135,14 @@ class EnasConv1dDAG(F.Model, BaseEnasConv1dDAG):
         # register with ModuleDict in PyTorch
         self.layers = torch.nn.ModuleDict(layers)
         # helpers
+        self.model_compile_dict = model_compile_dict
         self.decoder = ResConvNetArchitecture(model_space=self.model_space)
         # for receiving architecture tokens during `fit``
         self.fixed_arc = None
     
-    def __call__(self, arc_seq=None):
+    def __call__(self, arc_seq=None, *args, **kwargs):
         self.fixed_arc = arc_seq
+        self.compile(**self.model_compile_dict)
         return self
 
     def forward(self, arc_seq, x):

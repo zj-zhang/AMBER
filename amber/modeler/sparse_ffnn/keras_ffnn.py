@@ -1,59 +1,13 @@
-"""represent neural network computation graph
-as a directed-acyclic graph from a list of 
-architecture selections
-
-"""
-
 import numpy as np
-import warnings
-from ..architect.modelSpace import ModelSpace
-
-# for general child
-from .child import DenseAddOutputChild, EnasAnnModel, EnasCnnModel
-from .. import backend as F
-from ..backend import Operation, ComputationNode, get_layer_shortname
-from .supernet import EnasAnnDAG, EnasConv1dDAG, EnasConv1DwDataDescrption
-
-def get_dag(arg):
-    """Getter method for getting a DAG class from a string
-
-    DAG refers to the underlying tensor computation graphs for child models. Whenever possible, we prefer to use Keras
-    Model API to get the job done. For ENAS, the parameter-sharing scheme is implemented by tensorflow.
-
-    Parameters
-    ----------
-    arg : str or callable
-        return the DAG constructor corresponding to that identifier; if is callable, assume it's a DAG constructor
-        already, do nothing and return it
-
-    Returns
-    -------
-    callable
-        A DAG constructor
-    """
-    if arg is None:
-        return None
-    elif type(arg) is str:
-        if arg.lower() == 'dag':
-            return DAG
-        elif arg.lower() == 'inputblockdag':
-            return InputBlockDAG
-        elif arg.lower() == 'inputblockauxlossdag':
-            return InputBlockAuxLossDAG
-        elif arg.lower() == 'enasanndag':
-            return EnasAnnDAG
-        elif arg.lower() == 'enasconv1ddag':
-            return EnasConv1dDAG
-        elif arg == 'EnasConv1DwDataDescrption':
-            return EnasConv1DwDataDescrption
-    elif callable(arg):
-        return arg
-    else:
-        raise ValueError("Could not understand the DAG func:", arg)
+from ...architect.modelSpace import ModelSpace
+from ... import backend as F
+from ...backend import Operation, ComputationNode, get_layer_shortname
+from ..base import ModelBuilder
 
 
-class DAG:
-    """Construct a feed-forward neural network (FFNN) represented by a directed acyclic graph (DAG).
+class SparseFfnnModelBuilder(ModelBuilder):
+    """Construct a feed-forward neural network (FFNN) represented by a directed acyclic graph (DAG). By spliting dense connections 
+    into different DAG nodes, this sparsifies the interlayer connections.
 
     While a simple, linear and sequential neural network model is also a DAG, here we are trying to build more flexible,
     generalizable branching models. In other words, the primary use is to construct a block-sparse FFNN, to create an
@@ -85,11 +39,15 @@ class DAG:
     model : amber.backend.Model
         a constructed model using keras Model API
     """
-    def __init__(self, arc_seq, model_space, input_node, output_node,
+    def __init__(self, inputs_op, output_op, model_space, model_compile_dict,
                  with_skip_connection=True,
                  with_input_blocks=True, *args, **kwargs):
-        self.arc_seq = np.array(arc_seq)
+        input_node = self._get_input_nodes(inputs_op); output_node = self._get_output_node(output_op)
+        self.arc_seq = None
+        self._inputs_op = inputs_op
+        self._output_op = output_op
         self.model_space = model_space
+        self.model_compile_dict = model_compile_dict
         assert isinstance(self.model_space, ModelSpace), \
             TypeError(f"model_space must be of Type amber.architect.ModelSpace; got {type(self.model_space)}")
         self.num_layers = len(self.model_space)
@@ -104,7 +62,24 @@ class DAG:
         self.with_input_blocks = with_input_blocks
         self.model = None
         self.nodes = []
+    
+    @staticmethod
+    def _get_input_nodes(inputs_op):
+        """Convert input Operation to a list of ComputationNode"""
+        input_nodes = []
+        for node_op in inputs_op:
+            node = F.ComputationNode(node_op, node_name=node_op.Layer_attributes['name'])
+            input_nodes.append(node)
+        return input_nodes
 
+    @staticmethod
+    def _get_output_node(output_op):
+        """Convert output Operation to ComputationNode"""
+        if output_op is list:
+            raise Exception("DAG currently does not accept output_op in List")
+        output_node = F.ComputationNode(output_op, node_name='output')
+        return output_node
+    
     def _build_dag(self):
         if self.with_input_blocks:
             assert type(self.input_node) in (list, tuple), "If ``with_input_blocks=True" \
@@ -224,9 +199,21 @@ class DAG:
             nodes = [default_input_node] + nodes
         return nodes
 
+    def __call__(self, arc_seq, *args, **kwargs):
+        self.arc_seq = arc_seq
+        self.input_node = self._get_input_nodes(self._inputs_op); 
+        self.output_node = self._get_output_node(self._output_op)
+        try:
+            model = self._build_dag()
+            model.compile(**self.model_compile_dict)
+        except ValueError:
+            print(arc_seq)
+            raise Exception('above')
+        return model
+
 
 # these names are very confusing... FZZ 2022.5.8
-class InputBlockDAG(DAG):
+class MulInpSparseFfnnModelBuilder(SparseFfnnModelBuilder):
     """Add intermediate outputs to each level of network hidden layers. Based on DAG
 
     Compared to DAG, the difference is best illustrated by an example::
@@ -247,8 +234,8 @@ class InputBlockDAG(DAG):
 
     See also
     ----------
-    :class:`amber.modeler.dag.DAG`: the base class.
-    :class:`amber.modeler.dag.InputBlockAuxLossDAG`: add more auxillary outputs whenever two inputs meet.
+    :class:`amber.modeler.sparse_ffnn`: the base class.
+    :class:`amber.modeler.sparse_ffnn.MulInpAuxLossModelBuilder`: add more auxillary outputs whenever two inputs meet.
 
 
     Returns
@@ -338,7 +325,7 @@ class InputBlockDAG(DAG):
 
 
 # these names are very confusing... FZZ 2022.5.8
-class InputBlockAuxLossDAG(InputBlockDAG):
+class MulInpAuxLossModelBuilder(MulInpSparseFfnnModelBuilder):
     """Add intermediate outputs whenever two input blocks first meet and merge.
 
     Compared to InputBlockDAG, the difference is best illustrated by an example::
@@ -359,8 +346,7 @@ class InputBlockAuxLossDAG(InputBlockDAG):
 
     See also
     ---------
-    :class:`amber.modeler.dag.DAG`.
-    :class:`amber.modeler.dag.InputBlockDAG`.
+    :class:`amber.modeler.sparse_ffnn`
 
     Returns
     -------
@@ -487,3 +473,63 @@ class InputBlockAuxLossDAG(InputBlockDAG):
         return nodes
 
 
+class DenseAddOutputChild(F.Model):
+    """A modified Model class to facilitate multiple output predictions within AMBER 
+    manager handling
+    """
+    def __init__(self, nodes=None, block_loss_mapping=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if len(self.outputs) > 1:
+            # self.aux_loss_weight = 0.25 / (len(self.outputs)-1)
+            self.aux_loss_weight = 0.1
+        else:
+            self.aux_loss_weight = 0
+        self.nodes = nodes
+        self.block_loss_mapping = block_loss_mapping
+
+    def _expand_label(self, y):
+        if type(y) is not list:
+            y_ = [y] * len(self.outputs)
+        else:
+            assert len(y) == len(self.outputs), "if `y` is provided as list, it has to match the added " \
+                                                "output dimension; got len(y)=%i but len(outputs)=%i" % (
+                                                    len(y), len(self.outputs))
+            y_ = y
+        return y_
+
+    def compile(self, *args, **kwargs):
+        return super().compile(*args, **kwargs,
+                               loss_weights=[1.] + [self.aux_loss_weight] * (len(self.outputs) - 1))
+
+    def fit(self, x, y, *args, **kwargs):
+        if 'validation_data' in kwargs:
+            kwargs['validation_data'] = list(kwargs['validation_data'])
+            kwargs['validation_data'][1] = self._expand_label(kwargs['validation_data'][1])
+        y_ = self._expand_label(y)
+        return super().fit(x=x, y=y_, *args, **kwargs)
+
+    def evaluate(self, x, y, final_only=True, *args, **kwargs):
+        y_ = self._expand_label(y)
+        # the loss and metrics are distributed as
+        # total_loss, loss_0 (output), loss_1 (added_out1), loss_2 (added_out2), ..
+        # metrics_0 (output), metrics_1 (added_out1), ..
+        loss_and_metrics = super().evaluate(x, y_)
+        if final_only and len(self.outputs) > 1:
+            metrics = [
+                loss_and_metrics[(len(self.outputs) + 1):][i] for i in
+                range(0, len(loss_and_metrics[(len(self.outputs) + 1):]), len(self.outputs))
+            ]
+            loss = loss_and_metrics[1]
+            return [loss] + metrics
+        else:
+            return loss_and_metrics
+
+    def predict(self, x, final_only=True, *args, **kwargs):
+        if final_only:
+            y_pred = super().predict(x)
+            if len(self.outputs) > 1:
+                return y_pred[0]
+            else:
+                return y_pred
+        else:
+            return super().predict(x)

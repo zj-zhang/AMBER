@@ -7,12 +7,12 @@ lib_types = {
     'tensorflow_2': 'dynamic'
 }
 
-supernet_cls = ('EnasAnnDAG', 'EnasConv1dDAG', 'EnasConv1DwDataDescrption')
+supernet_cls = ('EnasAnnModelBuilder', 'EnasCnnModelBuilder', 'EnasCNNwDataDescriptor')
 
 if lib_types[mod_name] == 'static':
-    from . import static as mod
+    from . import tf1_supernet as mod
 elif lib_types[mod_name] == 'dynamic':
-    from . import dynamic as mod
+    from . import pytorch_supernet as mod
 else:
     raise Exception(f"Unsupported {mod_name} for supernet; must be in {list(lib_types.keys())}")
 

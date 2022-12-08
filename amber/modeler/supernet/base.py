@@ -1,6 +1,5 @@
 from ... import backend as F
 from ...backend import Operation, ComputationNode, get_layer_shortname
-from ..child import EnasCnnModel
 
 class BaseEnasConv1dDAG:
     def __init__(self,
@@ -144,39 +143,6 @@ class BaseEnasConv1dDAG:
 
     def __call__(self, arc_seq=None, **kwargs):
         return self._model(arc_seq, **kwargs)
-
-    def _model(self, arc, **kwargs):
-        if self.train_fixed_arc:
-            assert arc == self.fixed_arc or arc is None, "This DAG instance is built to train fixed arc, hence you " \
-                                                         "can only provide arc=None or arc=self.fixed_arc; check the " \
-                                                         "initialization of this instances "
-        if arc is None:
-            if self.train_fixed_arc:
-                model = EnasCnnModel(inputs=self.fixed_model_input,
-                                     outputs=self.fixed_model_output,
-                                     labels=self.fixed_model_label,
-                                     arc_seq=arc,
-                                     dag=self,
-                                     session=self.session,
-                                     name=self.name)
-
-            else:
-                model = EnasCnnModel(inputs=self.sample_model_input,
-                                     outputs=self.sample_model_output,
-                                     labels=self.sample_model_label,
-                                     arc_seq=arc,
-                                     dag=self,
-                                     session=self.session,
-                                     name=self.name)
-        else:
-            model = EnasCnnModel(inputs=self.fixed_model_input,
-                                 outputs=self.fixed_model_output,
-                                 labels=self.fixed_model_label,
-                                 arc_seq=arc,
-                                 dag=self,
-                                 session=self.session,
-                                 name=self.name)
-        return model
 
     def set_controller(self, controller):
         assert self.controller is None, "already has inherent controller, disallowed; start a new " \

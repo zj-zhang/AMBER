@@ -15,8 +15,8 @@ class ResidualCnnBuilder(ModelBuilder):
 
     Parameters
     ----------
-    inputs_op : amber.architect.modelSpace.Operation
-    output_op : amber.architect.modelSpace.Operation
+    inputs_op : amber.architect.modelSpace.F.Operation
+    output_op : amber.architect.modelSpace.F.Operation
     fc_units : int
         number of units in the fully-connected layer
     flatten_mode : {'GAP', 'Flatten'}
@@ -62,9 +62,9 @@ class ResidualCnnBuilder(ModelBuilder):
     def _convert(self, arc_seq, verbose=True):
         out_filters, pool_layers = self.get_out_filters(self.model_space)
 
-        inp = get_layer(x=None, op=self.inputs)
+        inp = F.get_layer(x=None, op=self.inputs)
         # this is assuming all choices have the same out_filters
-        stem_conv = Operation(
+        stem_conv = F.Operation(
             'conv1d',
             kernel_size=8,
             filters=out_filters[0],
@@ -136,7 +136,7 @@ class ResidualCnnBuilder(ModelBuilder):
             x = Dropout(self.dropout_rate)(x)
         x = Dense(units=self.fc_units, activation="relu")(x)
 
-        out = get_layer(x=x, op=self.outputs)
+        out = F.get_layer(x=x, op=self.outputs)
 
         model = Model(inputs=inp, outputs=out)
         return model

@@ -20,7 +20,7 @@ class TestKerasBuilder(testing_utils.TestCase):
         self.model_compile_dict = {'loss': 'binary_crossentropy', 'optimizer': 'sgd'}
         self.x = np.random.choice(2, 40).reshape((1, 10, 4))
         self.y = np.random.sample(1).reshape((1, 1))
-        self.modeler = modeler.KerasResidualCnnBuilder(
+        self.modeler = modeler.resnet.ResidualCnnBuilder(
             inputs_op=self.input_op,
             output_op=self.output_op,
             model_space=self.model_space,
@@ -91,17 +91,17 @@ class TestKerasGetLayer(testing_utils.TestCase):
 
 
 
-@parameterized_class(attrs=('dag_func',), input_values=[
-    ('DAG',),
-    ('InputBlockDAG',),
-    ('InputBlockAuxLossDAG',)
+@parameterized_class(attrs=('model_builder',), input_values=[
+    (modeler.sparse_ffnn.SparseFfnnModelBuilder,),
+    (modeler.sparse_ffnn.MulInpSparseFfnnModelBuilder,),
+    (modeler.sparse_ffnn.MulInpAuxLossModelBuilder,)
 ])
 class TestKerasDAG(testing_utils.TestCase):
     with_input_blocks = True
     with_skip_connection = True
     num_inputs = 4
     fit_epochs = 5
-    dag_func = 'InputBlockDAG'
+    model_builder = modeler.sparse_ffnn.SparseFfnnModelBuilder
     model_compile_dict = {'optimizer': 'adam', 'loss': 'mse', 'metrics': ['mae']}
 
     def setUp(self):
@@ -116,15 +116,14 @@ class TestKerasDAG(testing_utils.TestCase):
         self.traindata, self.validdata, self.testdata = self.get_data(seed=111)
 
     def get_model_builder(self):
-        model_fn = modeler.DAGModelBuilder(
-            self.inputs_op,
-            self.output_op,
+        model_fn = self.model_builder(
+            inputs_op=self.inputs_op,
+            output_op=self.output_op,
             num_layers=len(self.model_space),
             model_space=self.model_space,
             model_compile_dict=self.model_compile_dict,
             with_skip_connection=self.with_skip_connection,
-            with_input_blocks=self.with_input_blocks,
-            dag_func=self.dag_func)
+            with_input_blocks=self.with_input_blocks,)
         return model_fn
 
     def get_data(self, seed=111, blockify_inputs=True):

@@ -2,14 +2,13 @@ import pytorch_lightning as pl
 import torch
 from typing import Tuple, List, Union
 from collections import OrderedDict
-import os
 import copy
 from argparse import Namespace
 from typing import Optional, Union, List, Dict, Any
 from ... import backend as F
 from ..base import ModelBuilder
 from ..architectureDecoder import ResConvNetArchitecture
-from ..supernet.dynamic import ConcatLayer, GlobalAveragePooling1DLayer, get_torch_layer
+from ..supernet.pytorch_supernet import ConcatLayer, GlobalAveragePooling1DLayer, get_torch_layer
 
 
 class ResidualCnnBuilder(ModelBuilder):

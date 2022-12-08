@@ -10,7 +10,7 @@ from amber import modeler
 from amber import architect
 from amber import backend
 from amber import backend as F
-from amber.modeler.dag import EnasConv1dDAG
+from amber.modeler.supernet import EnasCnnModelBuilder
 import logging, sys
 logging.disable(sys.maxsize)
 import unittest
@@ -37,7 +37,7 @@ class TestEnasPyTorchConvDAG(testing_utils.TestCase):
         model_space, _ = testing_utils.get_example_conv1d_space(num_layers=12, num_pool=4)
         #self.controller = architect.GeneralController(model_space=model_space, buffer_type='ordinal', with_skip_connection=True, session=self.session)
         self.decoder = modeler.architectureDecoder.ResConvNetArchitecture(model_space=model_space)
-        self.dag = EnasConv1dDAG(model_space=model_space, input_node=input_op,  output_node=output_op, model_compile_dict={}, reduction_factor=2)
+        self.dag = EnasCnnModelBuilder(model_space=model_space, input_node=input_op,  output_node=output_op, model_compile_dict={}, reduction_factor=2)
 
     def test_1forward(self):
         x = torch.randn((10, 100, 4))

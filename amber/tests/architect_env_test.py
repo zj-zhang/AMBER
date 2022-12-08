@@ -35,9 +35,8 @@ def get_class_name(*args):
 
 
 @parameterized_class(attrs=('foo', 'manager_getter', 'controller_getter', 'modeler_getter', 'trainenv_getter'), input_values=[
-    #(0, architect.GeneralManager, architect.GeneralController, modeler.KerasResidualCnnBuilder, architect.ControllerTrainEnvironment),
     (0, architect.GeneralManager, architect.GeneralController, modeler.resnet.ResidualCnnBuilder, architect.ControllerTrainEnvironment),
-    (1, architect.EnasManager, architect.GeneralController, modeler.EnasCnnModelBuilder, architect.EnasTrainEnv)
+    (1, architect.EnasManager, architect.GeneralController, modeler.supernet.EnasCnnModelBuilder, architect.EnasTrainEnv)
 ], class_name_func=get_class_name)
 class TestEnvDryRun(testing_utils.TestCase):
     """Test dry-run will only aim to construct a train env class w/o examining its behaviors; however, this will
@@ -126,8 +125,8 @@ class TestEnvDryRun(testing_utils.TestCase):
 # https://github.com/zj-zhang/AMBER/blob/89cdd45f8803014cadb131159d8bea804bfefcbc/examples/AMBIENT/sim_data/zero_shot_nas.sim_data.py
 @parameterized_class(attrs=('manager_getter', 'controller_getter', 'modeler_getter', 'trainenv_getter'), input_values=[
     (architect.GeneralManager, architect.ZeroShotController, modeler.resnet.ResidualCnnBuilder, architect.MultiManagerEnvironment),
-    (architect.EnasManager, architect.ZeroShotController, modeler.EnasCnnModelBuilder, architect.MultiManagerEnvironment),
-    #(architect.GeneralManager, architect.ZeroShotController, modeler.KerasResidualCnnBuilder, architect.ParallelMultiManagerEnvironment),
+    (architect.EnasManager, architect.ZeroShotController, modeler.supernet.EnasCNNwDataDescriptor, architect.MultiManagerEnvironment),
+    #(architect.GeneralManager, architect.ZeroShotController, modeler.resnet.ResidualCnnBuilder, architect.ParallelMultiManagerEnvironment),
 ])
 @unittest.skipIf(F.mod_name!='tensorflow_1', "only implemented in TF1 backend")
 class TestMultiManagerEnv(TestEnvDryRun):
@@ -174,8 +173,7 @@ class TestMultiManagerEnv(TestEnvDryRun):
     def get_manager(self, sess, controller, dataset_key):
         model_fn = self.modeler_getter(
             # specific to EnasCnnModelBuilder; will be ignored by KerasResidualCnnModelBuilder
-            dag_func='EnasConv1DwDataDescrption',
-            dag_kwargs={
+            **{
                 'with_skip_connection': True,
                 'add_conv1_under_pool': False,
                 'stem_config': {

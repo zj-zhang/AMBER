@@ -20,9 +20,3 @@ class ModelBuilder:
     def __call__(self, model_states):
         raise NotImplementedError("Abstract method.")
 
-
-
-class GeneralChild(F.Model):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-

@@ -1,11 +1,11 @@
-from ..architect.modelSpace import Operation
-from .. import backend as F
-from ..backend import get_layer, Model  # type: ignore
+from ...architect.modelSpace import Operation
+from ... import backend as F
+from ...backend import get_layer, Model  # type: ignore
 import numpy as np
-from .base import ModelBuilder
-from .architectureDecoder import MultiIOArchitecture, ResConvNetArchitecture
+from ..base import ModelBuilder
+from ..architectureDecoder import MultiIOArchitecture, ResConvNetArchitecture
 import copy
-from ..architect.modelSpace import BranchedModelSpace
+from ...architect.modelSpace import BranchedModelSpace
 try:
     import tensorflow as tf
     from tensorflow.keras.layers import Concatenate, Add, Dense, Conv1D, MaxPooling1D, AveragePooling1D, \
