@@ -1,63 +1,82 @@
-from ...architect.modelSpace import Operation
 from ... import backend as F
 from ...backend import get_layer, Model  # type: ignore
 import numpy as np
 from ..base import ModelBuilder
-from ..architectureDecoder import MultiIOArchitecture, ResConvNetArchitecture
+from ..architectureDecoder import MultiIOArchitecture
 import copy
 from ...architect.modelSpace import BranchedModelSpace
-try:
-    import tensorflow as tf
-    from tensorflow.keras.layers import Concatenate, Add, Dense, Conv1D, MaxPooling1D, AveragePooling1D, \
-        GlobalAveragePooling1D, Flatten, BatchNormalization, LeakyReLU, Dropout, Activation, Lambda
-    from tensorflow.keras import regularizers
-    from tensorflow.keras import constraints
-    from tensorflow.keras.models import Model
-except ImportError:
-    pass
+import tensorflow as tf
+from tensorflow.keras.utils import multi_gpu_model
 
-class KerasModelBuilder(ModelBuilder):
-    def __init__(self, inputs_op, output_op, model_compile_dict,
-                 model_space=None, gpus=None, **kwargs):
+
+class SequentialModelBuilder(ModelBuilder):
+    def __init__(self, inputs_op, output_op, model_compile_dict, model_space, custom_objects=None, gpus=None, session=None, **kwargs):
         self.model_compile_dict = model_compile_dict
-        self.input_node = inputs_op
-        self.output_node = output_op
+        if isinstance(inputs_op, (tuple, list)):
+            assert len(inputs_op) == 1, "SequentialModelBuilder only support one inputs_op"
+            self.input_node = inputs_op[0]
+        elif isinstance(inputs_op, F.Operation):
+            self.input_node = inputs_op
+        else:
+            raise TypeError("unknown type for inputs_op")
+        if isinstance(output_op, (tuple, list)):
+            assert len(output_op) == 1, "SequentialModelBuilder only support one inputs_op"
+            self.output_node = output_op[0]
+        elif isinstance(output_op, F.Operation):
+            self.output_node = output_op
+        else:
+            raise TypeError("unknown type for output_node")
         self.model_space = model_space
+        self.custom_objects = custom_objects or {}
         self.gpus = gpus
+        self.session = session
+        assert self.session is None or isinstance(self.session, F.SessionType)
 
+    def build(self, model_states):
+        inp = get_layer(None, self.input_node, custom_objects=self.custom_objects)
+        x = inp
+        for i, state in enumerate(model_states):
+            if issubclass(type(state), int) or np.issubclass_(type(state), np.integer):
+                op = self.model_space[i][state]
+            elif isinstance(state, F.Operation) or callable(state):
+                op = state
+            else:
+                raise Exception(
+                    "cannot understand %s of type %s" % (state, type(state))
+                )
+            x = get_layer(x, op, custom_objects=self.custom_objects)
+
+        out = get_layer(x, self.output_node, custom_objects=self.custom_objects)
+        model = F.Model(inputs=inp, outputs=out)
+        return model
+    
     def __call__(self, model_states):
+        if self.session is not None:
+            F.set_session(self.session)
         if self.gpus is None or self.gpus == 1:
-            model = build_sequential_model(
-                model_states=model_states,
-                input_state=self.input_node,
-                output_state=self.output_node,
-                model_compile_dict=self.model_compile_dict,
-                model_space=self.model_space
-            )
+            model = self.build(model_states=model_states)
         elif isinstance(self.gpus, int):
-            model = build_multi_gpu_sequential_model(
-                model_states=model_states,
-                input_state=self.input_node,
-                output_state=self.output_node,
-                model_compile_dict=self.model_compile_dict,
-                model_space=self.model_space,
-                gpus=self.gpus
-            )
+            with F.device_scope('/cpu:0'):
+                vanilla_model = self.build(model_states)
+            model = multi_gpu_model(vanilla_model, gpus=gpus)
         elif isinstance(self.gpus, list):
             mirrored_strategy = tf.distribute.MirroredStrategy(
                 devices=self.gpus)
             with mirrored_strategy.scope():
-                model = build_sequential_model(
-                    model_states=model_states,
-                    input_state=self.input_node,
-                    output_state=self.output_node,
-                    model_compile_dict=self.model_compile_dict,
-                    model_space=self.model_space
-                )
+                model = self.build(model_states=model_states)
+        else:
+            raise ValueError(f"cannot parse gpus: {self.gpus}")
+        model_compile_dict = copy.deepcopy(self.model_compile_dict)
+        opt = model_compile_dict.pop("optimizer")
+        if callable(opt): opt = opt()
+        metrics = [
+            x() if callable(x) else x for x in model_compile_dict.pop("metrics", [])
+        ]
+        model.compile(optimizer=opt, metrics=metrics, **model_compile_dict)
         return model
 
 
-class KerasBranchModelBuilder(ModelBuilder):
+class SequentialBranchModelBuilder(ModelBuilder):
     def __init__(self, inputs_op, output_op, model_compile_dict,
                  model_space=None, with_bn=False, **kwargs):
         assert isinstance(model_space, BranchedModelSpace)
@@ -70,14 +89,14 @@ class KerasBranchModelBuilder(ModelBuilder):
         self._branch_to_layer = self.model_space.branch_to_layer
 
     def _build_branch(self, input_op, model_states, model_space):
-        if issubclass(type(input_op), Operation):
+        if issubclass(type(input_op), F.Operation):
             inp = get_layer(None, input_op)
         else:
             inp = input_op
         x = inp
         assert len(model_states) > 0
         for i, state in enumerate(model_states):
-            if issubclass(type(state), Operation):
+            if issubclass(type(state), F.Operation):
                 x = get_layer(x, state)
             elif issubclass(type(state), int) or np.issubclass_(type(state), np.integer):
                 assert model_space is not None, "if provided integer model_arc, must provide model_space in kwargs"
@@ -104,7 +123,7 @@ class KerasBranchModelBuilder(ModelBuilder):
         # merge branches
         if self.model_space.concat_op == 'concatenate':
             branch_merge = get_layer(
-                x=branches, op=Operation('concatenate'))
+                x=branches, op=F.Operation('concatenate'))
         else:
             raise ValueError(
                 'Model builder cannot understand model space concat op: %s' %
@@ -122,7 +141,7 @@ class KerasBranchModelBuilder(ModelBuilder):
         return model
 
 
-class KerasMultiIOModelBuilder(ModelBuilder):
+class SequentialMultiIOModelBuilder(ModelBuilder):
     """
     Note:
         Still not working if num_outputs=0
@@ -206,7 +225,7 @@ class KerasMultiIOModelBuilder(ModelBuilder):
                 raise Exception("Cannot use wsf")
 
             if len(this_inputs) > 1:
-                input_tensor = Concatenate()(this_inputs)
+                input_tensor = F.concat(this_inputs)
                 layer = get_layer(
                     x=input_tensor,
                     op=model_op,
@@ -242,90 +261,3 @@ class KerasMultiIOModelBuilder(ModelBuilder):
                 self.num_outputs)]
         model = Model(inputs=inputs, outputs=outputs)
         return model
-
-
-def build_sequential_model(model_states, input_state,
-                           output_state, model_compile_dict, **kwargs):
-    """
-    Parameters
-    ----------
-    model_states: a list of _operators sampled from operator space
-    input_state:
-    output_state: specifies the output tensor, e.g. Dense(1, activation='sigmoid')
-    model_compile_dict: a dict of `loss`, `optimizer` and `metrics`
-
-    Returns
-    ---------
-    Keras.Model
-    """
-    inp = get_layer(None, input_state)
-    x = inp
-    model_space = kwargs.pop("model_space", None)
-    for i, state in enumerate(model_states):
-        if issubclass(type(state), Operation):
-            x = get_layer(x, state)
-        elif issubclass(type(state), int) or np.issubclass_(type(state), np.integer):
-            assert model_space is not None, "if provided integer model_arc, must provide model_space in kwargs"
-            x = get_layer(x, model_space[i][state])
-        else:
-            raise Exception(
-                "cannot understand %s of type %s" %
-                (state, type(state)))
-    out = get_layer(x, output_state)
-    model = Model(inputs=inp, outputs=out)
-    if not kwargs.pop('stop_compile', False):
-        model.compile(**model_compile_dict)
-    return model
-
-
-def build_multi_gpu_sequential_model(
-        model_states, input_state, output_state, model_compile_dict, gpus=4, **kwargs):
-    try:
-        from tensorflow.keras.utils import multi_gpu_model
-    except Exception as e:
-        raise Exception(
-            "multi gpu not supported in keras. check your version. Error: %s" %
-            e)
-    with tf.device('/cpu:0'):
-        vanilla_model = build_sequential_model(
-            model_states,
-            input_state,
-            output_state,
-            model_compile_dict,
-            stop_compile=True,
-            **kwargs)
-    model = multi_gpu_model(vanilla_model, gpus=gpus)
-    model.compile(**model_compile_dict)
-    return model
-
-
-def build_sequential_model_from_string(
-        model_states_str, input_state, output_state, state_space, model_compile_dict):
-    """build a sequential model from a string of states
-    """
-    assert len(model_states_str) == len(state_space)
-    str_to_state = [[str(state) for state in state_space[i]]
-                    for i in range(len(state_space))]
-    try:
-        model_states = [state_space[i][str_to_state[i].index(
-            model_states_str[i])] for i in range(len(state_space))]
-    except ValueError:
-        raise Exception("model_states_str not found in state-space")
-    return build_sequential_model(
-        model_states, input_state, output_state, model_compile_dict)
-
-
-def build_multi_gpu_sequential_model_from_string(model_states_str, input_state, output_state, state_space,
-                                                 model_compile_dict):
-    """build a sequential model from a string of states
-    """
-    assert len(model_states_str) == len(state_space)
-    str_to_state = [[str(state) for state in state_space[i]]
-                    for i in range(len(state_space))]
-    try:
-        model_states = [state_space[i][str_to_state[i].index(
-            model_states_str[i])] for i in range(len(state_space))]
-    except ValueError:
-        raise Exception("model_states_str not found in state-space")
-    return build_multi_gpu_sequential_model(
-        model_states, input_state, output_state, model_compile_dict)

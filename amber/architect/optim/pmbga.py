@@ -16,7 +16,6 @@ import scipy.stats as ss
 from collections import defaultdict
 from ..buffer import Buffer, PopulationBuffer
 from ..modelSpace import ModelSpace, Operation
-from ...modeler.enasModeler import ModelBuilder
 
 # sort out more deps
 #from bpm_ml_blending.gen_kinetic_weight_mats import KineticModel

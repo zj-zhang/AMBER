@@ -2,7 +2,7 @@ from ...backend import mod_name, _gen_missing_api
 import sys
 
 
-sequential_cls = ('ResidualCnnBuilder', )
+sequential_cls = ('SequentialModelBuilder', 'SequentialBranchModelBuilder', 'SequentialMultiIOModelBuilder')
 
 if mod_name in ('tensorflow_1', 'tensorflow_2'):
     from . import keras_sequential as mod

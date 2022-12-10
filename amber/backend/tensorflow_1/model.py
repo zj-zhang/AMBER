@@ -151,7 +151,7 @@ def get_loss(loss, y_true, y_pred):
             loss_ = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=y_pred, labels=y_true)
         else:
             raise Exception("cannot understand string loss: %s" % loss)
-    elif type(loss) is callable:
+    elif callable(loss):
         loss_ = loss(y_true, y_pred)
     else:
         raise TypeError("Expect loss argument to be str or callable, got %s" % type(loss))

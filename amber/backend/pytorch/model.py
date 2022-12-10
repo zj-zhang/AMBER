@@ -207,14 +207,14 @@ def get_loss(loss, y_true=None, y_pred=None):
             if compute_loss:
                 loss_ = loss_(input=y_pred, target=y_true)
         elif loss == 'categorical_crossentropy':
-            pass
+            loss_ = torch.nn.CrossEntropyLoss(reduction='none')
         elif loss == 'binary_crossentropy':
             loss_ = torch.nn.BCELoss(reduction='none')
             if compute_loss:
                loss_ = loss_(input=y_pred, target=y_true.float())
         elif loss == 'nllloss_with_logits':
-            #loss_ = torch.nn.NLLLoss()(input=torch.nn.LogSoftmax(dim=-1)(y_pred), target=y_true.long())
-            loss_ = torch.nn.CrossEntropyLoss(reduction='none')
+            # loss computed with NLL and LogSoftmax is equivalent to categorical_crossentropy, but more efficient for sparse classes
+            loss_ = torch.nn.NLLLoss(reduction='none')
             if compute_loss:
                 loss_ = loss_(input=torch.nn.LogSoftmax(dim=-1)(y_pred), target=y_true.long())
         else:

@@ -71,7 +71,7 @@ class PseudoReward(PseudoCaller):
         return self.retr_val, [self.retr_val], None
 
 
-def get_example_conv1d_space(out_filters=8, num_layers=2, num_pool=1):
+def get_example_conv1d_space(out_filters=8, num_layers=4, num_pool=2):
     """Model space for stacking the same conv-pool-id layers"""
     model_space = architect.ModelSpace()
     expand_layers = [num_layers//num_pool-1 + i*(num_layers//num_pool) for i in range(num_pool-1)]
@@ -80,6 +80,7 @@ def get_example_conv1d_space(out_filters=8, num_layers=2, num_pool=1):
         model_space.add_layer(i, [
             architect.Operation('conv1d', filters=out_filters, kernel_size=7, activation='relu'),
             architect.Operation('maxpool1d', filters=out_filters, pool_size=5, strides=1),
+            architect.Operation('avgpool1d', filters=out_filters, pool_size=5, strides=1),
             architect.Operation('identity', filters=out_filters)
       ])
         if i in expand_layers:

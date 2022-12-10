@@ -200,9 +200,11 @@ class SparseFfnnModelBuilder(ModelBuilder):
         return nodes
 
     def __call__(self, arc_seq, *args, **kwargs):
+        # to re-build DAGs, reset self attributes each time got called
         self.arc_seq = arc_seq
-        self.input_node = self._get_input_nodes(self._inputs_op); 
+        self.input_node = self._get_input_nodes(self._inputs_op)
         self.output_node = self._get_output_node(self._output_op)
+        self.added_output_nodes = []
         try:
             model = self._build_dag()
             model.compile(**self.model_compile_dict)
@@ -246,6 +248,7 @@ class MulInpSparseFfnnModelBuilder(SparseFfnnModelBuilder):
     def __init__(self, add_output=True, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert self.with_input_blocks, "`InputBlockDAG` class only handles `with_input_blocks=True`"
+        self.added_output_nodes = []
         self.added_output_nodes = []
         self.add_output = add_output
 

@@ -559,88 +559,90 @@ class MultiIOController(MultiInputController):
     # override
     def _build_sampler(self):
         super()._build_sampler()
-        step_size = 1 + int(self.with_input_blocks) + int(self.with_skip_connection)
-        layer_hs = [self.sample_hidden_states[i][-1] for i in range(0, self.num_layers*step_size-1, step_size)]
-        layer_hs = tf.concat(layer_hs, axis=0)
-        output_probs = []
-        output_onehot = []
-        output_log_probs = []
-        for i in range(self.num_output_blocks):
-            logit = tf.matmul(layer_hs, self.w_soft['output'][i])
-            if self.temperature is not None:
-                logit /= self.temperature
-            if self.tanh_constant is not None:
-                logit = self.tanh_constant * tf.tanh(logit)
-            if self.output_block_unique_connection:
-                output_label = tf.reshape(tf.multinomial(tf.transpose(logit), 1), [-1])
-                output = tf.one_hot(output_label, self.num_layers)
-                prob = tf.nn.softmax(tf.squeeze(logit))
-                prob = tf.reshape(prob, [1, -1])
-                log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                    logits=tf.transpose(logit), labels=output_label)
-            else:
-                logit_ = tf.concat([-logit, logit], axis=1)
-                output = tf.squeeze(tf.multinomial(logit_, 1))
-                prob = tf.nn.sigmoid(logit_)
-                prob = tf.reshape(prob, [1, -1, 2])
-                log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                    logits=logit_, labels=output)
-            output_onehot.append(tf.cast(output, tf.int32))
-            output_probs.append(prob)
-            output_log_probs.append(log_prob)
+        if self.with_output_blocks:
+            step_size = 1 + int(self.with_input_blocks) + int(self.with_skip_connection)
+            layer_hs = [self.sample_hidden_states[i][-1] for i in range(0, self.num_layers*step_size-1, step_size)]
+            layer_hs = tf.concat(layer_hs, axis=0)
+            output_probs = []
+            output_onehot = []
+            output_log_probs = []
+            for i in range(self.num_output_blocks):
+                logit = tf.matmul(layer_hs, self.w_soft['output'][i])
+                if self.temperature is not None:
+                    logit /= self.temperature
+                if self.tanh_constant is not None:
+                    logit = self.tanh_constant * tf.tanh(logit)
+                if self.output_block_unique_connection:
+                    output_label = tf.reshape(tf.multinomial(tf.transpose(logit), 1), [-1])
+                    output = tf.one_hot(output_label, self.num_layers)
+                    prob = tf.nn.softmax(tf.squeeze(logit))
+                    prob = tf.reshape(prob, [1, -1])
+                    log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                        logits=tf.transpose(logit), labels=output_label)
+                else:
+                    logit_ = tf.concat([-logit, logit], axis=1)
+                    output = tf.squeeze(tf.multinomial(logit_, 1))
+                    prob = tf.nn.sigmoid(logit_)
+                    prob = tf.reshape(prob, [1, -1, 2])
+                    log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                        logits=logit_, labels=output)
+                output_onehot.append(tf.cast(output, tf.int32))
+                output_probs.append(prob)
+                output_log_probs.append(log_prob)
 
-        self.sample_probs.extend(output_probs)
-        self.sample_arc = tf.concat([self.sample_arc, tf.reshape(output_onehot, [-1])], axis=0)
-        self.sample_log_prob += tf.reduce_sum(output_log_probs)
-        #if self.output_block_diversity_weight is not None:
-        #    diversity = tf.math.reduce_std(output_probs, axis=0)
-        #    diversity = tf.reduce_mean(diversity)
-        #    self.skip_penaltys -= diversity * self.output_block_diversity_weight 
+            self.sample_probs.extend(output_probs)
+            self.sample_arc = tf.concat([self.sample_arc, tf.reshape(output_onehot, [-1])], axis=0)
+            self.sample_log_prob += tf.reduce_sum(output_log_probs)
+            #if self.output_block_diversity_weight is not None:
+            #    diversity = tf.math.reduce_std(output_probs, axis=0)
+            #    diversity = tf.reduce_mean(diversity)
+            #    self.skip_penaltys -= diversity * self.output_block_diversity_weight 
 
     # override
     def _build_trainer(self):
         super()._build_trainer()
-        output_arc_len = self.num_layers * self.num_output_blocks
-        self.input_arc += [tf.placeholder(shape=(None, 1), dtype=tf.int32, name='arc_{}'.format(i))
-                           for i in range(self.total_arc_len, self.total_arc_len + output_arc_len)]
-        self.total_arc_len += output_arc_len
+        if self.with_output_blocks:
+            output_arc_len = self.num_layers * self.num_output_blocks
+            self.input_arc += [tf.placeholder(shape=(None, 1), dtype=tf.int32, name='arc_{}'.format(i))
+                            for i in range(self.total_arc_len, self.total_arc_len + output_arc_len)]
+            self.total_arc_len += output_arc_len
 
-        step_size = 1 + int(self.with_input_blocks) + int(self.with_skip_connection) 
-        layer_hs = [self.train_hidden_states[i][-1] for i in range(0, self.num_layers*step_size-1, step_size)]
-        layer_hs = tf.transpose(tf.stack(layer_hs), [1, 0, 2])  # shape: batch, num_layers, lstm_size
-        output_probs = []
-        output_log_probs = []
-        for i in range(self.num_output_blocks):
-            logit = tf.matmul(layer_hs, self.w_soft['output'][i])
-            if self.temperature is not None:
-                logit /= self.temperature
-            if self.tanh_constant is not None:
-                logit = self.tanh_constant * tf.tanh(logit)
+            step_size = 1 + int(self.with_input_blocks) + int(self.with_skip_connection) 
+            layer_hs = [self.train_hidden_states[i][-1] for i in range(0, self.num_layers*step_size-1, step_size)]
+            layer_hs = tf.transpose(tf.stack(layer_hs), [1, 0, 2])  # shape: batch, num_layers, lstm_size
+            output_probs = []
+            output_log_probs = []
+            for i in range(self.num_output_blocks):
+                logit = tf.matmul(layer_hs, self.w_soft['output'][i])
+                if self.temperature is not None:
+                    logit /= self.temperature
+                if self.tanh_constant is not None:
+                    logit = self.tanh_constant * tf.tanh(logit)
 
-            output = self.input_arc[-output_arc_len::][self.num_layers * i: self.num_layers * (i + 1)]
-            output = tf.transpose(tf.squeeze(tf.stack(output), axis=-1))
-            if self.output_block_unique_connection:
-                logit = tf.transpose(logit, [0, 2, 1])
-                prob = tf.squeeze(tf.nn.softmax(logit), axis=1)
-                log_prob = tf.nn.softmax_cross_entropy_with_logits(
-                    logits=logit, labels=output)
-            else:
-                logit_ = tf.concat([-logit, logit], axis=2)
-                prob = tf.nn.sigmoid(logit_)
-                log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                    logits=logit_, labels=output)
-                log_prob = tf.reshape(tf.reduce_mean(log_prob, axis=-1), [-1, 1])
-            output_probs.append(prob)
-            output_log_probs.append(log_prob)
+                output = self.input_arc[-output_arc_len::][self.num_layers * i: self.num_layers * (i + 1)]
+                output = tf.transpose(tf.squeeze(tf.stack(output), axis=-1))
+                if self.output_block_unique_connection:
+                    logit = tf.transpose(logit, [0, 2, 1])
+                    prob = tf.squeeze(tf.nn.softmax(logit), axis=1)
+                    log_prob = tf.nn.softmax_cross_entropy_with_logits(
+                        logits=logit, labels=output)
+                else:
+                    logit_ = tf.concat([-logit, logit], axis=2)
+                    prob = tf.nn.sigmoid(logit_)
+                    log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                        logits=logit_, labels=output)
+                    log_prob = tf.reshape(tf.reduce_mean(log_prob, axis=-1), [-1, 1])
+                output_probs.append(prob)
+                output_log_probs.append(log_prob)
 
-        # for class attributes
-        # NOTE: entropys is not added for the output_blocks
-        self.onehot_probs.extend(output_probs)
-        # self.output_log_probs = output_log_probs
-        output_log_probs = tf.squeeze(tf.transpose(tf.stack(output_log_probs), [1, 0, 2]), axis=-1)
-        self.onehot_log_prob += tf.reduce_sum(output_log_probs, axis=1)
-        if self.output_block_diversity_weight is not None:
-            output_probs = tf.transpose(tf.stack(output_probs), [1, 0, 2]) # shape: (batch, num_out_blocks, num_layers)
-            diversity_penaltys = tf.math.reduce_std(output_probs, axis=1)  # std of probs. of out_blocks on each layer; connecting every out_block to one layer will be penalized
-            diversity_penaltys = tf.reduce_mean(diversity_penaltys, axis=1)
-            self.onehot_skip_penaltys -= diversity_penaltys * self.output_block_diversity_weight
+            # for class attributes
+            # NOTE: entropys is not added for the output_blocks
+            self.onehot_probs.extend(output_probs)
+            # self.output_log_probs = output_log_probs
+            output_log_probs = tf.squeeze(tf.transpose(tf.stack(output_log_probs), [1, 0, 2]), axis=-1)
+            self.onehot_log_prob += tf.reduce_sum(output_log_probs, axis=1)
+            if self.output_block_diversity_weight is not None:
+                output_probs = tf.transpose(tf.stack(output_probs), [1, 0, 2]) # shape: (batch, num_out_blocks, num_layers)
+                diversity_penaltys = tf.math.reduce_std(output_probs, axis=1)  # std of probs. of out_blocks on each layer; connecting every out_block to one layer will be penalized
+                diversity_penaltys = tf.reduce_mean(diversity_penaltys, axis=1)
+                self.onehot_skip_penaltys -= diversity_penaltys * self.output_block_diversity_weight

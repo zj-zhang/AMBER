@@ -6,6 +6,7 @@ from tensorflow.test import TestCase
 import gc
 
 session_cache = {}
+SessionType = tf.Session
 
 def Session():
     sess = tf.Session()
@@ -19,6 +20,8 @@ def clear_session():
     tf.keras.backend.clear_session()
     gc.collect()
 
+def get_session():
+    return tf.keras.backend.get_session()
 
 def init_all_params(sess, var_scope=None):
     var_scope = var_scope or ''

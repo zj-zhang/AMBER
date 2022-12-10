@@ -128,6 +128,9 @@ def stack(x) -> np.ndarray: # type:ignore
     pass
 
 # math
+def get_math_func(n: Union[str,Callable]) -> Callable: # type:ignore
+    pass
+
 def abs(x) -> np.ndarray: # type: ignore
     pass
 
@@ -198,6 +201,9 @@ def multinomial(logits, num_samples) -> np.ndarray: # type:ignore
     pass
 
 # session
+def SessionType(): # type:ignore
+    pass
+
 def Session(): # type:ignore
     pass
 
@@ -211,6 +217,9 @@ def init_all_params(sess, var_scope=None) -> None: # type:ignore
     pass
 
 def set_session(): # type:ignore
+    pass
+
+def get_session(): # type:ignore
     pass
 
 def clear_session(): # type:ignore

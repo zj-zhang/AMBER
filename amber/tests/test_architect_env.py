@@ -215,7 +215,7 @@ class TestMultiManagerEnv(TestEnvDryRun):
         return manager
 
     def test_build(self):
-        is_enas = self.modeler_getter in (modeler.EnasAnnModelBuilder, modeler.EnasCnnModelBuilder)
+        is_enas = self.modeler_getter in (modeler.supernet.EnasAnnModelBuilder, modeler.supernet.EnasCnnModelBuilder)
         sess = F.Session()
         F.set_session(sess)
         controller = self.get_controller(sess=sess)

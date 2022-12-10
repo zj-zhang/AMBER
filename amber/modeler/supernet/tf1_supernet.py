@@ -8,6 +8,7 @@ import h5py
 import datetime
 from amber.architect.commonOps import batchify, numpy_shuffle_in_unison
 from tqdm import trange, tqdm
+from .base import BaseEnasConv1dDAG
 from ... import backend as F
 from ...backend import Operation
 
@@ -87,7 +88,7 @@ class EnasAnnModelBuilder:
         else:
             self.output_node = output_node
         if session is None:
-            self.session = F.Session()
+            self.session = F.get_session()
         else:
             self.session = session
         self.model_compile_dict = model_compile_dict
@@ -122,14 +123,8 @@ class EnasAnnModelBuilder:
         # for compatability with EnasConv1d
         self.train_fixed_arc = False
 
-    def __call__(self, arc_seq=None, node_builder=None, *args, **kwargs):
+    def __call__(self, arc_seq=None, *args, **kwargs):
         model = self._model(arc_seq)
-        if node_builder is not None and arc_seq is not None:
-            nb = node_builder(arc_seq)
-            nodes = nb._init_nodes()
-            nodes = nb._remove_disconnected_nodes(nodes)
-            nodes = nb.input_node + nodes + [nb.output_node]
-            model.nodes = nodes
         model.compile(**self.model_compile_dict)
         return model
 
@@ -299,14 +294,14 @@ class EnasAnnModelBuilder:
         # otherwise, need to connect to feature model output
         else:
             # TODO: for now, only use data_pipe for sample_arc
-            if self.feature_model.pseudo_inputs_pipe is None or type(arc_seq) is list:
+            #if self.feature_model.pseudo_inputs_pipe is None or type(arc_seq) is list:
                 # print('='*80)
                 # print('used placeholder')
-                inputs = self.feature_model.pseudo_inputs
-            else:
-                # print('='*80)
-                # print('used data pipe')
-                inputs = self.feature_model.pseudo_inputs_pipe
+            inputs = self.feature_model.pseudo_inputs
+            #else:
+            #    # print('='*80)
+            #    # print('used data pipe')
+            #    inputs = self.feature_model.pseudo_inputs_pipe
         for layer_id in range(self.num_layers):
             w = self.w[layer_id]
             b = self.b[layer_id]
@@ -392,34 +387,29 @@ class EnasAnnModelBuilder:
                                         F.ones((1, self._child_output_size[i]), dtype=F.int32))
                 w = F.where(F.cast(output_mask, F.bool), x=self.w_out[i], y=F.fill(F.shape(self.w_out[i]), 0.))
                 model_output.append(
-                    F.get_layer(
-                        x=F.matmul(layer_outputs_, w) + self.b_out[i], 
-                        op=Operation("Activation", activation=self._child_output_func[i])
-                    ))
+                    F.get_math_func(self._child_output_func[i])(
+                        F.matmul(layer_outputs_, w) + self.b_out[i])
+                    )
                 w_masks.append((w, self.b_out[i]))
+        # no output block
         else:
             model_output = [
-                F.get_layer(
-                    x=F.matmul(x, self.w_out[i]) + self.b_out[i],
-                    op=Operation("Activation", activation=self._child_output_func[i]))
-                            for i in range(len(self.output_node))]
+                F.get_math_func(self._child_output_func[i])(F.matmul(x, self.w_out[i]) + self.b_out[i])
+                for i in range(len(self.output_node))
+                ]
         return model_output, w_masks, layer_outputs, dropout_placeholders
 
     def _layer(self, w, b, inputs, layer_id, use_dropout=True):
-        layer = F.get_layer(
-            x=F.matmul(inputs, w) + b,
-            op=Operation("Activation", activation=self._actv_fn))
-        layer = F.get_layer(x=layer, op=Operation('Dropout', rate=self.drop_probs[layer_id], training=use_dropout))
+        layer = F.get_math_func(self._actv_fn)(F.matmul(inputs, w) + b)
+        if use_dropout:
+            layer = F.get_math_func('dropout')(layer, rate=self.drop_probs[layer_id])
         return layer, None
 
     def _model(self, arc):
         if self.feature_model is None:
             child_model_input = self.child_model_input
         else:
-            if self.feature_model.pseudo_inputs_pipe is None or arc is not None:
-                child_model_input = self.feature_model.x_inputs
-            else:
-                child_model_input = self.child_model_input_pipe
+            child_model_input = self.feature_model.x_inputs
         if arc is None:
             model = EnasAnnModel(inputs=child_model_input, outputs=self.sample_model_output,
                                  arc_seq=arc,
@@ -454,14 +444,7 @@ class EnasAnnModelBuilder:
         var_scope = var_scope or self.name
 
         with F.variable_scope(var_scope):
-            if self.feature_model is None or self.feature_model.pseudo_inputs_pipe is None:
-                labels = self.child_model_label
-            else:
-                # TODO: for now, only use data_pipe for sample_arc
-                if use_pipe:
-                    labels = self.child_model_label_pipe
-                else:
-                    labels = self.child_model_label
+            labels = self.child_model_label
 
             # TODO: process loss_weights
             loss_weights = self.model_compile_dict['loss_weights'] if 'loss_weights' in self.model_compile_dict else None
@@ -487,7 +470,7 @@ class EnasAnnModelBuilder:
                 raise Exception("expect loss to be str, list, dict or callable; got %s" % loss)
             trainable_var = [var for var in F.trainable_variables(scope=var_scope)]
             if self.feature_model_trainable:
-                feature_model_trainable_var = [var for var in F.trainable_variables(scope=self.feature_model.name)]
+                feature_model_trainable_var = self.feature_model.trainable_var
                 assert len(feature_model_trainable_var) > 0, "You asked me to train featureModel but there is no trainable " \
                                                              "variables in featureModel"
                 trainable_var += feature_model_trainable_var
@@ -507,19 +490,12 @@ class EnasAnnModelBuilder:
             regularization_penalty += l1_regularization_penalty + l2_regularization_penalty
 
             # default settings used from enas
-            if self.child_train_op_kwargs is None:
-                # more sensible default values
-                train_op, lr, optimizer_ = F.get_train_op(
-                    loss=loss_,
-                    variables=trainable_var,
-                    optimizer=optimizer)
-            # user specific settings; useful when training the final searched arc
-            else:
-                train_op, lr, optimizer_ = F.get_train_op(
-                    loss=loss_,
-                    variables=trainable_var,
-                    optimizer=optimizer,
-                    **self.child_train_op_kwargs)
+            #if self.child_train_op_kwargs is None:
+            assert self.child_train_op_kwargs is None, "legacy child_train_op_kwargs to tf1_supernet.EnasAnnModelBuilder is no longer supported"
+            train_op, lr, optimizer_ = F.get_train_op(
+                loss=loss_,
+                variables=trainable_var,
+                optimizer=optimizer)
             if metrics is None:
                 metrics = []
             else:
@@ -544,7 +520,7 @@ class EnasAnnModelBuilder:
         return
 
 
-class EnasCnnModelBuilder:
+class EnasCnnModelBuilder(BaseEnasConv1dDAG):
     def __init__(self,
                  model_space,
                  inputs_op,
@@ -589,101 +565,20 @@ class EnasCnnModelBuilder:
         name: str
             a name identifier for this instance
         """
-        input_node = inputs_op
-        output_node = output_op
-        assert type(input_node) in (Operation, F.TensorType) or len(
-            input_node) == 1, "EnasCnnDAG currently does not accept List type of inputs"
-        assert type(output_node) in (Operation, F.TensorType) or len(
-            output_node) == 1, "EnasCnnDAG currently does not accept List type of outputs"
-        self.input_node = input_node
-        self.output_node = output_node
-        self.num_layers = len(model_space)
-        self.model_space = model_space
-        self.model_compile_dict = model_compile_dict
-        self.session = session
-        self.l1_reg = l1_reg
-        self.l2_reg = l2_reg
-        self.with_skip_connection = with_skip_connection
-        self.controller = None
-        if controller is not None:
-            self.set_controller(controller)
-        self.child_train_op_kwargs = child_train_op_kwargs
-        self.stem_config = stem_config or {}
-
-        self.name = name
-        self.batch_size = batch_size
-        self.batch_dim = None
-        self.reduction_factor = reduction_factor
-        self.keep_prob = keep_prob
-        self.data_format = data_format
-        self.out_filters = None
-        self.branches = []
-        self.is_initialized = False
-
-        self.add_conv1_under_pool = kwargs.get("add_conv1_under_pool", True)
-
-        self.train_fixed_arc = train_fixed_arc
-        self.fixed_arc = fixed_arc
-        if self.train_fixed_arc:
-            assert self.fixed_arc is not None, "if train_fixed_arc=True, must provide the architectures in `fixed_arc`"
-            assert controller is None, "if train_fixed_arc=True, must not provide controller"
-            self.skip_max_depth = None
-
-        self._verify_args()
-        self.vars = []
-        if controller is None:
-            self.controller = None
-            print("this EnasDAG instance did not connect a controller; pleaes make sure you are only training a fixed "
-                  "architecture.")
-        else:
-            self.controller = controller
-            self._build_sample_arc()
-        self._build_fixed_arc()
+        super().__init__(model_space=model_space, input_node=inputs_op, output_node=output_op, model_compile_dict=model_compile_dict,
+            session=session, train_fixed_arc=train_fixed_arc, fixed_arc=fixed_arc, name=name,
+            with_skip_connection=with_skip_connection, batch_size=batch_size, keep_prob=keep_prob,
+            l1_reg=l1_reg, l2_reg=l2_reg,
+            reduction_factor=reduction_factor,
+            controller=controller,
+            stem_config=stem_config,
+            data_format=data_format,
+            **kwargs
+        )
         F.init_all_params(sess=self.session)
 
     def _verify_args(self):
-        out_filters = []
-        pool_layers = []
-        for layer_id in range(len(self.model_space)):
-            layer = self.model_space[layer_id]
-            this_out_filters = [l.Layer_attributes['filters'] for l in layer]
-            assert len(
-                set(this_out_filters)) == 1, "EnasConv1dDAG only supports one identical number of filters per layer," \
-                                             "but found %i different number of filters in layer %s" % \
-                                             (len(set(this_out_filters)), layer)
-            if len(out_filters) and this_out_filters[0] != out_filters[-1]:
-                pool_layers.append(layer_id - 1)
-
-            out_filters.append(this_out_filters[0])
-        self.out_filters = out_filters
-        self.pool_layers = pool_layers
-
-        # if train fixed arc, avoid building unused skip connections
-        # and verify the input fixed_arc
-        if self.train_fixed_arc:
-            assert self.fixed_arc is not None
-            skip_max_depth = {}
-            start_idx = 0
-            for layer_id in range(len(self.model_space)):
-                skip_max_depth[layer_id] = layer_id
-                operation = self.fixed_arc[start_idx]
-                total_choices = len(self.model_space[layer_id])
-                assert 0 <= operation < total_choices, "Invalid operation selection: layer_id=%i, " \
-                                                       "operation=%i, model space len=%i" % (
-                                                       layer_id, operation, total_choices)
-                if layer_id > 0:
-                    skip_binary = self.fixed_arc[(start_idx + 1):(start_idx + 1 + layer_id)]
-                    skip = [i for i in range(layer_id) if skip_binary[i] == 1]
-                    for d in skip:
-                        skip_max_depth[d] = layer_id
-
-                start_idx += 1 + layer_id
-            print('-' * 80)
-            print(skip_max_depth)
-            self.skip_max_depth = skip_max_depth
-
-        if type(self.input_node) is list:
-            self.input_node = self.input_node[0]
+        super()._verify_args()
         self.input_ph = F.placeholder(shape=[self.batch_dim] + list(self.input_node.Layer_attributes['shape']),
                                        name='child_input_placeholder',
                                        dtype=F.float32)
@@ -731,25 +626,11 @@ class EnasCnnModelBuilder:
                                  name=self.name)
         return model
 
-    def set_controller(self, controller):
-        assert self.controller is None, "already has inherent controller, disallowed; start a new " \
-                                        "EnasCnnDAG instance if you want to connect another controller"
-        self.controller = controller
-        self.sample_arc = controller.sample_arc
-
     def _build_sample_arc(self, input_tensor=None, label_tensor=None, **kwargs):
         """
         Notes:
             I left `input_tensor` and `label_tensor` so that in the future some pipeline
             tensors can be connected to the model, instead of the placeholders as is now.
-
-        Args:
-            input_tensor:
-            label_tensor:
-            **kwargs:
-
-        Returns:
-
         """
         var_scope = self.name
         is_training = kwargs.pop('is_training', True)
@@ -779,14 +660,6 @@ class EnasCnnModelBuilder:
         Notes:
             I left `input_tensor` and `label_tensor` so that in the future some pipeline
             tensors can be connected to the model, instead of the placeholders as is now.
-
-        Args:
-            input_tensor:
-            label_tensor:
-            **kwargs:
-
-        Returns:
-
         """
         var_scope = self.name
         if self.train_fixed_arc:
@@ -858,15 +731,17 @@ class EnasCnnModelBuilder:
                 raise Exception("expect loss to be str, list, dict or callable; got %s" % loss)
             trainable_var = [var for var in F.trainable_variables(scope=var_scope)]
             regularization_penalty = 0.
+            regularizable_vars = [var for var in trainable_var if F.get_param_name(var).split('/')[-1] in ('kernel:0', 'w:0', 'w_out:0' 'weight:0')]
             if self.l1_reg > 0:
-                l1_regularization_penalty = self.l1_reg * F.reduce_mean([F.reduce_mean(F.abs(var[0])) for var in trainable_var if
-                                                                                    F.get_param_name(var).split('/')[-1] == 'w:0'])
+                assert len(regularizable_vars) > 0, "no parameter to apply regularization"
+                l1_regularization_penalty = self.l1_reg * F.reduce_mean([F.reduce_mean(F.abs(var)) for var in regularizable_vars] )
                 loss_ += l1_regularization_penalty
             else:
                 l1_regularization_penalty = 0.
 
             if self.l2_reg > 0:
-                l2_regularization_penalty = self.l2_reg * F.reduce_mean([F.reduce_mean(F.pow(var[0], 2)) for var in trainable_var if F.get_param_name(var).split('/')[-1] == 'w:0'])
+                assert len(regularizable_vars) > 0, "no parameter to apply regularization"
+                l2_regularization_penalty = self.l2_reg * F.reduce_mean([F.reduce_mean(F.pow(var, 2)) for var in regularizable_vars])
                 loss_ += l2_regularization_penalty
             else:
                 l2_regularization_penalty = 0.
@@ -874,22 +749,12 @@ class EnasCnnModelBuilder:
             regularization_penalty += l1_regularization_penalty + l2_regularization_penalty
 
             if is_training:
-                # default settings used from enas
-                if self.child_train_op_kwargs is None:
-                    # more sensible default values
-                    train_op, lr, optimizer_ = F.get_train_op( 
-                        loss=loss_,
-                        variables=trainable_var,
-                        optimizer=optimizer,
-                        train_step=self.train_step)
-                # user specific settings; useful when training the final searched arc
-                else:
-                    train_op, lr, optimizer_ = F.get_train_op(  # get_train_ops(
-                        loss=loss_,
-                        variables=trainable_var,
-                        optimizer=optimizer,
-                        train_step=self.train_step,
-                        **self.child_train_op_kwargs)
+                assert self.child_train_op_kwargs is None, "legacy child_train_op_kwargs is not supported"
+                train_op, lr, optimizer_ = F.get_train_op( 
+                    loss=loss_,
+                    variables=trainable_var,
+                    optimizer=optimizer,
+                    train_step=self.train_step)
             else:
                 train_op, lr, optimizer_ = None, None, None
             if metrics is None:
@@ -989,7 +854,7 @@ class EnasCnnModelBuilder:
         actual_data_format = 'channels_first' if channel_num == 1 else 'channels_last'
 
         with F.variable_scope("path1_conv"):
-            x = F.get_layer(x=x, op=Operation('Conv1D', filters=out_filters, kernel_size=1, strides=1, padding="same"))
+            x = F.get_layer(x=layer, op=Operation('Conv1D', filters=out_filters, kernel_size=1, strides=1, padding="same"))
             x = F.get_layer(x=x, op=Operation('MaxPooling1D', pool_size=self.reduction_factor, strides=self.reduction_factor, padding="same", data_format=actual_data_format))
         return x
 
@@ -1083,9 +948,8 @@ class EnasCnnModelBuilder:
             x=inputs, 
             op=F.Operation('Conv1D', filters=filters, kernel_size=kernel_size, strides=1, padding="SAME", dilation_rate=dilation))
         x = F.get_layer(x=x, op=F.Operation('BatchNormalization', training=is_training))
-        b = F.create_parameter("b", shape=[1], initializer='zeros')
         x = F.get_layer(
-            x=x+b,
+            x=x,
             op=Operation("Activation", activation=activation_fn))
         return lambda: x
 
@@ -1100,15 +964,12 @@ class EnasCnnModelBuilder:
         else:
             raise Exception("Unknown data format: %s" % self.data_format)
 
-        if self.add_conv1_under_pool:
-            with F.variable_scope("conv_1"):
-                x = F.get_layer(
-                    x=inputs, 
-                    op=F.Operation('Conv1D', filters=filters, kernel_size=1, strides=1, padding="same"))
-                x = F.get_layer(x=x, op=F.Operation('BatchNormalization', training=is_training))
-                x = F.get_layer(x=x, op=F.Operation('Activation', activation="relu"))
-        else:
-            x = inputs
+        with F.variable_scope("conv_1"):
+            x = F.get_layer(
+                x=inputs, 
+                op=F.Operation('Conv1D', filters=filters, kernel_size=1, strides=1, padding="same"))
+            x = F.get_layer(x=x, op=F.Operation('BatchNormalization', training=is_training))
+            x = F.get_layer(x=x, op=F.Operation('Activation', activation="relu"))
         with F.variable_scope("pool"):
             if avg_or_max == "avg":
                 x = F.get_layer(
@@ -1281,6 +1142,7 @@ class EnasAnnModel:
         if self.arc_seq is None:
             feed_dict = {}
         else:
+            assert len(self.arc_seq) == len(self.dag.input_arc), f"got {len(self.arc_seq)} length arc_seq as input, but expect {len(self.dag.input_arc)} length input_arc"
             feed_dict = {self.dag.input_arc[i]: self.arc_seq[i] for i in range(len(self.arc_seq))}
         if x is not None:
             for i in range(len(self.inputs)):
@@ -1426,65 +1288,10 @@ class EnasAnnModel:
             # print('='*80); print('predict with placeholder')
             return self.predict_ph(*args, **kwargs)
 
-    def fit_pipe(self, x, y, batch_size=None, nsteps=None, epochs=1, verbose=1, callbacks=None, validation_data=None):
-        hist = {'loss': [], 'val_loss': []}
-        assert epochs > 0
-        assert self.dag.feature_model is not None
-        feature_model = self.dag.feature_model
-        if batch_size is None:
-            batch_size = feature_model.batch_size
-        # overwrite
-        # batch_size = feature_model.batch_size
-        total_len = len(y[0]) if type(y) is list else len(y)
-        nsteps = total_len // batch_size
-        if type(x) is list:
-            x_ = x
-        else:
-            x_ = [x]
-        if type(y) is list:
-            y_ = y
-        else:
-            y_ = [y]
-        for epoch in range(epochs):
-            if self.reinitialize_train_pipe:
-                self._make_tf_dataset(x_, y_)
-                self.reinitialize_train_pipe = False
-            t = trange(nsteps) if verbose == 1 else range(nsteps)
-            metrics_val = []
-            curr_loss = None
-            for _ in t:
-                try:
-                    feed_dict = self._make_feed_dict()
-                    _, batch_loss, batch_metrics = self.session.run([self.train_op, self.loss, self.metrics],
-                                                                    feed_dict=feed_dict)
-                    if len(metrics_val):
-                        metrics_val = list(map(lambda x: x[0] * 0.95 + x[1] * 0.05, zip(metrics_val, batch_metrics)))
-                    else:
-                        metrics_val = batch_metrics
-                    curr_loss = batch_loss if curr_loss is None else curr_loss * 0.95 + batch_loss * 0.05
-                    if verbose == 1:
-                        t.set_postfix(loss="%.4f" % curr_loss)
-                except Exception as e:
-                    self.reinitialize_train_pipe = True
-                    warnings.warn("train pipe out of range; %s"%e)
-                    break
-
-            hist['loss'].append(curr_loss)
-            if validation_data:
-                val_loss_and_metrics = self.evaluate(validation_data[0], validation_data[1])
-                hist['val_loss'].append(val_loss_and_metrics[0])
-
-            if verbose:
-                if validation_data:
-                    print("Epoch %i, loss=%.3f, metrics=%s; val=%s" % (
-                    epoch, curr_loss, metrics_val, val_loss_and_metrics))
-                else:
-                    print("Epoch %i, loss=%.3f, metrics=%s" % (epoch, curr_loss, metrics_val))
-        return hist
-
     def fit_ph(self, x, y, batch_size=None, nsteps=None, epochs=1, verbose=1, callbacks=None, validation_data=None):
         hist = {'loss': [], 'val_loss': []}
         total_len = len(y[0]) if type(y) is list else len(y)
+        batch_size = batch_size or 32
         if nsteps is None:
             nsteps = total_len // batch_size
         callback_list = F.get_callback('CallbackList')(callbacks=callbacks)
@@ -1560,8 +1367,6 @@ class EnasAnnModel:
         else:
             x_ = x
         feature_model = self.dag.feature_model
-        # if batch_size is None:
-        #    batch_size = feature_model.batch_size
         # overwrite
         batch_size = feature_model.batch_size
         y_pred_ = []
@@ -1709,7 +1514,7 @@ class EnasCnnModel:
         self.loss_weights = None
         self.is_compiled = False
 
-        self.use_pipe = use_pipe or False
+        self.use_pipe = False if use_pipe is None else use_pipe
         self.reinitialize_train_pipe = None
 
         # added 2020.5.17: add default feed-dict for sampled architecture, to account for data description NAS

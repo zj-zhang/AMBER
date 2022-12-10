@@ -1,5 +1,26 @@
 import tensorflow as tf
 
+def get_math_func(n):
+    if callable(n):
+        return n
+    elif type(n) is str:
+        if n.lower() == 'relu':
+            return tf.nn.relu
+        elif n.lower() == 'sigmoid':
+            return tf.sigmoid
+        elif n.lower() == 'tanh':
+            return tf.tanh
+        elif n.lower() == 'softmax':
+            return tf.nn.softmax
+        elif n.lower() == 'linear':
+            return lambda x:x
+        elif n.lower() == 'dropout':
+            return tf.nn.dropout
+        else:
+            raise ValueError("unknown string math func: %s" % n)
+    else:
+        raise TypeError(f"unknown type math func: {n}")
+
 def abs(x):
     return tf.abs(x)
 

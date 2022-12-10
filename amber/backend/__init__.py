@@ -11,7 +11,7 @@ from .amber_ops import *
 
 _enabled_apis = set()
 
-logger = logging.getLogger("amb-core")
+logger = logging.getLogger("amber")
 
 
 def _gen_missing_api(api, mod_name):

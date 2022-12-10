@@ -114,8 +114,8 @@ class ResidualCnnBuilder(ModelBuilder):
                         self.factorized_reduction_layer(
                             layer,
                             out_filters[layer_id + 1] * self.wsf,
-                            name="pool_at_%i_from_%i" % (layer_id, i)),
-                            reduction_factor = self.reduction_factor
+                            name="pool_at_%i_from_%i" % (layer_id, i),
+                            reduction_factor = self.reduction_factor)
                     )
                 if verbose:
                     print("pooled@%i, %s" % (layer_id, pooled_layers))

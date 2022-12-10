@@ -5,7 +5,7 @@ Modeler is an interface class that interacts outside with manager, and inside co
 """
 
 from . import resnet, supernet, sequential, sparse_ffnn
-
+from . import architectureDecoder
 
 __all__ = [
     'resnet',

@@ -15,6 +15,8 @@ def placeholder(shape, dtype=None, name=None):
     dtype = dtype or tf.float32
     return tf.placeholder(shape=shape, dtype=dtype, name=name)
 
+def get_param_name(var):
+    return var.name
 
 def one_hot(tensor, num_classes=-1):
     return tf.one_hot(indices=tensor, depth=num_classes)

@@ -175,7 +175,7 @@ class GeneralController(BaseController):
     def __str__(self):
         s = "GeneralController '%s' for %s" % (self.name, self.model_space)
         return s
-    
+
     def _build_sampler(self):
         arc_seq, probs_, log_probs, hidden_states, entropys, skip_count, skip_penaltys = self.forward(input_arc=None)
         self.sample_hidden_states = hidden_states
@@ -188,8 +188,6 @@ class GeneralController(BaseController):
         self.sample_log_prob = F.reduce_sum(log_probs)
         skip_count = F.stack(skip_count)
         self.skip_count = F.reduce_sum(skip_count)
-        skip_penaltys = F.stack(skip_penaltys)
-        self.skip_penaltys = F.reduce_mean(skip_penaltys)
         self.sample_probs = probs_
     
     def _build_trainer(self, input_arc):

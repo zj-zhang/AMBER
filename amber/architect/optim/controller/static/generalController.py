@@ -190,8 +190,6 @@ class GeneralController(BaseController):
         self.sample_log_prob = F.reduce_sum(log_probs)
         skip_count = F.stack(skip_count)
         self.skip_count = F.reduce_sum(skip_count)
-        skip_penaltys = F.stack(skip_penaltys)
-        self.skip_penaltys = F.reduce_mean(skip_penaltys)
         self.sample_probs = probs_
 
     def _build_trainer(self):

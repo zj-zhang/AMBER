@@ -1,8 +1,12 @@
+"""
+For managing global sessions and graphs, see also: https://github.com/tensorflow/tensorflow/blob/v1.15.0/tensorflow/python/framework/ops.py#L5108-L5141
+"""
 import torch
 from torch.testing._internal.common_utils import TestCase as torch_testCase
 import numpy as np
 from . import cache
 
+SessionType = cache.compute_graph
 
 def Session(*args):
     return cache.compute_graph()

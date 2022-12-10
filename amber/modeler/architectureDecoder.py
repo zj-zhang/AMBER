@@ -8,6 +8,7 @@ Classes for breaking down an architecture sequence into a more structured format
 # Date : 2020.8.2; revised 2020-10-06
 
 import numpy as np
+import copy
 
 
 def get_decoder(m):
@@ -25,14 +26,19 @@ def get_decoder(m):
 
 
 class MultiIOArchitecture:
-    def __init__(self, num_layers, num_inputs, num_outputs):
-        #self.model_space = model_space
-        #self.num_layers = len(model_space)
-        self.num_layers = num_layers
+    def __init__(self, model_space, num_inputs, num_outputs):
+        self.model_space = model_space
+        self.num_layers = len(model_space)
         self.num_inputs = num_inputs
         self.num_outputs = num_outputs
 
     def decode(self, arc_seq):
+        """arc_seq is ordered, in each layer, as
+        [op, inp_0, inp_1, ..., con_0, con_1, ...,] X n_layers
+        [ 
+            [layer0_to_out0, layer1_to_out0, ..., ] X n_outs
+        ]
+        """
         start_idx = 0
         operations = []
         inputs = []
@@ -51,6 +57,30 @@ class MultiIOArchitecture:
         inputs = np.asarray(inputs)
         outputs = np.asarray(arc_seq[start_idx::]).reshape((-1, self.num_layers))
         return operations, inputs, skips, outputs
+
+    def encode(self, operations, inputs, skips, outputs):
+        operations_ = copy.copy(operations)
+        inputs = inputs.tolist()
+        arc_seq = [operations_.pop(0)] + inputs.pop(0)
+        for op, inp, sk in zip(operations_, inputs, skips):
+            arc_seq.append(op)
+            arc_seq.extend(inp)
+            arc_seq.extend(sk)
+        arc_seq.extend(outputs.flatten())
+        return arc_seq
+
+    def sample(self, seed=None):
+        np.random.seed(seed)
+        ops = []
+        for _ in range(self.num_layers):
+            ops.append(np.random.randint(len(self.model_space[_])))
+        res_con = []
+        for _ in range(1, self.num_layers):
+            res_con.append( np.random.binomial(n=1, p=0.5, size=_).tolist())
+        inputs = np.random.multinomial(n=1, pvals=np.repeat(1, self.num_layers)/self.num_layers, size=self.num_inputs).T
+        outputs = np.random.multinomial(n=1, pvals=np.repeat(1, self.num_layers)/self.num_layers, size=self.num_outputs)
+        np.random.seed(None)
+        return self.encode(operations=ops, inputs=inputs, skips=res_con, outputs=outputs)
 
 
 class ResConvNetArchitecture:
@@ -98,12 +128,14 @@ class ResConvNetArchitecture:
             arc_seq.extend(res)
         return arc_seq
 
-    def sample(self):
+    def sample(self, seed=None):
+        np.random.seed(seed)
         ops = []
         for _ in range(self._num_layers):
             ops.append(np.random.randint(len(self.model_space[_])))
         res_con = []
         for _ in range(1, self._num_layers):
             res_con.append( np.random.binomial(n=1, p=0.5, size=_).tolist())
+        np.random.seed(None)
         return self.encode(operations=ops, res_con=res_con)
 

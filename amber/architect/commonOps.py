@@ -30,7 +30,7 @@ def unpack_data(data, unroll_generator_x=False, unroll_generator_y=False, callab
     return x, y
 
 
-def batchify(x, y=None, batch_size=None, shuffle=True, drop_remainder=True):
+def batchify(x, y=None, batch_size=None, shuffle=True, drop_remainder=False):
     if not type(x) is list: x = [x]
     if y is not None and type(y) is not list: y = [y]
     # assuming batch_size is axis=0
