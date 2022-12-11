@@ -14,8 +14,10 @@ from collections import defaultdict
 
 import numpy as np
 from ..backend import Operation, get_layer_shortname
+from .base import BaseModelSpace
 
-class ModelSpace:
+
+class ModelSpace(BaseModelSpace):
     """Model Space constructor
 
     Provides utility functions for holding "states" / "operations" that the controller must use to train and predict.
@@ -196,12 +198,9 @@ class ModelSpace:
         num_layers = len(d)
         ms = ModelSpace()
         for i in range(num_layers):
-            for j in range(len(d[i])):
-                if 'shape' in d[i][j] and isinstance(d[i][j]['shape'], str):
-                    d[i][j] = ast.literal_eval(d[i][j]['shape'])
-
             ms.add_layer(layer_id=i, layer_states=[
-                         State(**d[i][j]) for j in range(len(d[i]))])
+                         d[i][j] if type(d[i][j]) is Operation else Operation(**d[i][j])
+                         for j in range(len(d[i]))])
         return ms
 
 

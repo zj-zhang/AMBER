@@ -1,11 +1,12 @@
 from ... import backend as F
 from ...backend import Operation, ComputationNode, get_layer_shortname
+from ..base import BaseModelBuilder
 
-class BaseEnasConv1dDAG:
+class BaseEnasConv1dDAG(BaseModelBuilder):
     def __init__(self,
                  model_space,
-                 input_node,
-                 output_node,
+                 inputs_op,
+                 output_op,
                  model_compile_dict,
                  session,
                  with_skip_connection=True,
@@ -46,6 +47,8 @@ class BaseEnasConv1dDAG:
         name: str
             a name identifier for this instance
         """
+        input_node = inputs_op
+        output_node = output_op
         assert type(input_node) in (Operation, F.TensorType) or len(
             input_node) == 1, "EnasCnnDAG currently does not accept List type of inputs"
         assert type(output_node) in (Operation, F.TensorType) or len(

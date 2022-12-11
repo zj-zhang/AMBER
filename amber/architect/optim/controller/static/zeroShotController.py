@@ -12,6 +12,7 @@ from amber.backend import create_parameter, get_layer
 from amber.architect.modelSpace import Operation
 from amber.architect.buffer import MultiManagerBuffer
 from amber.utils import static_tf as tf
+import numpy as np
 try:
     from tensorflow.keras.regularizers import L1L2
 except ImportError:
@@ -19,14 +20,15 @@ except ImportError:
 
 
 class ZeroShotController(GeneralController):
-    def __init__(self, data_description_config, *args, **kwargs):
+    def __init__(self, data_description_config, default_descriptor=None, buffer_type='multimanager', *args, **kwargs):
         """
         Args:
             data_description_config: dict, must have key "length".
                 optional keys: "hidden_layer" (dict), "regularizer" (dict).
         """
         self.data_description_config = data_description_config
-        super().__init__(*args, **kwargs)
+        self.default_descriptor = default_descriptor or np.zeros((1, self.data_description_config['length']))
+        super().__init__(*args, buffer_type=buffer_type, **kwargs)
         assert isinstance(self.buffer, MultiManagerBuffer), "ZeroShotController must have MultiManagerBuffer;" \
                                                             " got %s" % self.buffer
 
@@ -63,7 +65,8 @@ class ZeroShotController(GeneralController):
             self.g_emb = tf.matmul(h, w_dd) + b_dd  # shape: none, lstm_size
 
     # overwrite
-    def get_action(self, description_feature, *args, **kwargs):
+    def get_action(self, description_feature=None, *args, **kwargs):
+        description_feature = self.default_descriptor if description_feature is None else description_feature
         feed_dict = {self.data_descriptive_feature: description_feature}
         probs, onehots = self.session.run([self.sample_probs, self.sample_arc], feed_dict=feed_dict)
         return onehots, probs
@@ -74,10 +77,7 @@ class ZeroShotController(GeneralController):
                 manager_index=manager_index)
 
     # overwrite
-    def train(self, episode, working_dir):
-        # only finish path if short-term buffer is non-zero
-        if len(self.buffer.action_buffer) > 0:
-            self.buffer.finish_path(self.model_space, episode, working_dir)
+    def train(self):
         aloss = 0
         g_t = 0
 

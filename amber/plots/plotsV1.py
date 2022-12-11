@@ -287,21 +287,22 @@ def plot_stats2(working_dir):
             min_, max_ = avg - 1.96 * std, avg + 1.96 * std
             ax.fill_between(range(avg.shape[0]), min_, max_, alpha=0.2)
 
-        ax2 = ax.twinx()
         data = df['Knowledge']
-        d = np.stack(list(map(lambda x: sma(x), np.array(data))), axis=0)
-        avg = np.apply_along_axis(np.mean, 0, d)
-        sns.lineplot(x=np.arange(1, len(avg) + 1), y=avg,
-                     color='g', label='Knowledge', ax=ax2, legend=False)
-        if d.shape[0] >= 6:
-            std = np.apply_along_axis(np.std, 0, d) / np.sqrt(d.shape[0])
-            min_, max_ = avg - 1.96 * std, avg + 1.96 * std
-            ax2.fill_between(range(avg.shape[0]), min_, max_, alpha=0.2)
+        if np.array(data).shape[1] > 0: # if have data
+            ax2 = ax.twinx()
+            d = np.stack(list(map(lambda x: sma(x), np.array(data))), axis=0)
+            avg = np.apply_along_axis(np.mean, 0, d)
+            sns.lineplot(x=np.arange(1, len(avg) + 1), y=avg,
+                        color='g', label='Knowledge', ax=ax2, legend=False)
+            if d.shape[0] >= 6:
+                std = np.apply_along_axis(np.std, 0, d) / np.sqrt(d.shape[0])
+                min_, max_ = avg - 1.96 * std, avg + 1.96 * std
+                ax2.fill_between(range(avg.shape[0]), min_, max_, alpha=0.2)
+            ax2.set_ylabel('Knowledge')
 
         ax.figure.legend()
         ax.set_xlabel('Number of steps')
         ax.set_ylabel('Loss')
-        ax2.set_ylabel('Knowledge')
         plt.savefig(os.path.join(working_dir, 'nas_training_stats.png'), bbox_inches='tight')
     else:
         raise IOError('File not found')

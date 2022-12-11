@@ -496,7 +496,7 @@ class MultiIOController(MultiInputController):
 
     .. code-block:: python
 
-        from amber.bootstrap.dense_skipcon_space import get_model_space
+        from amber.utils.testing_utils import get_example_sparse_model_space as get_model_space
         from amber.architect.controller.multiioController import MultiIOController
         import numpy as np
         import tensorflow as tf

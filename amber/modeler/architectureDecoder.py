@@ -9,7 +9,7 @@ Classes for breaking down an architecture sequence into a more structured format
 
 import numpy as np
 import copy
-
+from .base import BaseArchitectDecoder
 
 def get_decoder(m):
     if callable(m):
@@ -25,7 +25,7 @@ def get_decoder(m):
         raise Exception('Unknown decoder %s' % m)
 
 
-class MultiIOArchitecture:
+class MultiIOArchitecture(BaseArchitectDecoder):
     def __init__(self, model_space, num_inputs, num_outputs):
         self.model_space = model_space
         self.num_layers = len(model_space)
@@ -83,7 +83,7 @@ class MultiIOArchitecture:
         return self.encode(operations=ops, inputs=inputs, skips=res_con, outputs=outputs)
 
 
-class ResConvNetArchitecture:
+class ResConvNetArchitecture(BaseArchitectDecoder):
     def __init__(self, model_space):
         """ResConvNetArchitecture is a class for decoding and encoding neural architectures of convolutional neural
         networks with residual connections

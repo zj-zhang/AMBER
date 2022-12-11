@@ -2,10 +2,10 @@ import numpy as np
 from ...architect.modelSpace import ModelSpace
 from ... import backend as F
 from ...backend import Operation, ComputationNode, get_layer_shortname
-from ..base import ModelBuilder
+from ..base import BaseModelBuilder
 
 
-class SparseFfnnModelBuilder(ModelBuilder):
+class SparseFfnnModelBuilder(BaseModelBuilder):
     """Construct a feed-forward neural network (FFNN) represented by a directed acyclic graph (DAG). By spliting dense connections 
     into different DAG nodes, this sparsifies the interlayer connections.
 

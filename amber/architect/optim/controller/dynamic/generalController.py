@@ -249,7 +249,7 @@ class GeneralController(BaseController):
         probs = [F.to_numpy(x) for x in self.sample_probs]
         return onehots, probs
 
-    def train(self, episode, working_dir):
+    def train(self):
         """Train the controller policy parameters for one step.
 
         Parameters
@@ -269,11 +269,6 @@ class GeneralController(BaseController):
         Consider renaming this method to ``train_step()`` to better reflect its function, and avoid confusion with the
         training function in environment ``ControllerTrainEnv.train()``
         """
-        try:
-            self.buffer.finish_path(self.model_space, episode, working_dir)
-        except Exception as e:
-            print("cannot finish path in buffer because: %s" % e)
-            sys.exit(1)
         aloss = 0
         g_t = 0
 

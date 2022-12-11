@@ -104,8 +104,8 @@ class OperationController(BaseController):
     """
 
     def __init__(self,
-                 state_space,
-                 controller_units,
+                 model_space,
+                 controller_units=16,
                  embedding_dim=5,
                  optimizer='rmsprop',
                  discount_factor=0.0,
@@ -116,9 +116,10 @@ class OperationController(BaseController):
                  lr_pi=0.005,
                  buffer_size=50,
                  batch_size=5,
-                 verbose=0
+                 verbose=0,
+                 **kwargs
                  ):
-        self.state_space = state_space
+        self.model_space = model_space
         self.controller_units = controller_units
         self.embedding_dim = embedding_dim
         self.optimizer = get_optimizer(optimizer, lr_pi, 0.999)
@@ -138,14 +139,14 @@ class OperationController(BaseController):
         self._build_trainer()
 
     def _build_sampler(self):
-        maxlen = len(self.state_space)
+        maxlen = len(self.model_space)
         input_dim = self.embedding_dim
-        last_output_dim = len(self.state_space.state_space[maxlen - 1])
+        last_output_dim = len(self.model_space[maxlen - 1])
 
         self.state_inputs = Input(shape=(1, last_output_dim))  # states
         # build sampler model
         self.probs, self.action = build_actor(self.state_inputs, self.controller_units, input_dim, maxlen,
-                                              self.state_space,
+                                              self.model_space,
                                               scope='actor', trainable=True)
         self.model = Model(inputs=self.state_inputs, outputs=self.probs + self.action)
 
@@ -185,8 +186,11 @@ class OperationController(BaseController):
                                    outputs=[loss],
                                    updates=updates)
 
-    def get_action(self, seed):
-        maxlen = len(self.state_space)
+    def get_action(self, seed=None):
+        maxlen = len(self.model_space)
+        last_output_dim = len(self.model_space[maxlen - 1])
+        seed = np.zeros((1, 1, last_output_dim)) if seed is None else seed
+        maxlen = len(self.model_space)
         pred = self.model.predict(seed)
         prob = pred[:maxlen]
         onehot_action = pred[-maxlen:]
@@ -197,12 +201,10 @@ class OperationController(BaseController):
 
         self.buffer.store(state, prob, action, reward)
 
-    def train(self, episode, working_dir):
+    def train(self):
         """
         called only when path finishes
         """
-
-        self.buffer.finish_path(self.state_space, episode, working_dir)
 
         aloss = 0
         g_t = 0

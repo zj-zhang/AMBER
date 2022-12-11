@@ -1,7 +1,7 @@
 from .... import backend as F
-#from amber.modeler.architectureDecoder import get_decoder
 import os
 import numpy as np
+from ...base import BaseSearcher
 
 
 def lstm(x, prev_c, prev_h, w):
@@ -54,13 +54,14 @@ def proximal_policy_optimization_loss(curr_prediction, curr_onehot, old_predicti
         return - surr_obj
 
 
-class BaseController(object):
+class BaseController(BaseSearcher):
     """Base class for controllers
     """
 
-    def __init__(self, model_space, *args, **kwargs):
+    def __init__(self, model_space=None, buffer=None, *args, **kwargs):
         super().__init__()
         self.model_space = model_space
+        self.buffer = None
         #self.decoder = get_decoder(arc_decoder)
 
     def __str__(self):
@@ -316,7 +317,7 @@ class BaseController(object):
 
         """
         state = [[[0]]] if state is None else state
-        self.buffer.store(state=state, prob=prob, action=action, reward=reward)
+        self.buffer.store(state=state, prob=prob, action=action, reward=reward, **kwargs)
         return
 
     @staticmethod
@@ -392,7 +393,7 @@ class BaseController(object):
         return onehot_list
 
     def train(self, *args, **kwargs):
-        raise NotImplementedError("Abstract method.")
+        pass
 
     def get_action(self, *args, **kwargs):
-        raise NotImplementedError("Abstract method.")
+        pass

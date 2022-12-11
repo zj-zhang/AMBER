@@ -161,6 +161,17 @@ def get_train_env(env_type, controller, manager, *args, **kwargs):
         from .architect.trainEnv import EnasTrainEnv
 
         env = EnasTrainEnv(controller=controller, manager=manager, *args, **kwargs)
+    
+    elif env_type == "MultiManagerEnvironment":
+        from .architect.trainEnv import MultiManagerEnvironment
+
+        env = MultiManagerEnvironment(controller=controller, manager=manager, *args, **kwargs)
+    
+    elif env_type == "ParallelMultiManagerEnvironment":
+        from .architect.trainEnv import ParallelMultiManagerEnvironment
+
+        env = ParallelMultiManagerEnvironment(controller=controller, manager=manager, *args, **kwargs)
+
     else:
         raise ValueError("cannot understand train env type: %s" % env_type)
     print("env_type = %s" % env_type)
@@ -177,7 +188,7 @@ def get_controller(controller_type, model_space, session, **kwargs):
     The search algorithm takes two neccessary arguments as inputs: a string to specify what search algorithm to use,
     and a model space to sample model architectures from.
 
-    A tensorflow session may be passed to run training and inference, if the controller is implemented in Tensorflow.
+    An amber.backend.session may be passed to run training and inference, if the controller is implemented in Tensorflow.
 
     Parameters
     ----------
@@ -186,7 +197,7 @@ def get_controller(controller_type, model_space, session, **kwargs):
     model_space : amber.architect.ModelSpace
         a model space instance for the search algorithms
     session : amber.backend.Session, or None
-        a tensorflow session
+        amber.backend session
     kwargs : dict
         keyword arguments for controller, such as buffer type
     """
@@ -252,22 +263,11 @@ def get_model_space(arg):
         # output: StateSpace with 2 layers and 4 total combinations
 
     """
-    from .architect.modelSpace import ModelSpace
+    from .architect.modelSpace import ModelSpace, BaseModelSpace
 
-    if type(arg) is str:
-        if arg == "Default ANN":
-            from .bootstrap.dense_skipcon_space import get_model_space as ms_ann
-
-            model_space = ms_ann(3)
-        elif arg == "Default 1D-CNN":
-            from .bootstrap.simple_conv1d_space import get_state_space as ms_cnn
-
-            model_space = ms_cnn()
-        else:
-            raise Exception("cannot understand string model_space arg: %s" % arg)
-    elif type(arg) in (dict, list):
+    if type(arg) in (dict, list):
         model_space = ModelSpace.from_dict(arg)
-    elif isinstance(arg, ModelSpace):
+    elif issubclass(type(arg), BaseModelSpace):
         model_space = arg
     else:
         raise Exception("cannot understand non-string model_space arg: %s" % arg)
@@ -341,7 +341,7 @@ def get_manager(manager_type, model_fn, reward_fn, data_dict, session, *args, **
             **kwargs
         )
     elif manager_type == "Mock" or manager_type == "MockManager":
-        from .bootstrap.mock_manager import MockManager
+        from .offline_learn.mock_manager import MockManager
 
         manager = MockManager(model_fn=model_fn, reward_fn=reward_fn, *args, **kwargs)
     elif manager_type == "Distributed" or manager_type == "DistributedManager":
@@ -390,7 +390,7 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
     model_space : amber.architect.ModelSpace
         model space where the search algorithms sample models
     session : amber.backend.Session
-        tensorflow session, can be None if not applicable for certain model builders
+        GPU session, can be None if not applicable for certain model builders
     """
     from .modeler import ModelBuilder
     assert isinstance(model_fn_type, (str,)) or issubclass(model_fn_type, ModelBuilder), TypeError("model_fn_type must be a amber.modeler.ModelBuilder, or string; got %s" % type(model_fn_type))

@@ -19,21 +19,13 @@ from datetime import datetime
 from collections import defaultdict
 from .commonOps import unpack_data
 from .store import get_store_fn
+from .base import BaseNetworkManager
 
 __all__ = [
     'BaseNetworkManager',
     'GeneralManager',
     'DistributedGeneralManager'
 ]
-
-
-class BaseNetworkManager:
-    def __init__(self, *args, **kwargs):
-        # abstract
-        pass
-
-    def get_rewards(self, trial, model_arc):
-        raise NotImplementedError("Abstract method.")
 
 
 class GeneralManager(BaseNetworkManager):
@@ -125,7 +117,7 @@ class GeneralManager(BaseNetworkManager):
                  validation_data,
                  model_fn,
                  reward_fn,
-                 store_fn,
+                 store_fn='general',
                  working_dir='.',
                  save_full_model=False,
                  epochs=5,

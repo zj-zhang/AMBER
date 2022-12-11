@@ -20,181 +20,31 @@ from amber.utils import testing_utils
 logging.disable(sys.maxsize)
 
 
-@parameterized_class([
-     {'loss': tf.keras.losses.MeanSquaredError()},
-     {'loss': ['binary_crossentropy']},
-     {'loss': 'binary_crossentropy'},
-     {'reg': 0},
-     {'reg': 1e-8},
-     {'metrics': None},
-     {'metrics': ['mae']},
-     {'has_stem_conv': True},
-     # not working - must have stem-conv
-     #{'has_stem_conv': False},    
-])
-class TestEnasConvModeler(testing_utils.TestCase):
-    loss = 'binary_crossentropy'
-    metrics = None
-    reg = 0
-    has_stem_conv = True
-
-    def setUp(self):
-        self.sess = F.Session()
-        self.input_op = [architect.Operation('input', shape=(10, 4), name="input")]
-        self.output_op = architect.Operation('dense', units=1, activation='sigmoid', name="output")
-        self.x = np.random.randn(2, 10, 4)
-        self.y = np.random.sample(2).reshape((2, 1))
-        self.model_space, _ = testing_utils.get_example_conv1d_space(num_layers=4, num_pool=2)
-        #self.model_space, _ = testing_utils.get_example_conv1d_space()
-        self.model_compile_dict = {'loss': self.loss, 'optimizer': 'sgd', 'metrics':self.metrics}
-        self.controller = architect.GeneralController(
-            model_space=self.model_space,
-            buffer_type='ordinal',
-            with_skip_connection=True,
-            kl_threshold=0.05,
-            buffer_size=15,
-            batch_size=5,
-            session=self.sess,
-            train_pi_iter=2,
-            lstm_size=32,
-            lstm_num_layers=1,
-            lstm_keep_prob=1.0,
-            optim_algo="adam",
-            skip_target=0.8,
-            skip_weight=0.4,
-        )
-        self.decoder = modeler.architectureDecoder.ResConvNetArchitecture(model_space=self.model_space)
-        self.target_arc = self.decoder.sample(seed=777)
-        self.enas_modeler = modeler.supernet.EnasCnnModelBuilder(
-            model_space=self.model_space,
-            num_layers=len(self.model_space),
-            inputs_op=self.input_op,
-            output_op=self.output_op,
-            model_compile_dict=self.model_compile_dict,
-            session=self.sess,
-            controller=self.controller,
-            l1_reg=1e-8,
-            l2_reg=self.reg,
-            batch_size=1,
-            stem_config= {
-                    'has_stem_conv': self.has_stem_conv,
-                    'fc_units': 5}
-        )
-        self.num_samps = 15
-    
-    def tearDown(self):
-        try:
-            self.sess.close()
-        except:
-            pass
-        super().tearDown()
-
-    def test_sample_arc_builder(self):
-        model = self.enas_modeler()
-        samp_preds = [model.predict(self.x).flatten()[0] for _ in range(self.num_samps)]
-        # sampled loss can't be always identical
-        self.assertNotEqual(len(set(samp_preds)), 1)
-        old_loss = [model.evaluate(self.x, self.y)['val_loss'] for _ in range(self.num_samps)]
-        model.fit(self.x, self.y, batch_size=1, epochs=100, verbose=0)
-        new_loss = [model.evaluate(self.x, self.y)['val_loss'] for _ in range(self.num_samps)]
-        self.assertLess(sum(new_loss), sum(old_loss))
-
-    def test_fix_arc_builder(self):
-        model = self.enas_modeler(arc_seq=self.target_arc)
-        # fixed preds must always be identical
-        fix_preds = [model.predict(self.x).flatten()[0] for _ in range(self.num_samps)]
-        self.assertEqual(len(set(fix_preds)), 1)
-        # record original loss
-        old_loss = model.evaluate(self.x, self.y)['val_loss']
-        # train weights with sampled arcs from model2
-        model2 = self.enas_modeler()
-        model2.fit(self.x, self.y, batch_size=1, epochs=100, verbose=0)
-        # loss should reduce
-        new_loss = model.evaluate(self.x, self.y)['val_loss']
-        # XXX: this will often fail - may indicate dropouts are not turned off.
-        self.assertLess(new_loss, old_loss)
-        # fixed preds should still be identical
-        fix_preds = [model.predict(self.x).flatten()[0] for _ in range(self.num_samps)]
-        self.assertEqual(len(set(fix_preds)), 1)
-
-
-class TestEnasConvModelerIO(TestEnasConvModeler):
-    def test_model_save_load(self):
-        tempdir = tempfile.TemporaryDirectory()
-        model = self.enas_modeler(arc_seq=self.target_arc)
-        model.save(filepath=os.path.join(tempdir.name, "save.h5"))
-        model.save_weights(filepath=os.path.join(tempdir.name, "save_weights.h5"))
-        model.load_weights(filepath=os.path.join(tempdir.name, "save_weights.h5"))
-        tempdir.cleanup()
-
-
-class TestSinglePathCnnSupernet(testing_utils.TestCase):
-    def setUp(self):
-        self.sess = F.Session()
-        self.input_op = [architect.Operation('input', shape=(10, 4), name="input")]
-        self.output_op = architect.Operation('dense', units=1, activation='sigmoid', name="output")
-        self.model_compile_dict = {'loss': 'mse', 'optimizer': 'sgd'}
-        self.x = np.random.choice(2, 40).reshape((1, 10, 4))
-        self.y = np.random.sample(1).reshape((1, 1))
-        self.model_space, _ = testing_utils.get_example_conv1d_space()
-        self.decoder = modeler.architectureDecoder.ResConvNetArchitecture(model_space=self.model_space)
-        self.num_samps = 15
-
-    def tearDown(self):
-        try:
-            self.sess.close()
-        except:
-            pass
-        super().tearDown()
-    
-    def test_single_path(self):
-        arc = self.decoder.sample()
-        enas_modeler = modeler.supernet.EnasCnnModelBuilder(
-            fixed_arc=arc,
-            train_fixed_arc=True,
-            model_space=self.model_space,
-            num_layers=len(self.model_space),
-            inputs_op=self.input_op,
-            output_op=self.output_op,
-            model_compile_dict=self.model_compile_dict,
-            session=self.sess,
-            controller=None,
-            batch_size=1,
-            stem_config={'has_stem_conv': True,
-                    'fc_units': 5}
-        )        
-        model = enas_modeler(arc_seq=arc)
-        # test pred
-        fix_preds = [model.predict(self.x).flatten()[0] for _ in range(self.num_samps)]
-        #print(fix_preds) # indeed not the same. no fix yet. FZZ 20221209
-        #self.assertEqual(len(set(fix_preds)), 1)
-        # test train & eval
-        old_loss = model.evaluate(self.x, self.y)['val_loss']
-        model.fit(self.x, self.y, batch_size=1, epochs=10, verbose=0)
-        new_loss = model.evaluate(self.x, self.y)['val_loss']
-        # seems dropout is not turned off yet
-        #self.assertLess(new_loss, old_loss)
-
-
 # See also: test Ann with a upstream feature model, e.g. CNN, see `test_supernet_featmodel.py`
-@parameterized_class(
-    attrs=('with_output_blocks', 'with_input_blocks', 'use_pipe', 'use_node_dag'), input_values=[
-        (True,  True,  True, False, False),
-        (False, True,  True, False, False),
-        (False, False, True, False, False),
-        (True,  True,  True, True,  True),
+@parameterized_class([
+        {'with_output_blocks': False},
+        {'with_input_blocks': False},
+        {'reg': 0},
+        {'reg': 1e-8},
+        {'loss': 'mse'},
+        {'loss': tf.keras.losses.MeanSquaredError()},
+        {'loss': ['mse']},
+        {'metrics': []},
+        {'metrics': ['mae']}
 ])
 class TestEnasAnnDAG(testing_utils.TestCase):
-    with_output_blocks = False
-    fit_epochs = 15
+    with_output_blocks = True
     with_input_blocks = True
+    reg = 0
+    metrics = ['mae']
+    loss = 'mse'
+
+    fit_epochs = 10
     with_skip_connection = True
-    use_pipe = False
-    use_node_dag = False
     num_inputs = 4
-    model_compile_dict = {'optimizer': 'sgd', 'loss': 'mse', 'metrics': ['mae']}
 
     def setUp(self):
+        self.model_compile_dict = {'optimizer': 'sgd', 'loss': self.loss, 'metrics': self.metrics}
         #print(self.with_output_blocks, self.with_input_blocks, self.with_skip_connection)
         if self.with_input_blocks:
             self.inputs_op = [architect.Operation('input', shape=(1,), name='X_%i' % i) for i in range(self.num_inputs)]
@@ -207,8 +57,8 @@ class TestEnasAnnDAG(testing_utils.TestCase):
         self.traindata, self.validdata, self.testdata = self.get_data(seed=111, blockify_inputs=False)
     
     def get_data(self, seed=111, blockify_inputs=True):
-        n1 = 1500
-        n2 = 1000
+        n1 = 1000
+        n2 = 500
         p = self.num_inputs
         # Y = f(X0,X1,X2,X3) = 3*X0X1 - 2*X2X3
         f = lambda X: 3 * X[:, 0] * X[:, 1] - 2 * X[:, 2] * X[:, 3] + rng.normal(0, np.sqrt(0.1), len(X))
@@ -231,12 +81,10 @@ class TestEnasAnnDAG(testing_utils.TestCase):
             model_space=self.model_space,
             inputs_op=self.inputs_op,
             output_op=self.output_op,
-            l1_reg=0.001,
-            l2_reg=0.0001,
+            l1_reg=self.reg,
+            l2_reg=self.reg,
             model_compile_dict=self.model_compile_dict,
             controller=None,
-            use_node_dag=self.use_node_dag,
-            use_pipe=self.use_pipe,
             with_output_blocks=self.with_output_blocks,
             with_input_blocks=self.with_input_blocks,
             with_skip_connections=self.with_skip_connection,
@@ -270,7 +118,7 @@ class TestEnasAnnDAG(testing_utils.TestCase):
     def model_fit(self, model):
         model.fit(
             self.traindata[0], self.traindata[1],
-            batch_size=512,
+            batch_size=200,
             epochs=self.fit_epochs,
             validation_data=self.validdata,
             callbacks=[tf.keras.callbacks.EarlyStopping(patience=2)],
@@ -336,7 +184,9 @@ class TestEnasAnnDAG(testing_utils.TestCase):
             # sampled graph should also decrease loss over training, though it
             # may fail due to randomness in dropout
             self.assertLess(new_loss[0], old_loss[0])
-    
+
+
+class TestAnnModelIO(TestEnasAnnDAG):
     def test_model_save_load(self):
         tempdir = tempfile.TemporaryDirectory()
         with self.session() as sess:

@@ -99,3 +99,55 @@ def get_example_sparse_model_space(num_layers):
             architect.Operation('Dense', units=10, activation='relu'),
         ])
     return state_space
+
+
+def get_bionas_model_space():
+    """architect.Operation_space is the place we define all possible operations (called `architect.Operations`) on each layer to stack a neural net.
+    The state_space is defined in a layer-by-layer manner, i.e. first define the first layer (layer 0), then layer 1,
+    so on and so forth. See below for how to define all possible choices for a given layer.
+
+    Returns
+    -------
+    a pre-defined state_space object
+
+    Notes
+    ------
+    Use key-word arguments to define layer-specific attributes.
+
+    Adding `Identity` state to a layer is basically omitting a layer by performing no operations.
+    """
+    state_space = architect.ModelSpace()
+    state_space.add_layer(0, [
+        architect.Operation('conv1d', filters=3, kernel_size=8, kernel_initializer='glorot_uniform', activation='relu',
+              name="conv1"),
+        architect.Operation('conv1d', filters=3, kernel_size=14, kernel_initializer='glorot_uniform', activation='relu',
+              name="conv1"),
+        architect.Operation('conv1d', filters=3, kernel_size=20, kernel_initializer='glorot_uniform', activation='relu',
+              name="conv1"),
+        architect.Operation('denovo', filters=3, kernel_size=8, lambda_pos=1e-4,
+              lambda_l1=1e-4, lambda_filter=1e-8, name='conv1'),
+        architect.Operation('denovo', filters=3, kernel_size=14, lambda_pos=1e-4,
+              lambda_l1=1e-4, lambda_filter=1e-8, name='conv1'),
+        architect.Operation('denovo', filters=3, kernel_size=20, lambda_pos=1e-4,
+              lambda_l1=1e-4, lambda_filter=1e-8, name='conv1'),
+    ])
+    state_space.add_layer(1, [
+        architect.Operation('Identity'),
+        architect.Operation('maxpool1d', pool_size=8, strides=8),
+        architect.Operation('avgpool1d', pool_size=8, strides=8),
+
+    ])
+    state_space.add_layer(2, [
+        architect.Operation('Flatten'),
+        architect.Operation('GlobalMaxPool1D'),
+        architect.Operation('GlobalAvgPool1D'),
+        architect.Operation('SFC', output_dim=10, symmetric=True, smoothness_penalty=1., smoothness_l1=True,
+              smoothness_second_diff=True, curvature_constraint=10., name='sfc'),
+    ])
+    state_space.add_layer(3, [
+        architect.Operation('Dense', units=3, activation='relu'),
+        architect.Operation('Dense', units=10, activation='relu'),
+        architect.Operation('Identity')
+    ])
+    return state_space
+

@@ -1,7 +1,7 @@
 from ... import backend as F
 from ...backend import get_layer, Model  # type: ignore
 import numpy as np
-from ..base import ModelBuilder
+from ..base import BaseModelBuilder
 from ..architectureDecoder import MultiIOArchitecture
 import copy
 from ...architect.modelSpace import BranchedModelSpace
@@ -9,7 +9,7 @@ import tensorflow as tf
 from tensorflow.keras.utils import multi_gpu_model
 
 
-class SequentialModelBuilder(ModelBuilder):
+class SequentialModelBuilder(BaseModelBuilder):
     def __init__(self, inputs_op, output_op, model_compile_dict, model_space, custom_objects=None, gpus=None, session=None, **kwargs):
         self.model_compile_dict = model_compile_dict
         if isinstance(inputs_op, (tuple, list)):
@@ -76,7 +76,7 @@ class SequentialModelBuilder(ModelBuilder):
         return model
 
 
-class SequentialBranchModelBuilder(ModelBuilder):
+class SequentialBranchModelBuilder(BaseModelBuilder):
     def __init__(self, inputs_op, output_op, model_compile_dict,
                  model_space=None, with_bn=False, **kwargs):
         assert isinstance(model_space, BranchedModelSpace)
@@ -141,7 +141,7 @@ class SequentialBranchModelBuilder(ModelBuilder):
         return model
 
 
-class SequentialMultiIOModelBuilder(ModelBuilder):
+class SequentialMultiIOModelBuilder(BaseModelBuilder):
     """
     Note:
         Still not working if num_outputs=0

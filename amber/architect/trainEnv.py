@@ -22,7 +22,7 @@ from ..plots import plot_stats2, plot_environment_entropy, plot_controller_perfo
 from ..utils import get_available_gpus
 from ..utils.io import save_action_weights, save_stats
 from ..utils.logging import setup_logger
-
+from .base import BaseSearchEnvironment
 
 def get_controller_states(model):
     return [K.get_value(s) for s, _ in model.state_updates]
@@ -53,7 +53,7 @@ def compute_entropy(prob_states):
     return ent
 
 
-class ControllerTrainEnvironment:
+class ControllerTrainEnvironment(BaseSearchEnvironment):
     """The training evnrionment employs ``controller`` model and ``manager`` to mange data and reward,
     creates a reinforcement learning environment
 
@@ -165,7 +165,7 @@ class ControllerTrainEnvironment:
 
         # FOR DEPRECATED USE
         try:
-            self.last_actionState_size = len(self.controller.state_space[-1])
+            self.last_actionState_size = len(self.controller.model_space[-1])
         except Exception as e:
             warnings.warn("DEPRECATED Exception in ControllerTrainEnv: %s" % e, stacklevel=2)
             self.last_actionState_size = 1
@@ -281,9 +281,9 @@ class ControllerTrainEnvironment:
                     ep_probs.append(probs)
                     # LOGGER.debug the action probabilities
                     if self.squeezed_action:
-                        action_list = parse_action_str_squeezed(actions, self.controller.state_space)
+                        action_list = parse_action_str_squeezed(actions, self.controller.model_space)
                     else:
-                        action_list = parse_action_str(actions, self.controller.state_space)
+                        action_list = parse_action_str(actions, self.controller.model_space)
                     LOGGER.debug("Predicted actions : {}".format([str(x) for x in action_list]))
 
                     # build a model, train and get reward and accuracy from the network manager
@@ -325,7 +325,9 @@ class ControllerTrainEnvironment:
                 action_probs_record.append(ep_p)
                 if ep >= self.initial_buffering_queue - 1:
                     # train the controller on the saved state and the discounted rewards
-                    loss = self.controller.train(ep, self.working_dir)
+                    if len(self.controller.buffer.action_buffer) > 0:
+                        self.controller.buffer.finish_path(state_space=self.controller.model_space, global_ep=ep, working_dir=self.working_dir)
+                    loss = self.controller.train()
                     self.total_reward += np.sum(np.array(self.controller.buffer.lt_adbuffer[-1]).flatten())
                     LOGGER.debug("Total reward : " + str(self.total_reward))
                     LOGGER.debug("END episode %d: Controller loss : %0.6f" % (ep, loss))
@@ -333,7 +335,7 @@ class ControllerTrainEnvironment:
                 else:
                     LOGGER.debug("END episode %d: Buffering" % (ep))
                     LOGGER.debug("-" * 10)
-                    # self.controller.buffer.finish_path(self.controller.state_space, ep, self.working_dir)
+                    # self.controller.buffer.finish_path(self.controller.model_space, ep, self.working_dir)
 
                 # save the controller states and weights
                 if self.save_controller:
@@ -369,7 +371,7 @@ class ControllerTrainEnvironment:
         save_kwargs = {}
         if self.with_input_blocks:
             save_kwargs['input_nodes'] = self.manager.model_fn.inputs_op
-        save_action_weights(action_probs_record, self.controller.state_space, self.working_dir,
+        save_action_weights(action_probs_record, self.controller.model_space, self.working_dir,
                             with_input_blocks=self.with_input_blocks, with_skip_connection=self.with_skip_connection,
                             **save_kwargs)
         save_stats(loss_and_metrics_list, self.working_dir)
@@ -387,11 +389,6 @@ class ControllerTrainEnvironment:
 
 
 class EnasTrainEnv(ControllerTrainEnvironment):
-    """
-    Params:
-        time_budget: defaults to 72 hours
-    """
-
     def __init__(self, *args, **kwargs):
         self.time_budget = kwargs.pop('time_budget', None)
         self.child_train_steps = kwargs.pop('child_train_steps', None)
@@ -451,7 +448,7 @@ class EnasTrainEnv(ControllerTrainEnvironment):
                     self.entropy_record.append(compute_entropy(probs))
                     ep_probs.append(probs)
                     # LOGGER.debug the action probabilities
-                    action_list = parse_action_str_squeezed(arc_seq, self.controller.state_space)
+                    action_list = parse_action_str_squeezed(arc_seq, self.controller.model_space)
                     LOGGER.debug("Predicted actions : {}".format([str(x) for x in action_list]))
 
                     # build a model, train and get reward and accuracy from the network manager
@@ -485,7 +482,9 @@ class EnasTrainEnv(ControllerTrainEnvironment):
                 action_probs_record.append(ep_p)
                 if child_step >= self.initial_buffering_queue - 1:
                     # train the controller on the saved state and the discounted rewards
-                    loss = self.controller.train(child_step, self.working_dir)
+                    if len(self.controller.buffer.action_buffer) > 0:
+                        self.controller.buffer.finish_path(state_space=self.controller.model_space, global_ep=child_step, working_dir=self.working_dir)
+                    loss = self.controller.train()
                     self.total_reward += np.sum(np.array(self.controller.buffer.lt_adbuffer[-1]).flatten())
                     LOGGER.info("Total reward : " + str(self.total_reward))
                     LOGGER.info("END episode %d: Controller loss : %0.6f" % (child_step, loss))
@@ -524,7 +523,7 @@ class EnasTrainEnv(ControllerTrainEnvironment):
         if self.with_input_blocks:
             save_kwargs['input_nodes'] = self.manager.model_fn.inputs_op
         self.action_probs_record = action_probs_record
-        save_action_weights(action_probs_record, self.controller.state_space, self.working_dir,
+        save_action_weights(action_probs_record, self.controller.model_space, self.working_dir,
                             with_input_blocks=self.with_input_blocks, with_skip_connection=self.with_skip_connection,
                             **save_kwargs)
         self.action_probs_record = loss_and_metrics_list
@@ -608,7 +607,7 @@ class MultiManagerEnvironment(EnasTrainEnv):
                         self.entropy_record.append(compute_entropy(probs))
                         ep_probs.append(probs)
                         # LOGGER.debug the action probabilities
-                        action_list = parse_action_str_squeezed(arc_seq, self.controller.state_space)
+                        action_list = parse_action_str_squeezed(arc_seq, self.controller.model_space)
                         self.logger.debug("Manager {}, Predicted actions : {}".format(j, [str(x) for x in action_list]))
 
                         # build a model, train and get reward and accuracy from the network manager
@@ -640,7 +639,9 @@ class MultiManagerEnvironment(EnasTrainEnv):
                 action_probs_record.append(ep_p)
                 if child_step >= self.initial_buffering_queue - 1:
                     # train the controller on the saved state and the discounted rewards
-                    loss = self.controller.train(child_step, self.working_dir)
+                    if len(self.controller.buffer.action_buffer) > 0:
+                        self.controller.buffer.finish_path(state_space=self.controller.model_space, global_ep=child_step, working_dir=self.working_dir)
+                    loss = self.controller.train()
                     self.total_reward += np.sum(np.array(self.controller.buffer.lt_adv[-1]).flatten())
                     self.logger.info("Total reward : " + str(self.total_reward))
                     self.logger.info("END episode %d: Controller loss : %0.6f" % (child_step, loss))
@@ -688,7 +689,7 @@ class MultiManagerEnvironment(EnasTrainEnv):
         if self.with_input_blocks:
             save_kwargs['input_nodes'] = self.manager.model_fn.inputs_op
         self.action_probs_record = action_probs_record
-        save_action_weights(action_probs_record, self.controller.state_space, self.working_dir,
+        save_action_weights(action_probs_record, self.controller.model_space, self.working_dir,
                             with_input_blocks=self.with_input_blocks, with_skip_connection=self.with_skip_connection,
                             **save_kwargs)
         save_stats(loss_and_metrics_list, self.working_dir)
@@ -803,7 +804,7 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                         self.entropy_record.append(compute_entropy(probs))
                         ep_probs.append(probs)
                         # LOGGER.debug the action probabilities
-                        action_list = parse_action_str_squeezed(arc_seq, self.controller.state_space)
+                        action_list = parse_action_str_squeezed(arc_seq, self.controller.model_space)
                         self.logger.debug("Manager {}, Predicted actions : {}".format(j, [str(x) for x in action_list]))
 
                         this_pool.append(
@@ -881,7 +882,9 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
 
                 if child_step >= self.initial_buffering_queue - 1:
                     # train the controller on the saved state and the rewards
-                    loss = self.controller.train(child_step, self.working_dir)
+                    if len(self.controller.buffer.action_buffer) > 0:
+                        self.controller.buffer.finish_path(state_space=self.controller.model_space, global_ep=child_step, working_dir=self.working_dir)
+                    loss = self.controller.train()
                     self.total_reward += np.sum(np.array(self.controller.buffer.lt_adv[-1]).flatten())
                     self.logger.info("Total reward : " + str(self.total_reward))
                     self.logger.info("END episode %d: Controller loss : %0.6f" % (child_step, loss))

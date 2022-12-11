@@ -1,6 +1,6 @@
 from amber import backend as F
 import numpy as np
-from ..base import ModelBuilder
+from ..base import BaseModelBuilder
 from ..architectureDecoder import ResConvNetArchitecture
 import tensorflow as tf
 from tensorflow.keras.layers import Concatenate, Add, Dense, Conv1D, MaxPooling1D, AveragePooling1D, \
@@ -10,7 +10,7 @@ from tensorflow.keras import constraints
 from tensorflow.keras.models import Model
 
 
-class ResidualCnnBuilder(ModelBuilder):
+class ResidualCnnBuilder(BaseModelBuilder):
     """Function class for converting an architecture sequence tokens to a Keras model
 
     Parameters

@@ -11,6 +11,7 @@ Buffer must have the following functionality:
 
 import os
 import numpy as np
+from .base import BaseModelBuffer
 
 
 def get_buffer(arg):
@@ -56,7 +57,7 @@ def parse_action_str_squeezed(action_onehot, state_space):
     return [state_space[i][action_onehot[i]] for i in range(len(state_space))]
 
 
-class Buffer(object):
+class Buffer(BaseModelBuffer):
     """The ordinal buffer class
 
     Buffer stores the sampled architectures, computed bias-adjusted rewards/advantages, and make feed-dict related through
@@ -445,7 +446,7 @@ class MultiManagerBuffer:
         """For legacy use"""
         return self.lt_prob
 
-    def store(self, prob, action, reward, description, manager_index):
+    def store(self, prob, action, reward, description, manager_index, **kwargs):
         """
         Parameters
         ----------

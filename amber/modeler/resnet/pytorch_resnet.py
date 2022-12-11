@@ -6,12 +6,12 @@ import copy
 from argparse import Namespace
 from typing import Optional, Union, List, Dict, Any
 from ... import backend as F
-from ..base import ModelBuilder
+from ..base import BaseModelBuilder
 from ..architectureDecoder import ResConvNetArchitecture
 from ..supernet.pytorch_supernet import ConcatLayer, GlobalAveragePooling1DLayer, get_torch_layer
 
 
-class ResidualCnnBuilder(ModelBuilder):
+class ResidualCnnBuilder(BaseModelBuilder):
     """Class for converting an architecture sequence tokens to a PyTorch-lightning model
 
     Parameters

@@ -161,11 +161,13 @@ class TestGeneralController(testing_utils.TestCase):
             self.controller.store(prob=prob, action=arc,
                                     reward=reward)
         # train
-        old_loss = self.controller.train(episode=0, working_dir=self.tempdir.name)
+        self.controller.buffer.finish_path(global_ep=0, state_space=self.controller.model_space, working_dir=self.tempdir.name)
+        old_loss = self.controller.train()
         for arc, prob, reward in zip(*[arcs, probs, rewards]):
             self.controller.store(prob=prob, action=arc,
                                     reward=reward)
-        new_loss = self.controller.train(episode=1, working_dir=self.tempdir.name)
+        self.controller.buffer.finish_path(global_ep=1, state_space=self.controller.model_space, working_dir=self.tempdir.name)
+        new_loss = self.controller.train()
         self.assertLess(new_loss, old_loss)
 
 @unittest.skipIf(F.mod_name!='tensorflow_1', "only implemented in TF1 backend")
@@ -174,7 +176,7 @@ class TestOperationController(testing_utils.TestCase):
         super(TestOperationController, self).setUp()
         self.model_space, _ = testing_utils.get_example_conv1d_space()
         self.controller = architect.OperationController(
-            state_space=self.model_space,
+            model_space=self.model_space,
             controller_units=8,
             kl_threshold=0.05,
             buffer_size=15,
@@ -193,7 +195,8 @@ class TestOperationController(testing_utils.TestCase):
                 action=act,
                 reward=_
             )
-        self.controller.train(episode=0, working_dir=self.tempdir.name)
+        self.controller.buffer.finish_path(global_ep=0, state_space=self.controller.model_space, working_dir=self.tempdir.name)
+        self.controller.train()
 
     def tearDown(self):
         super(TestOperationController, self).tearDown()
@@ -204,6 +207,7 @@ class TestOperationController(testing_utils.TestCase):
     (architect.MultiInputController, architectureDecoder.MultiIOArchitecture),
     (architect.MultiIOController, architectureDecoder.MultiIOArchitecture)
 ])
+@unittest.skipIf(F.mod_name!='tensorflow_1', "only implemented in TF1 backend")
 class TestMultiIOController(testing_utils.TestCase):
     def setUp(self):
         super(TestMultiIOController, self).setUp()
@@ -312,8 +316,9 @@ class TestAmbientController(TestMultiIOController):
                 self.controller.store(prob=prob, action=arc, description=self.description_feature[[i]],
                                       reward=np.random.random(1)[0], manager_index=i)
         # train
-        old_loss = self.controller.train(episode=0, working_dir=self.tempdir.name)
-        new_loss = self.controller.train(episode=1, working_dir=self.tempdir.name)
+        self.controller.buffer.finish_path(global_ep=0, state_space=self.controller.model_space, working_dir=self.tempdir.name)
+        old_loss = self.controller.train()
+        new_loss = self.controller.train()
         self.assertLess(new_loss, old_loss)
     
     @unittest.skipIf(F.mod_name!='tensorflow_1', "only implemented in TF1 backend")

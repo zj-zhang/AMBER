@@ -31,7 +31,6 @@ class GeneralController(BaseController):
     ----------
     Refactor the rest of the attributes to private.
 
-
     Parameters
     ----------
     model_space : amber.architect.ModelSpace
@@ -278,15 +277,8 @@ class GeneralController(BaseController):
         probs, onehots = self.session.run([self.sample_probs, self.sample_arc])
         return onehots, probs
 
-    def train(self, episode, working_dir):
+    def train(self):
         """Train the controller policy parameters for one step.
-
-        Parameters
-        ----------
-        episode : int
-            Total number of epochs to train the controller. Each epoch will iterate over all architectures stored in buffer.
-        working_dir : str
-            Filepath to working directory to store (possible) intermediate results
 
         Returns
         -------
@@ -298,11 +290,6 @@ class GeneralController(BaseController):
         Consider renaming this method to ``train_step()`` to better reflect its function, and avoid confusion with the
         training function in environment ``ControllerTrainEnv.train()``
         """
-        try:
-            self.buffer.finish_path(self.model_space, episode, working_dir)
-        except Exception as e:
-            print("cannot finish path in buffer because: %s" % e)
-            sys.exit(1)
         aloss = 0
         g_t = 0
 

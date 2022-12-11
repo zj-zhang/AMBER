@@ -124,8 +124,8 @@ class EnasCnnModelBuilder(F.Model, BaseEnasConv1dDAG):
         BaseEnasConv1dDAG.__init__(
             self,
             model_space=model_space,
-            input_node=inputs_op,
-            output_node=output_op,
+            inputs_op=inputs_op,
+            output_op=output_op,
             controller=controller,
             session=F.Session(),
             model_compile_dict={},

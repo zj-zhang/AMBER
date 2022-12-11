@@ -1,9 +1,10 @@
 from amber.utils import testing_utils
 from amber.architect.controller import GeneralController
 from amber.architect.trainEnv import ControllerTrainEnvironment
-from amber.bootstrap.mock_manager import MockManager
-from amber.bootstrap.simple_conv1d_space import get_state_space
+from amber.offline_learn.mock_manager import MockManager
+from amber.utils.testing_utils import get_bionas_model_space as get_state_space
 from amber.utils import static_tf as tf
+from amber import backend as F
 import numpy as np
 import os
 
@@ -83,16 +84,6 @@ class TestBootstrap(testing_utils.TestCase):
         # first get state_space
         self.state_space = get_state_space()
 
-    def setUp(self):
-        self.tempdir = tempfile.TemporaryDirectory()
-        self.session = tf.Session()
-        # init network manager
-        self.manager = get_mock_manager(self.hist_file_list, Lambda=self.Lambda, wd=self.tempdir.name)
-        # get controller
-        self.controller = get_controller(self.state_space, self.session)
-        # get the training environment
-        self.env = get_environment(self.controller, self.manager, wd=self.tempdir.name)
-
     def _sample_rewards(self):
         rewards = []
         for _ in range(10):
@@ -103,16 +94,24 @@ class TestBootstrap(testing_utils.TestCase):
         return rewards
 
     def test_run(self):
-        old_rewards = self._sample_rewards()
-        self.env.train()
-        self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'train_history.csv')))
-        self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'controller_weights.h5')))
-        new_rewards = self._sample_rewards()
-        self.assertLess(np.mean(old_rewards), np.mean(new_rewards))
+        self.tempdir = tempfile.TemporaryDirectory()
+        # init network manager
+        self.manager = get_mock_manager(self.hist_file_list, Lambda=self.Lambda, wd=self.tempdir.name)
+        sess = F.Session()
+        # XXX: guarantees to place everything on one session
+        with F.session_scope(sess):
+            # get controller
+            self.controller = get_controller(state_space=self.state_space, sess=sess)
+            # get the training environment
+            self.env = get_environment(self.controller, self.manager, wd=self.tempdir.name)
 
-    def tearDown(self):
+            old_rewards = self._sample_rewards()
+            self.env.train()
+            self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'train_history.csv')))
+            self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'controller_weights.h5')))
+            new_rewards = self._sample_rewards()
+            self.assertLess(np.mean(old_rewards), np.mean(new_rewards))
         self.tempdir.cleanup()
-        super(TestBootstrap, self).tearDown()
 
 
 if __name__ == '__main__':

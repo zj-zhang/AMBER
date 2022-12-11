@@ -13,14 +13,7 @@ import numpy as np
 import copy
 from .commonOps import unpack_data
 from ..utils.io import read_history
-
-
-class Reward:
-    def __init__(self, *args, **kwargs):
-        raise NotImplemented("Abstract method.")
-
-    def __call__(self, model, data, *args, **kwargs):
-        raise NotImplemented("Abstract method.")
+from .base import BaseReward as Reward
 
 
 class KnowledgeReward(Reward):

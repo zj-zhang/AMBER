@@ -293,15 +293,7 @@ class EnasAnnModelBuilder:
             inputs = self.child_model_input
         # otherwise, need to connect to feature model output
         else:
-            # TODO: for now, only use data_pipe for sample_arc
-            #if self.feature_model.pseudo_inputs_pipe is None or type(arc_seq) is list:
-                # print('='*80)
-                # print('used placeholder')
             inputs = self.feature_model.pseudo_inputs
-            #else:
-            #    # print('='*80)
-            #    # print('used data pipe')
-            #    inputs = self.feature_model.pseudo_inputs_pipe
         for layer_id in range(self.num_layers):
             w = self.w[layer_id]
             b = self.b[layer_id]
@@ -565,7 +557,7 @@ class EnasCnnModelBuilder(BaseEnasConv1dDAG):
         name: str
             a name identifier for this instance
         """
-        super().__init__(model_space=model_space, input_node=inputs_op, output_node=output_op, model_compile_dict=model_compile_dict,
+        super().__init__(model_space=model_space, inputs_op=inputs_op, output_op=output_op, model_compile_dict=model_compile_dict,
             session=session, train_fixed_arc=train_fixed_arc, fixed_arc=fixed_arc, name=name,
             with_skip_connection=with_skip_connection, batch_size=batch_size, keep_prob=keep_prob,
             l1_reg=l1_reg, l2_reg=l2_reg,
@@ -1095,23 +1087,14 @@ class EnasAnnModel:
     def compile(self, optimizer, loss=None, metrics=None, loss_weights=None):
         assert not self.is_compiled, "already compiled"
         if self.arc_seq is None:
-            if self.dag.train_fixed_arc:
-                self.train_op = self.dag.fixed_train_op
-                self.optimizer = self.dag.fixed_optimizer
-                self.loss = self.dag.fixed_loss
-                self.metrics = self.dag.fixed_metrics
-                self.weights = self.dag.fixed_w_masks
-                # self.loss_weights = self.dag.loss_weights
-                self.dropout_placeholders = self.dag.fixed_dropouts
-
-            else:
-                self.train_op = self.dag.sample_train_op
-                self.optimizer = self.dag.sample_optimizer
-                self.loss = self.dag.sample_loss
-                self.metrics = self.dag.sample_metrics
-                self.weights = self.dag.sample_w_masks
-                # self.loss_weights = self.dag.loss_weights
-                self.dropout_placeholders = self.dag.sample_dropouts
+            assert self.dag.train_fixed_arc is False, "You specified EnasAnnModelBuilder to train_fixed_arc=True, but didn't give arc_seq to the child model instance"
+            self.train_op = self.dag.sample_train_op
+            self.optimizer = self.dag.sample_optimizer
+            self.loss = self.dag.sample_loss
+            self.metrics = self.dag.sample_metrics
+            self.weights = self.dag.sample_w_masks
+            # self.loss_weights = self.dag.loss_weights
+            self.dropout_placeholders = self.dag.sample_dropouts
         else:
             self.train_op = self.dag.fixed_train_op
             self.optimizer = self.dag.fixed_optimizer
@@ -1160,48 +1143,6 @@ class EnasAnnModel:
             feed_dict.update({self.dropout_placeholders[i]: self.dropouts[i]
                               for i in range(len(self.dropouts))})
         return feed_dict
-
-    def _make_tf_dataset(self, x_, y_=None, shuffle=False):
-        assert type(x_) is list, "x arg for _make_tf_dataset must be List"
-        assert y_ is None or type(y_) is list, "x arg for _make_tf_dataset must be List"
-        if shuffle:
-            if y_ is None:
-                print("shuffling x")
-                numpy_shuffle_in_unison(x_)
-            else:
-                print("shuffling x and y")
-                numpy_shuffle_in_unison(x_ + y_)
-        feature_model = self.dag.feature_model
-        data_pipe_feed = {feature_model.x_ph[i]: x_[i] for i in range(len(x_))}
-        if y_ is None:
-            total_len = len(x_[0])
-            y_ = [np.zeros((total_len,) + tuple(i.value for i in self.outputs[i].shape[1:]))
-                  for i in range(len(self.outputs))]
-        data_pipe_feed.update({feature_model.y_ph[i]: y_[i] for i in range(len(y_))})
-        self.session.run(feature_model.data_gen.initializer,
-                         feed_dict=data_pipe_feed)
-
-    def fit(self, x, y, batch_size=None, nsteps=None, epochs=1, verbose=1, callbacks=None, validation_data=None):
-        if self.use_pipe:
-            return self.fit_pipe(
-                x=x,
-                y=y,
-                batch_size=batch_size,
-                nsteps=nsteps,
-                epochs=epochs,
-                verbose=verbose,
-                callbacks=callbacks,
-                validation_data=validation_data)
-        else:
-            return self.fit_ph(
-                x=x,
-                y=y,
-                batch_size=batch_size,
-                nsteps=nsteps,
-                epochs=epochs,
-                verbose=verbose,
-                callbacks=callbacks,
-                validation_data=validation_data)
 
     def fit_generator(self,
                       generator,
@@ -1273,22 +1214,7 @@ class EnasAnnModel:
         _, batch_loss, batch_metrics = self.session.run([self.train_op, self.loss, self.metrics], feed_dict=feed_dict)
         return batch_loss, batch_metrics
 
-    def evaluate(self, *args, **kwargs):
-        assert self.is_compiled
-        if self.use_pipe:
-            return self.evaluate_pipe(*args, **kwargs)
-        else:
-            return self.evaluate_ph(*args, **kwargs)
-
-    def predict(self, *args, **kwargs):
-        if self.use_pipe:
-            # print('='*80); print('predict with pipe')
-            return self.predict_pipe(*args, **kwargs)
-        else:
-            # print('='*80); print('predict with placeholder')
-            return self.predict_ph(*args, **kwargs)
-
-    def fit_ph(self, x, y, batch_size=None, nsteps=None, epochs=1, verbose=1, callbacks=None, validation_data=None):
+    def fit(self, x, y, batch_size=None, nsteps=None, epochs=1, verbose=1, callbacks=None, validation_data=None):
         hist = {'loss': [], 'val_loss': []}
         total_len = len(y[0]) if type(y) is list else len(y)
         batch_size = batch_size or 32
@@ -1344,7 +1270,7 @@ class EnasAnnModel:
                 break
         return hist
 
-    def predict_ph(self, x, batch_size=None):
+    def predict(self, x, batch_size=None):
         if type(x) is not list: x = [x]
         if batch_size is None:
             batch_size = min(1000, len(x[0]))
@@ -1360,31 +1286,7 @@ class EnasAnnModel:
             y_pred = y_pred[0]
         return y_pred
 
-    def predict_pipe(self, x, batch_size=None, verbose=0):
-        total_len = len(x[0]) if type(x) is list else len(x)
-        if type(x) is not list:
-            x_ = [x]
-        else:
-            x_ = x
-        feature_model = self.dag.feature_model
-        # overwrite
-        batch_size = feature_model.batch_size
-        y_pred_ = []
-        self._make_tf_dataset(x_)
-        nsteps = total_len // batch_size
-        t = trange(nsteps) if verbose else range(nsteps)
-        for _ in t:
-            feed_dict = self._make_feed_dict()
-            y_pred = self.session.run(self.outputs, feed_dict)
-            y_pred_.append(y_pred)
-        y_pred = [np.concatenate(t, axis=0) for t in zip(*y_pred_)]
-        if len(y_pred) > 1:
-            y_pred = [y for y in y_pred]
-        else:
-            y_pred = y_pred[0]
-        return y_pred
-
-    def evaluate_ph(self, x, y, batch_size=None, verbose=0):
+    def evaluate(self, x, y, batch_size=None, verbose=0):
         if batch_size is None:
             batch_size = min(100, x.shape[0])
         loss_and_metrics = []
@@ -1404,35 +1306,6 @@ class EnasAnnModel:
                 loss_and_metrics = [loss_and_metrics[i] + this_batch_size * tmp[i] for i in range(len(tmp))]
             seen += this_batch_size
         loss_and_metrics = [x / seen for x in loss_and_metrics]
-        return loss_and_metrics
-
-    def evaluate_pipe(self, x, y, batch_size=None, verbose=0):
-        loss_and_metrics = []
-        feature_model = self.dag.feature_model
-        total_len = len(y[0]) if type(y) is list else len(y)
-        # if batch_size is None:
-        #    batch_size = feature_model.batch_size
-        # overwrite
-        batch_size = feature_model.batch_size
-        nsteps = total_len // batch_size
-        if type(x) is list:
-            x_ = x
-        else:
-            x_ = [x]
-        if type(y) is list:
-            y_ = y
-        else:
-            y_ = [y]
-        self._make_tf_dataset(x_, y_)
-        t = trange(nsteps) if verbose else range(nsteps)
-        for _ in t:
-            feed_dict = self._make_feed_dict()
-            loss, metrics = self.session.run([self.loss, self.metrics], feed_dict=feed_dict)
-            if not len(loss_and_metrics):
-                loss_and_metrics = [loss] + metrics
-            else:
-                tmp = [loss] + metrics
-                loss_and_metrics = [0.95 * loss_and_metrics[i] + 0.05 * tmp[i] for i in range(len(tmp))]
         return loss_and_metrics
 
     def save(self, *args, **kwargs):
@@ -1528,21 +1401,13 @@ class EnasCnnModel:
     def compile(self, optimizer=None, loss=None, metrics=None, loss_weights=None):
         assert not self.is_compiled, "already compiled"
         if self.arc_seq is None:
-            if self.dag.train_fixed_arc:
-                self.train_op = self.dag.fixed_train_op
-                self.optimizer = self.dag.fixed_optimizer
-                self.loss = self.dag.fixed_loss
-                self.metrics = self.dag.fixed_metrics
-                # self.loss_weights = self.dag.loss_weights
-                self.dropout_placeholders = self.dag.fixed_dropouts
-
-            else:
-                self.train_op = self.dag.sample_train_op
-                self.optimizer = self.dag.sample_optimizer
-                self.loss = self.dag.sample_loss
-                self.metrics = self.dag.sample_metrics
-                # self.loss_weights = self.dag.loss_weights
-                self.dropout_placeholders = self.dag.sample_dropouts
+            assert self.dag.train_fixed_arc is False, "You specified EnasCnnModelBuilder to train_fixed_arc=True, but didn't give arc_seq to the child model instance"
+            self.train_op = self.dag.sample_train_op
+            self.optimizer = self.dag.sample_optimizer
+            self.loss = self.dag.sample_loss
+            self.metrics = self.dag.sample_metrics
+            # self.loss_weights = self.dag.loss_weights
+            self.dropout_placeholders = self.dag.sample_dropouts
         else:
             self.train_op = self.dag.fixed_train_op
             self.optimizer = self.dag.fixed_optimizer
