@@ -59,5 +59,5 @@ def test_parallel_env(env_type, num_process):
         tempdir.cleanup()
 
 if __name__ == '__main__':
-    test_parallel_env(env_type='ParallelMultiManagerEnvironment', num_process=2)
+    test_parallel_env(env_type='ParallelMultiManagerEnvironment', num_process=1)
     pass

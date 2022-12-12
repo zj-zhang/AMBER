@@ -731,7 +731,7 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                 else:
                     devices = "NoAttribute"
                     args[i]['remap_device'] = None
-                sys.stderr.write("PID %i: %i/%i run; devices=%s\n" % (pid, i, len(args), devices))
+                sys.stderr.write(f"PID {pid}: {i}/{len(args)} run; devices={devices}\n")
                 reward, loss_and_metrics = args[i]['manager'].get_rewards(
                     trial=args[i]['trial'], model_arc=args[i]['model_arc'], nsteps=args[i]['nsteps'],
                     remap_device=args[i]['remap_device']

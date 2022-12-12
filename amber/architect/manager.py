@@ -295,7 +295,6 @@ class DistributedGeneralManager(GeneralManager):
             idle_gpus = get_available_gpus()
             if len(idle_gpus):
                 target_device = idle_gpus[0]
-                target_device = "/device:GPU:%i"%target_device
             else:
                 target_device = "/cpu:0"
             self.devices = [target_device]
