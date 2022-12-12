@@ -74,8 +74,11 @@ def test_get_train_env(env_type):
     tempdir.cleanup()
 
 
-@pytest.mark.parametrize("env_type", ['MultiManagerEnvironment', 'ParallelMultiManagerEnvironment'])
+@pytest.mark.parametrize("env_type", ['MultiManagerEnvironment',])
 def test_get_train_env_multi_manager(env_type):
+    # parallel env is not working for MockMagic, see
+    # https://stackoverflow.com/questions/60627827/picklingerror-when-using-mock-to-check-function-is-called
+    # to test parallel env, see `test_parallel_env.py`
     tempdir = tempfile.TemporaryDirectory()
     model_space, _ = testing_utils.get_example_conv1d_space(num_layers=2, num_pool=1)
     controller = architect.optim.controller.BaseController(model_space=model_space)
@@ -127,6 +130,7 @@ def test_get_controller(controller_type, init_kws):
         )
         arc, prob = controller.get_action()
 
+
 @pytest.mark.parametrize('arg', [
     [[F.Operation('conv1d'), F.Operation('maxpool1d')], [F.Operation('conv1d'), F.Operation('maxpool1d')]],
     testing_utils.get_bionas_model_space()
@@ -134,6 +138,7 @@ def test_get_controller(controller_type, init_kws):
 def test_get_model_space(arg):
     ms = getter.get_model_space(arg)
     assert issubclass(type(ms), architect.base.BaseModelSpace)
+
 
 @pytest.mark.parametrize(['manager_type', 'init_kws'], [
     ['GeneralManager', {}],
@@ -163,10 +168,67 @@ def test_get_manager(manager_type, init_kws):
         assert issubclass(type(manager), architect.base.BaseNetworkManager)
 
 
+@pytest.mark.parametrize(["model_fn_type", "ms_type"], [
+    ['SupernetCnn', 'cnn'],
+    ['SequentialModelBuilder', 'cnn'],
+    [modeler.sequential.SequentialModelBuilder, 'cnn'],
+
+    ['SupernetDnn', 'dnn'],
+    ['SparseFfnnModelBuilder', 'dnn'],
+    ['SequentialMultiIOModelBuilder', 'dnn'], # multiIO needs more than one i/o
+
+    ['SequentialBranchModelBuilder', 'branched'],
+])
+def test_get_modeler(model_fn_type, ms_type):
+    if ms_type == 'cnn':
+        model_space, _ = testing_utils.get_example_conv1d_space()
+        inputs_op = [F.Operation('input', shape=(10,4))]
+    elif ms_type == 'dnn':
+        model_space, _ = testing_utils.get_example_sparse_model_space()
+        inputs_op = [F.Operation('input', shape=(5,))]
+    elif ms_type == 'branched':
+        branch1, _ = testing_utils.get_example_conv1d_space(num_layers=4, num_pool=2)
+        branch2, _ = testing_utils.get_example_conv1d_space(num_layers=2, num_pool=1)
+        stem, _ = testing_utils.get_example_sparse_model_space(num_layers=2)
+        model_space = architect.modelSpace.BranchedModelSpace(
+            subspaces=[[branch1, branch2], stem]
+        )
+        inputs_op = [
+            F.Operation('input', shape=(10,4)), # for branch 1
+            F.Operation('input', shape=(10,4)), # for branch 2
+        ]
+    else:
+        raise ValueError(f'unknown modelspace type: {ms_type}')
+    sess = F.Session()
+    outputs_op = [F.Operation('dense', units=1)]
+    model_compile_dict = {'loss':'mse', 'optimizer':'adam'}
+    model_fn = getter.get_modeler(
+        model_fn_type=model_fn_type, 
+        model_space=model_space,
+        session=sess,
+        inputs_op=inputs_op,
+        outputs_op=outputs_op,
+        model_compile_dict=model_compile_dict
+        )
+    assert callable(model_fn)
+    # TODO: test model building by model_fn.__call__
+
+
+@pytest.mark.parametrize('reward_fn_type', [
+    'LossReward', 'KnowledgeReward', 
+    "LossAucReward", "SparseCategoricalReward",
+])
+def test_get_reward_fn(reward_fn_type):
+    # because knowledge_fn is currently not tested and deprecated
+    knowledge_fn = None
+    reward_fn = getter.get_reward_fn(reward_fn_type=reward_fn_type, knowledge_fn=knowledge_fn)
+
 
 
 if __name__ == '__main__':
     #test_get_train_env(env_type='ControllerTrainEnv')
-    #test_get_manager(manager_type='GeneralManager', init_kws={})
-    test_get_train_env_multi_manager(env_type='ParallelMultiManagerEnvironment')
+    #test_get_manager(manager_type='DistributedManager', init_kws={})
+    #test_get_train_env_multi_manager(env_type='MultiManagerEnvironment')
+    #test_get_modeler('SequentialBranchModelBuilder', 'branched')
+    test_get_reward_fn('LossReward')
     pass

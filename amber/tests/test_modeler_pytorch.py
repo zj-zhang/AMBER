@@ -76,7 +76,7 @@ class TestPyTorchResConvModelBuilder(unittest.TestCase):
         model_space, _ = testing_utils.get_example_conv1d_space(num_layers=3, num_pool=3)
         #self.controller = architect.GeneralController(model_space=model_space, with_skip_connection=True, session=self.session)
         self.arc = [0, 1, 1, 2, 1, 1]
-        self.mb = modeler.pytorchModeler.PytorchResidualCnnBuilder(
+        self.mb = modeler.resnet.ResidualCnnBuilder(
             input_op, output_op, fc_units=32, flatten_mode='flatten', 
             model_compile_dict={'loss':'mse', 'optimizer':'adam'}, 
             model_space=model_space,
@@ -107,7 +107,7 @@ class TestPyTorchResConvModelBuilder(unittest.TestCase):
         old_loss = model.evaluate(train_data)
         model.fit(train_data, epochs=10)
         new_loss = model.evaluate(train_data)
-        self.assertLess(new_loss['test_loss'], old_loss['test_loss'])
+        self.assertLess(new_loss['val_loss'], old_loss['val_loss'])
         
     def test_3viz(self):
         if has_torchviz:

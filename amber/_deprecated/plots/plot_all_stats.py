@@ -1,10 +1,19 @@
 import matplotlib
 import matplotlib.pyplot as plt
 from pandas import read_csv
-from .plotsV1 import accum_opt
 
 matplotlib.use('Agg')
 
+def accum_opt(data, find_min):
+    tmp = []
+    best = np.inf if find_min else -np.inf
+    for d in data:
+        if find_min and d < best:
+            best = d
+        elif (not find_min) and d > best:
+            best = d
+        tmp.append(best)
+    return tmp
 
 def plot_all_stats(file_list, baseline_file):
     dfs = [read_csv(f) for f in file_list]

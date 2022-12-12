@@ -90,15 +90,18 @@ def get_example_conv1d_space(out_filters=8, num_layers=4, num_pool=2):
     return model_space, layer_sharing
 
 
-def get_example_sparse_model_space(num_layers):
+def get_example_sparse_model_space(num_layers=4):
     """Model space for multi-input/output sparse feed-forward nets"""
     state_space = architect.ModelSpace()
+    layer_sharing = {}
     for i in range(num_layers):
         state_space.add_layer(i, [
             architect.Operation('Dense', units=3, activation='relu'),
             architect.Operation('Dense', units=10, activation='relu'),
         ])
-    return state_space
+        if i > 0:
+            layer_sharing[i] = 0
+    return state_space, layer_sharing
 
 
 def get_bionas_model_space():

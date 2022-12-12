@@ -148,7 +148,7 @@ class SequentialMultiIOModelBuilder(BaseModelBuilder):
     """
 
     def __init__(self, inputs_op, output_op, model_compile_dict, model_space,
-                 with_input_blocks, with_output_blocks, dropout_rate=0.2, wsf=1, **kwargs):
+                 with_input_blocks=False, with_output_blocks=False, dropout_rate=0.2, wsf=1, **kwargs):
         self.model_compile_dict = model_compile_dict
         self.inputs = inputs_op
         self.outputs = output_op
@@ -166,12 +166,9 @@ class SequentialMultiIOModelBuilder(BaseModelBuilder):
                 "KerasMultiIOModelBuilder, but only provided 1 " \
                 "num_inputs "
         self.decoder = MultiIOArchitecture(
-            num_layers=len(
-                self.model_space),
-            num_inputs=self.num_inputs *
-            self.with_input_blocks,
-            num_outputs=self.num_outputs *
-            self.with_output_blocks)
+            model_space=self.model_space,
+            num_inputs=self.num_inputs * self.with_input_blocks,
+            num_outputs=self.num_outputs * self.with_output_blocks)
 
     def __call__(self, model_states):
         model = self._convert(model_states)

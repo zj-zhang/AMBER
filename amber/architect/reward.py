@@ -27,7 +27,7 @@ class KnowledgeReward(Reward):
     knowledge_c
     """
 
-    def __init__(self, knowledge_function, Lambda, loss_c=None, knowledge_c=None):
+    def __init__(self, knowledge_function, Lambda=1.0, loss_c=None, knowledge_c=None):
         self.knowledge_function = knowledge_function
         self.Lambda = Lambda
         self.loss_c = float(loss_c) if loss_c is not None else None

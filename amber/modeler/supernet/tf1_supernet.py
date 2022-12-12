@@ -64,7 +64,7 @@ class EnasAnnModelBuilder:
                  l1_reg=0.0,
                  l2_reg=0.0,
                  with_skip_connection=True,
-                 with_input_blocks=True,
+                 with_input_blocks=False,
                  with_output_blocks=False,
                  controller=None,
                  feature_model=None,
@@ -96,6 +96,8 @@ class EnasAnnModelBuilder:
         self.l2_reg = l2_reg
         self.with_skip_connection = with_skip_connection
         self.with_input_blocks = with_input_blocks
+        if self.with_input_blocks is True:
+            assert len(self.input_node) > 1, "Must have more than one input if with_input_blocks=True"
         self.with_output_blocks = with_output_blocks
         self.num_layers = len(model_space)
         self.name = name
@@ -167,7 +169,7 @@ class EnasAnnModelBuilder:
 
         # output node
         self._child_output_size = [n.Layer_attributes['units'] for n in self.output_node]
-        self._child_output_func = [n.Layer_attributes['activation'] for n in self.output_node]
+        self._child_output_func = [n.Layer_attributes.get('activation', 'linear') for n in self.output_node]
         self.num_output_blocks = len(self.output_node)
         self._output_block_map = np.array([
             [i * self._weight_max_units, (i + 1) * self._weight_max_units] for i in range(self.num_layers)],
@@ -835,7 +837,7 @@ class EnasCnnModelBuilder(BaseEnasConv1dDAG):
                 b_out = F.create_parameter("b_out", shape=[self.output_node.Layer_attributes['units']], initializer='zeros')
                 model_output = F.get_layer(
                     x=F.matmul(x, w_out) + b_out,
-                    op=Operation("Activation", activation=self.output_node.Layer_attributes['activation'])
+                    op=Operation("Activation", activation=self.output_node.Layer_attributes.get('activation', 'linear'))
                 )
         return model_output, dropout_placeholders
 

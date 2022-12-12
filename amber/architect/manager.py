@@ -253,7 +253,7 @@ class GeneralManager(BaseNetworkManager):
 class DistributedGeneralManager(GeneralManager):
     """Distributed manager will place all tensors of any child models to a pre-assigned GPU device
     """
-    def __init__(self, devices, train_data_kwargs, validate_data_kwargs, do_resample=False, *args, **kwargs):
+    def __init__(self, devices=None, train_data_kwargs=None, validate_data_kwargs=None, do_resample=False, *args, **kwargs):
         self.devices = devices
         super().__init__(*args, **kwargs)
         assert devices is None or len(self.devices) == 1, "Only supports one GPU device currently"
@@ -269,10 +269,15 @@ class DistributedGeneralManager(GeneralManager):
 
     def close_handler(self):
         if self.file_connected:
-            self.train_x.close()
-            if self.train_y:
+            if hasattr(self.train_x, 'close'):
+                self.train_x.close()
+            del self.train_x
+            if self.train_y is not None and hasattr(self.train_y, 'close'):
                 self.train_y.close()
-            self._validation_data_gen.close()
+            del self.train_y
+            if hasattr(self._validation_data_gen, "close"):
+                self._validation_data_gen.close()
+            del self._validation_data_gen 
             self.train_x = None
             self.train_y = None
             self.file_connected = False
@@ -288,8 +293,11 @@ class DistributedGeneralManager(GeneralManager):
         elif self.devices is None:
             from ..utils import get_available_gpus
             idle_gpus = get_available_gpus()
-            target_device = idle_gpus[0]
-            target_device = "/device:GPU:%i"%target_device
+            if len(idle_gpus):
+                target_device = idle_gpus[0]
+                target_device = "/device:GPU:%i"%target_device
+            else:
+                target_device = "/cpu:0"
             self.devices = [target_device]
             sys.stderr.write("[%s] Auto-assign device: %s" % (pid, target_device) )
         else:
@@ -366,7 +374,7 @@ class DistributedGeneralManager(GeneralManager):
                             loss_and_metrics=loss_and_metrics,
                             working_dir=self.working_dir,
                             save_full_model=self.save_full_model,
-                            knowledge_func=self.reward_fn.knowledge_function
+                            knowledge_func=getattr(self.reward_fn, "knowledge_function", None)
                         )
                     elapse_time = time.time() - start_time
                     sys.stderr.write("  %.3f sec\n"%elapse_time)

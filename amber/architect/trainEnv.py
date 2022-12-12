@@ -737,7 +737,7 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
                     remap_device=args[i]['remap_device']
                     )
             except Exception as e:
-                raise Exception("child pid %i when processing %s, has exception %s" % (pid, args[i]['model_arc'], e))
+                raise Exception("child pid %i when processing arc %s, has exception %s" % (pid, args[i]['model_arc'], e))
             res.append({'reward': reward, 'loss_and_metrics': loss_and_metrics})
         # close all handlers opened in this thread
         for i in range(len(args)):
@@ -758,7 +758,10 @@ class ParallelMultiManagerEnvironment(MultiManagerEnvironment):
         controller_step = self.start_ep * self.max_step_per_ep
 
         from multiprocessing import set_start_method, get_context
-        set_start_method("spawn")
+        try:
+            set_start_method("spawn")
+        except RuntimeError:
+            pass
         for child_step in range(self.start_ep, self.max_episode):
             try:
                 if self.is_enas:

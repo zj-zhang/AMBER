@@ -30,5 +30,5 @@ class BaseReward:
     def __init__(self, *args, **kwargs):
         pass
 
-    def __call__(self, model: F.Model, data: Union[np.ndarray, Tuple, List], *args, **kwargs) -> float:
-        pass
+    def __call__(self, model: F.Model, data: Union[np.ndarray, Tuple, List], *args, **kwargs) -> Tuple[float, list, list]:
+        return 0, [0,], []

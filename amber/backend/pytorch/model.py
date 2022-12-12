@@ -94,19 +94,32 @@ class Model(pl.LightningModule):
         Uses Adam, learning rate from `self.lr`, and no scheduler by default.
         """
         assert self.is_compiled
+        d = {}
         if isinstance(self.optimizer, (tuple, list)):
-            return self.optimizer[0](self.parameters(), **self.optimizer[1])
+            opt = self.optimizer[0](self.parameters(), **self.optimizer[1])
+            # if has scheduler? not sure if there should be better ways
+            if len(self.optimizer) > 2:
+                scheduler = self.optimizer[2](
+                    opt, **self.optimizer[3]
+                )
+                d['scheduler'] = scheduler
         elif self.optimizer == 'adam':
-            return torch.optim.Adam(self.parameters(), lr=0.001)
+            opt = torch.optim.Adam(self.parameters(), lr=0.001)
         elif self.optimizer == 'sgd':
-            return torch.optim.SGD(self.parameters(), lr=0.01, weight_decay=5e-4)
-        elif isinstance(self.optimizer, (torch.optim.Adam, torch.optim.SGD)):
-            return self.optimizer
+            opt =  torch.optim.SGD(self.parameters(), lr=0.01, weight_decay=5e-4)
+        elif isinstance(type(self.optimizer), torch.optim.Optimizer):
+            opt =  self.optimizer
         elif issubclass(self.optimizer, torch.optim.Optimizer):
-            return self.optimizer(self.parameters(), lr=0.001)
+            opt =  self.optimizer(self.parameters(), lr=0.001)
         else:
             raise ValueError(f"unknown torch optim {self.optimizer}")
-        
+        d.update({
+            "optimizer": opt,
+            "monitor": "val_loss",
+            "frequency": 1,
+        })
+        return d
+
     def step(self, batch, kind: str) -> dict:
         """Generic step function that runs the network on a batch and outputs loss
         and accuracy information that will be aggregated at epoch end.

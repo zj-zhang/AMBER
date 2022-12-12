@@ -111,7 +111,7 @@ class TestKerasDAG(testing_utils.TestCase):
             self.inputs_op = [architect.Operation('input', shape=(self.num_inputs,), name='X')]
         self.output_op = architect.Operation('Dense', units=1, activation='linear', name='output')
         # get a three-layer model space
-        self.model_space = testing_utils.get_example_sparse_model_space(4)
+        self.model_space, _ = testing_utils.get_example_sparse_model_space(4)
         # get data
         self.traindata, self.validdata, self.testdata = self.get_data(seed=111)
 

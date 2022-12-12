@@ -2,12 +2,12 @@ Name                                                                            
 ------------------------------------------------------------------------------------------------------------------------------
 /Users/zzjfrank/workspace/AMBER/amber/__init__.py                                                    8      0   100%
 /Users/zzjfrank/workspace/AMBER/amber/architect/__init__.py                                          7      0   100%
-/Users/zzjfrank/workspace/AMBER/amber/architect/base.py                                             23      2    91%   20, 34
+/Users/zzjfrank/workspace/AMBER/amber/architect/base.py                                             23      1    96%   20
 /Users/zzjfrank/workspace/AMBER/amber/architect/buffer.py                                          325     27    92%   37, 45-48, 243, 357, 374, 384, 394, 491, 526-529, 538, 554-558, 598, 609, 620, 641-642, 651, 669-670
-/Users/zzjfrank/workspace/AMBER/amber/architect/commonOps.py                                        59     25    58%   11-21, 23-29, 40, 46, 55-58, 62-65
+/Users/zzjfrank/workspace/AMBER/amber/architect/commonOps.py                                        59     21    64%   12-14, 21, 23-29, 40, 46, 55-58, 62-65
 /Users/zzjfrank/workspace/AMBER/amber/architect/controller.py                                        1      0   100%
-/Users/zzjfrank/workspace/AMBER/amber/architect/manager.py                                         194     92    53%   181-191, 195, 216, 228, 271-278, 281-392, 511, 548, 551
-/Users/zzjfrank/workspace/AMBER/amber/architect/modelSpace.py                                       85     37    56%   53, 67, 78-81, 134, 162-166, 176-179, 219-243, 247, 251
+/Users/zzjfrank/workspace/AMBER/amber/architect/manager.py                                         201     27    87%   181-191, 195, 216, 228, 273, 276, 279, 292, 297-298, 322-325, 362, 395-396, 519, 556, 559
+/Users/zzjfrank/workspace/AMBER/amber/architect/modelSpace.py                                       85     17    80%   53, 67, 78-81, 134, 162-166, 176-179, 247
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/__init__.py                                    0      0   100%
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/__init__.py                        17      4    76%   29-32, 39
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/base.py                           229     14    94%   54, 68, 235-238, 342, 346-350, 396, 399
@@ -19,8 +19,8 @@ Name                                                                            
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/pmbga.py                                     215    101    53%   31, 37, 40, 45-47, 50-55, 58-65, 70-77, 80-83, 86-87, 90-94, 98-100, 103-105, 109, 113, 116-120, 140-146, 149-153, 156-174, 177-180, 184-186, 190-195, 241-244, 247-250, 281, 335-337
 /Users/zzjfrank/workspace/AMBER/amber/architect/pmbga.py                                             1      0   100%
 /Users/zzjfrank/workspace/AMBER/amber/architect/reward.py                                          161     73    55%   41, 51, 55, 75, 83, 141, 154, 168-169, 176-179, 183-184, 192-199, 204-239, 277-300
-/Users/zzjfrank/workspace/AMBER/amber/architect/store.py                                            85     22    74%   34, 38, 40, 46, 86-105, 124, 151, 154, 164-165, 167, 174-175, 180
-/Users/zzjfrank/workspace/AMBER/amber/architect/trainEnv.py                                        555    195    65%   28, 32-33, 37-41, 159, 164, 169-171, 176, 181, 184, 189-190, 193-199, 205, 229, 259, 286, 314, 352-354, 359-360, 373, 401, 406, 413, 421, 427-432, 438, 472, 493-494, 497-503, 507-508, 524, 573-579, 583, 631, 650-651, 654-659, 664-665, 677, 690, 722-746, 751, 762-916, 919-926
+/Users/zzjfrank/workspace/AMBER/amber/architect/store.py                                            85     21    75%   34, 38, 40, 46, 86-105, 124, 151, 154, 164-165, 174-175, 180
+/Users/zzjfrank/workspace/AMBER/amber/architect/trainEnv.py                                        558    106    81%   28, 32-33, 37-41, 159, 164, 169-171, 176, 181, 184, 189-190, 193-199, 205, 229, 259, 286, 314, 352-354, 359-360, 373, 401, 406, 413, 421, 427-432, 438, 472, 493-494, 497-503, 507-508, 524, 573-579, 583, 631, 650-651, 654-659, 664-665, 677, 690, 727, 732-733, 739-740, 751, 769-780, 794-795, 823, 878, 896-897, 901-906, 911-912, 922-929
 /Users/zzjfrank/workspace/AMBER/amber/backend/__init__.py                                           65     14    78%   19, 30-31, 37-43, 57, 76, 82, 91-97
 /Users/zzjfrank/workspace/AMBER/amber/backend/amber_ops.py                                          50      3    94%   27, 29, 52
 /Users/zzjfrank/workspace/AMBER/amber/backend/backend.py                                           156     75    52%   20, 23, 26, 29, 32, 35, 38, 41, 44, 48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84, 89, 92, 95, 98, 101, 104, 107, 110, 113, 116, 119, 122, 125, 128, 132, 135, 138, 141, 144, 147, 150, 153, 156, 159, 162, 165, 168, 171, 174, 177, 180, 183, 186, 189, 192, 195, 198, 201, 205, 208, 211, 214, 217, 220, 223, 226, 230, 234, 236, 238, 242, 244, 246
@@ -34,42 +34,43 @@ Name                                                                            
 /Users/zzjfrank/workspace/AMBER/amber/backend/tensorflow_1/model.py                                156     17    89%   27, 129, 147, 153, 157, 163, 167, 169-172, 174, 178, 183, 196, 210, 222-223
 /Users/zzjfrank/workspace/AMBER/amber/backend/tensorflow_1/session.py                               27      0   100%
 /Users/zzjfrank/workspace/AMBER/amber/backend/tensorflow_1/tensor.py                                68      3    96%   29-30, 39
-/Users/zzjfrank/workspace/AMBER/amber/getter.py                                                    257    141    45%   80, 83-84, 153, 176, 208, 232, 273, 366, 395-520, 568-601, 613-641, 646-666, 673-771
+/Users/zzjfrank/workspace/AMBER/amber/getter.py                                                    215     24    89%   80, 83-84, 153, 176, 208, 232, 273, 366, 519, 573, 587-589, 600, 614-642
 /Users/zzjfrank/workspace/AMBER/amber/modeler/__init__.py                                            3      0   100%
 /Users/zzjfrank/workspace/AMBER/amber/modeler/architectureDecoder.py                                91     38    58%   15-25, 62-70, 73-83, 102-110
-/Users/zzjfrank/workspace/AMBER/amber/modeler/base.py                                               17      1    94%   21
+/Users/zzjfrank/workspace/AMBER/amber/modeler/base.py                                               28      1    96%   22
 /Users/zzjfrank/workspace/AMBER/amber/modeler/resnet/__init__.py                                    13      4    69%   9-12, 19
 /Users/zzjfrank/workspace/AMBER/amber/modeler/resnet/keras_resnet.py                               128      6    95%   134, 188-191, 225, 230
 /Users/zzjfrank/workspace/AMBER/amber/modeler/sequential/__init__.py                                13      4    69%   9-12, 19
-/Users/zzjfrank/workspace/AMBER/amber/modeler/sequential/keras_sequential.py                       168    116    31%   16-17, 21, 23-24, 28, 40, 44, 55, 58-68, 82-89, 92-108, 111-141, 152-168, 177-180, 183-263
+/Users/zzjfrank/workspace/AMBER/amber/modeler/sequential/keras_sequential.py                       168     93    45%   21, 28, 40, 44, 55, 58-68, 92-108, 111-141, 165, 174-177, 180-260
 /Users/zzjfrank/workspace/AMBER/amber/modeler/sparse_ffnn/__init__.py                               20      3    85%   21-24
-/Users/zzjfrank/workspace/AMBER/amber/modeler/sparse_ffnn/keras_ffnn.py                            283     25    91%   79, 121-124, 135-136, 182, 192-193, 211-213, 300-301, 318-319, 466-467, 489, 497-500, 528, 536-538
+/Users/zzjfrank/workspace/AMBER/amber/modeler/sparse_ffnn/keras_ffnn.py                            285     25    91%   82, 124-127, 138-139, 185, 195-196, 214-216, 303-304, 321-322, 469-470, 492, 500-503, 531, 539-541
 /Users/zzjfrank/workspace/AMBER/amber/modeler/sparse_ffnn/tf1_featmod_ffnn.py                       72      3    96%   86-89
 /Users/zzjfrank/workspace/AMBER/amber/modeler/supernet/__init__.py                                  14      4    71%   14-17, 24
 /Users/zzjfrank/workspace/AMBER/amber/modeler/supernet/base.py                                      83      0   100%
-/Users/zzjfrank/workspace/AMBER/amber/modeler/supernet/tf1_supernet.py                             966    105    89%   83, 91, 335-341, 462, 578, 595, 723, 791, 821-822, 827, 859-863, 895, 912-913, 954-957, 975, 990, 1000, 1005, 1108, 1114-1115, 1135, 1143, 1158-1210, 1213-1215, 1249-1250, 1266, 1295, 1420, 1425, 1427-1428, 1444, 1452, 1455, 1472, 1477-1480, 1495, 1497-1498, 1504-1505, 1511-1516, 1519, 1524, 1564, 1573
+/Users/zzjfrank/workspace/AMBER/amber/modeler/supernet/tf1_supernet.py                             968    106    89%   83, 91, 337-343, 464, 597, 725, 793, 810-812, 823-824, 829, 861-865, 897, 914-915, 956-959, 977, 992, 1002, 1007, 1110, 1116-1117, 1137, 1145, 1160-1212, 1215-1217, 1251-1252, 1268, 1297, 1422, 1427, 1429-1430, 1446, 1454, 1457, 1474, 1479-1482, 1497, 1499-1500, 1506-1507, 1513-1518, 1521, 1526, 1566, 1575
 /Users/zzjfrank/workspace/AMBER/amber/offline_learn/__init__.py                                      2      0   100%
 /Users/zzjfrank/workspace/AMBER/amber/offline_learn/gold_standard.py                                37     27    27%   17-23, 27-39, 44-55
 /Users/zzjfrank/workspace/AMBER/amber/offline_learn/grid_search.py                                  88     79    10%   13-38, 44-52, 56-64, 69-91, 95-117
 /Users/zzjfrank/workspace/AMBER/amber/offline_learn/mock_manager.py                                 61     14    77%   19, 23-24, 42-49, 82, 89-90, 97
 /Users/zzjfrank/workspace/AMBER/amber/plots/__init__.py                                              2      0   100%
-/Users/zzjfrank/workspace/AMBER/amber/plots/plotsV1.py                                             301    162    46%   42-43, 47-52, 56-58, 67-74, 81-87, 121, 157, 162-164, 178, 192-215, 224, 229-231, 244, 248-269, 286-288, 298-300, 308, 312-320, 325-345, 350-355, 359-372, 376-404, 417-457
+/Users/zzjfrank/workspace/AMBER/amber/plots/plotsV1.py                                             185     59    68%   47-53, 87, 123, 128-130, 144, 158-181, 190, 195-197, 210, 227-229, 239-241, 249, 253-281
 /Users/zzjfrank/workspace/AMBER/amber/utils/__init__.py                                             18     10    44%   7-11, 14-18
 /Users/zzjfrank/workspace/AMBER/amber/utils/io.py                                                  144     39    73%   51-64, 73-86, 108, 149-151, 158-159, 164-166, 175-178, 194-195
 /Users/zzjfrank/workspace/AMBER/amber/utils/logging.py                                              15      0   100%
-/Users/zzjfrank/workspace/AMBER/amber/utils/testing_utils.py                                        71      2    97%   27, 30
+/Users/zzjfrank/workspace/AMBER/amber/utils/testing_utils.py                                        74      2    97%   27, 30
 /Users/zzjfrank/workspace/AMBER/amber/wrapper.py                                                    77     59    23%   54-74, 77-112, 115-117, 135-147, 150, 153-156, 159-163, 166-168, 172-173, 177, 181
 __init__.py                                                                                          0      0   100%
 test_architect_env.py                                                                               91      3    97%   115-116, 256
 test_architect_helper.py                                                                           163      1    99%   306
 test_architect_optimize.py                                                                         230     29    87%   80-94, 98-120, 377
 test_architect_pmbga.py                                                                             50      1    98%   71
-test_getter.py                                                                                      89      1    99%   172
+test_getter.py                                                                                     111      2    98%   201, 233
 test_integration_bionas.py                                                                          55      1    98%   118
 test_modeler_keras.py                                                                               89      3    97%   80, 111, 188
 test_modeler_pytorch.py                                                                             92     59    36%   20, 25, 33-40, 43-49, 52-68, 74-79, 87-91, 101-110, 113-121, 125
 test_modeler_tensorflow_supercnn.py                                                                 90      5    94%   84-85, 142-143, 176
 test_modeler_tensorflow_superffnn.py                                                               106      4    96%   73-75, 205
+test_parallel_env.py                                                                                27      1    96%   62
 test_supernet_featmodel.py                                                                         107      1    99%   251
 ------------------------------------------------------------------------------------------------------------------------------
-TOTAL                                                                                             7545   1807    76%
+TOTAL                                                                                             7464   1387    81%

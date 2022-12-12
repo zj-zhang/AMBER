@@ -38,9 +38,43 @@ def reset_plot(width_in_inches=4.5,
         dpi=dots_per_inch)
 
 
+# def rand_jitter(arr, scale=0.01):
+#     stdev = scale * (max(arr) - min(arr))
+#     return arr + np.random.randn(len(arr)) * stdev
+
+
+# def heatscatter(x, y):
+#     heatmap, xedges, yedges = np.histogram2d(x, y, bins=50)
+#     extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+#     # plt.clf()
+#     reset_plot()
+#     plt.imshow(heatmap.T, extent=extent, origin='lower')
+#     plt.show()
+
+
+# def heatscatter_sns(x, y, figsize=(8, 8)):
+#     sns.set(rc={'figure.figsize': figsize})
+#     sns.set(style="white", color_codes=True)
+#     sns.jointplot(x=x, y=y, kind='kde', color="skyblue")
+
+
 def plot_training_history(history, par_dir):
     # print(history.history.keys())
     reset_plot()
+    # summarize history for r2
+    # try:
+    #     plt.plot(history.history['r_squared'])
+    #     plt.plot(history.history['val_r_squared'])
+    #     plt.title('model r2')
+    #     plt.ylabel('r2')
+    #     plt.xlabel('epoch')
+    #     plt.legend(['train', 'val'], loc='upper left')
+    #     # plt.show()
+    #     plt.savefig(os.path.join(par_dir, 'r2.png'))
+    #     plt.gcf().clear()
+    # except:
+    #     pass
+
     # summarize history for loss
     plt.plot(history.history['loss'])
     plt.plot(history.history['val_loss'])
@@ -210,6 +244,31 @@ def plot_wiring_weights(working_dir, with_input_blocks, with_skip_connection):
         raise IOError('File does not exist')
 
 
+# def plot_stats(working_dir):
+#     save_path = os.path.join(working_dir, 'nas_training_stats.json')
+#     if os.path.exists(save_path):
+#         df = json.load(open(save_path))
+#         # plt.clf()
+#         reset_plot()
+#         for item in ['Loss', 'Knowledge', 'Accuracy']:
+#             data = df[item]
+#             d = np.stack(list(map(lambda x: sma(x), np.array(data))), axis=0)
+#             avg = np.apply_along_axis(np.mean, 0, d)
+#             plt.plot(avg, label=item)
+#             if d.shape[0] >= 6:
+#                 std = np.apply_along_axis(np.std, 0, d) / np.sqrt(d.shape[0])
+#                 min_, max_ = avg - 1.96 * std, avg + 1.96 * std
+#                 plt.fill_between(range(avg.shape[0]), min_, max_, alpha=0.2)
+
+#         plt.legend(loc='best')
+#         plt.xlabel('Number of steps')
+#         plt.ylabel('Statistics')
+#         # plt.title('Knowledge, Accuracy, and Loss over time')
+#         plt.savefig(os.path.join(working_dir, 'nas_training_stats.png'), bbox_inches='tight')
+#     else:
+#         raise IOError('File not found')
+
+
 def plot_stats2(working_dir):
     save_path = os.path.join(working_dir, 'nas_training_stats.json')
     if os.path.exists(save_path):
@@ -249,6 +308,70 @@ def plot_stats2(working_dir):
         raise IOError('File not found')
 
 
+# def accum_opt(data, find_min):
+#     tmp = []
+#     best = np.inf if find_min else -np.inf
+#     for d in data:
+#         if find_min and d < best:
+#             best = d
+#         elif (not find_min) and d > best:
+#             best = d
+#         tmp.append(best)
+#     return tmp
+
+
+# def multi_distplot_sns(data, labels, save_fn, title='title', xlab='xlab', ylab='ylab', hist=False, rug=False, xlim=None,
+#                        ylim=None, legend_off=False, **kwargs):
+#     assert len(data) == len(labels)
+#     # plt.clf()
+#     reset_plot()
+#     ax = sns.distplot(data[0], hist=hist, rug=rug, label=labels[0], **kwargs)
+#     if len(data) > 1:
+#         for i in range(1, len(data)):
+#             sns.distplot(data[i], hist=hist, rug=rug, label=labels[i], ax=ax, **kwargs)
+#     # ax.set_title(title, fontsize=16)
+#     ax.set_xlabel(xlab)
+#     ax.set_ylabel(ylab)
+#     if xlim:
+#         ax.set_xlim(xlim)
+#     if ylim:
+#         ax.set_ylim(ylim)
+#     ax.legend(loc='upper left')
+#     if legend_off:
+#         ax.get_legend().remove()
+#     if save_fn:
+#         plt.savefig(save_fn)
+#     else:
+#         return ax
+
+
+# def violin_sns(data, x, y, hue, save_fn=None, split=True, **kwargs):
+#     # plt.clf()
+#     reset_plot()
+#     ax = sns.violinplot(x=x, y=y, hue=hue, split=split, data=data, **kwargs)
+#     if save_fn:
+#         plt.savefig(save_fn)
+#     else:
+#         return ax
+
+
+# def plot_controller_hidden_states(controller, save_fn='controller_hidden_states.png'):
+#     s = controller.sess
+#     hidden_states, arc = s.run([controller.sample_hidden_states, controller.sample_arc])
+#     hidden_states_map = pd.DataFrame(np.concatenate([hidden_states[i][-1] for i in range(len(hidden_states))], axis=0))
+
+#     reset_plot(width_in_inches=hidden_states_map.shape[1] / 1.5, height_in_inches=hidden_states_map.shape[0] / 1.5)
+#     ax = sns.heatmap(np.round(hidden_states_map, 3), annot=True)
+
+#     # for a seaborn bug that cuts off top&bottom rows
+#     ax.set_ylim(len(hidden_states_map) - 0.5, -0.5)
+
+#     if save_fn:
+#         plt.savefig(save_fn)
+#     else:
+#         return ax
+
+
 def plot_hessian(gkf, save_fn):
     h = np.apply_along_axis(np.mean, 0, gkf.W_model)
     h_var = np.apply_along_axis(np.var, 0, gkf.W_model)
@@ -280,3 +403,55 @@ def plot_hessian(gkf, save_fn):
              square=True, ax_kws={"title": "Model Hessian"})
     f.savefig(save_fn)
 
+
+# def plot_sequence_importance(model_importance,
+#                              motif_importance,
+#                              pos_chunks=None,
+#                              neg_chunks=None,
+#                              prediction=None,
+#                              seq_char=None,
+#                              title='sequence_importance',
+#                              linespace=0.025,
+#                              save_fn=None
+#                              ):
+#     def normalizer(x):
+#         return (x - np.min(x)) / (np.max(x) - np.min(x))
+
+#     seq_len = len(model_importance)
+#     fig = reset_plot(width_in_inches=seq_len / 1000 * 9, height_in_inches=4.5)
+#     ax = fig.add_subplot(111)
+#     # ax.plot(linespace + normalizer(model_importance), color='r', label='Model Saliency')
+#     # ax.plot(linespace + normalizer(model_importance), color='r', label='Model Saliency')
+#     lns1 = ax.plot(model_importance, color='r', label='Model Saliency')
+#     # ax.plot(-(linespace + normalizer(motif_importance)), color='b', label='Motif Score')
+#     # ax.plot(-(linespace + motif_importance), color='b', label='Motif Score')
+#     ax2 = ax.twinx()
+#     lns2 = ax2.plot(motif_importance, color='b', label='Motif Score')
+#     # cannot afford to put seq_char in for now; ZZ 2019.12.11
+#     if seq_char is not None:
+#         ax.text(0, 0, seq_char)
+#         # ax.set_xticks(np.arange(len(seq_char)), list(seq_char))
+#     if pos_chunks is not None:
+#         chunk = np.stack(pos_chunks)
+#         ax.hlines(y=np.zeros(chunk.shape[0]), xmin=chunk[:, 0], xmax=chunk[:, 1], color='orange', linewidth=8,
+#                   label='Important Region')
+#     if neg_chunks is not None:
+#         chunk = np.stack(neg_chunks)
+#         ax.hlines(y=np.zeros(chunk.shape[0]), xmin=chunk[:, 0], xmax=chunk[:, 1], color='grey', linewidth=8,
+#                   label='Nuisance Region')
+
+#     lns = lns1 + lns2
+#     labs = [l.get_label() for l in lns]
+#     ax.legend(lns, labs, loc=0)
+#     # ax.legend(loc='upper left')
+#     # ax.set_ylim((-1.05-linespace, 1.05+linespace))
+#     ax.set_xlabel('Nucleotide Position')
+#     ax.set_ylabel('Normalized Score')
+#     if prediction is None:
+#         ax.set_title(title)
+#     else:
+#         ax.set_title(title + ', pred=%s' % prediction)
+
+#     if save_fn is not None:
+#         plt.tight_layout()
+#         plt.savefig(save_fn)

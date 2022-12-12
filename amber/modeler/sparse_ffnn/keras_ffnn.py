@@ -67,16 +67,19 @@ class SparseFfnnModelBuilder(BaseModelBuilder):
     def _get_input_nodes(inputs_op):
         """Convert input Operation to a list of ComputationNode"""
         input_nodes = []
-        for node_op in inputs_op:
-            node = F.ComputationNode(node_op, node_name=node_op.Layer_attributes['name'])
+        for i, node_op in enumerate(inputs_op):
+            node = F.ComputationNode(node_op, node_name=node_op.Layer_attributes.get('name', f"input_{i}"))
             input_nodes.append(node)
         return input_nodes
 
     @staticmethod
     def _get_output_node(output_op):
         """Convert output Operation to ComputationNode"""
-        if output_op is list:
-            raise Exception("DAG currently does not accept output_op in List")
+        if type(output_op) in (tuple,list):
+            if len(output_op) == 1:
+                output_op = output_op[0]
+            else:
+                raise Exception("DAG currently does not accept output_op in List with more than one element")
         output_node = F.ComputationNode(output_op, node_name='output')
         return output_node
     

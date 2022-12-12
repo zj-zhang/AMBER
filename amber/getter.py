@@ -260,7 +260,7 @@ def get_model_space(arg):
                 [{'Layer_type': 'globalmaxpool1d'}, {'Layer_type': 'globalavgpool1d'} ]
             ])
         print(ms)
-        # output: StateSpace with 2 layers and 4 total combinations
+        # output: OperationSpace with 2 layers and 4 total combinations
 
     """
     from .architect.modelSpace import ModelSpace, BaseModelSpace
@@ -392,16 +392,16 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
     session : amber.backend.Session
         GPU session, can be None if not applicable for certain model builders
     """
-    from .modeler import ModelBuilder
-    assert isinstance(model_fn_type, (str,)) or issubclass(model_fn_type, ModelBuilder), TypeError("model_fn_type must be a amber.modeler.ModelBuilder, or string; got %s" % type(model_fn_type))
+    from .modeler.base import BaseModelBuilder
+    assert isinstance(model_fn_type, (str,)) or issubclass(model_fn_type, BaseModelBuilder), TypeError("model_fn_type must be a amber.modeler.ModelBuilder, or string; got %s" % type(model_fn_type))
 
-    from .architect.modelSpace import State
+    from .backend import Operation
 
-    if (not isinstance(model_fn_type, (str,))) and issubclass(model_fn_type, ModelBuilder):
+    if (not isinstance(model_fn_type, (str,))) and issubclass(model_fn_type, BaseModelBuilder):
         inp_op_list = kwargs.pop("inputs_op")
-        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        inputs_op = [Operation(**x) if not isinstance(x, Operation) else x for x in inp_op_list]
         out_op_list = kwargs.pop("outputs_op")
-        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
+        output_op = [Operation(**x) if not isinstance(x, Operation) else x for x in out_op_list]
         model_fn = model_fn_type(
             model_space=model_space,
             num_layers=len(model_space),
@@ -411,15 +411,16 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
             *args,
             **kwargs
         )
-    elif model_fn_type == "DAG" or model_fn_type == "DAGModelBuilder":
-        from .modeler import DAGModelBuilder
+    elif model_fn_type in ('SparseFfnn', "SparseFfnnModelBuilder",
+         "DAG", "DAGModelBuilder"): # includes legacy names
+        from .modeler.sparse_ffnn import SparseFfnnModelBuilder
 
         assert "inputs_op" in kwargs and "outputs_op" in kwargs
         inp_op_list = kwargs.pop("inputs_op")
-        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        inputs_op = [Operation(**x) if not isinstance(x, Operation) else x for x in inp_op_list]
         out_op_list = kwargs.pop("outputs_op")
-        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
-        model_fn = DAGModelBuilder(
+        output_op = [Operation(**x) if not isinstance(x, Operation) else x for x in out_op_list]
+        model_fn = SparseFfnnModelBuilder(
             model_space=model_space,
             num_layers=len(model_space),
             inputs_op=inputs_op,
@@ -428,13 +429,13 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
             *args,
             **kwargs
         )
-    elif model_fn_type == "Enas" or model_fn_type == "EnasAnnModelBuilder":
-        from .modeler import EnasAnnModelBuilder
+    elif model_fn_type in ("SupernetDnn", "EnasAnnModelBuilder"):
+        from .modeler.supernet import EnasAnnModelBuilder
 
         inp_op_list = kwargs.pop("inputs_op")
-        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        inputs_op = [Operation(**x) if not isinstance(x, Operation) else x for x in inp_op_list]
         out_op_list = kwargs.pop("outputs_op")
-        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
+        output_op = [Operation(**x) if not isinstance(x, Operation) else x for x in out_op_list]
         model_fn = EnasAnnModelBuilder(
             model_space=model_space,
             num_layers=len(model_space),
@@ -444,14 +445,14 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
             *args,
             **kwargs
         )
-    elif model_fn_type == "EnasCnnModelBuilder":
-        from .modeler import EnasCnnModelBuilder
+    elif model_fn_type in ("SupernetCnn", "EnasCnnModelBuilder"):
+        from .modeler.supernet import EnasCnnModelBuilder
 
         inp_op_list = kwargs.pop("inputs_op")
-        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        inputs_op = [Operation(**x) if not isinstance(x, Operation) else x for x in inp_op_list]
         out_op_list = kwargs.pop("outputs_op")
-        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
-        controller = kwargs.pop("controller")
+        output_op = [Operation(**x) if not isinstance(x, Operation) else x for x in out_op_list]
+        controller = kwargs.pop("controller", None)
         model_fn = EnasCnnModelBuilder(
             model_space=model_space,
             num_layers=len(model_space),
@@ -462,34 +463,34 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
             *args,
             **kwargs
         )
-    elif model_fn_type == "KerasModelBuilder":
-        from .modeler import KerasModelBuilder
+    elif model_fn_type in ("KerasModelBuilder", "SequentialModelBuilder"):
+        from .modeler.sequential import SequentialModelBuilder
 
         inp_op_list = kwargs.pop("inputs_op")
-        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        inputs_op = [Operation(**x) if not isinstance(x, Operation) else x for x in inp_op_list]
         assert (
             len(inputs_op) == 1
-        ), "KerasModelBuilder only accepts one input; try KerasMultiIOModelBuilder for multiple inputs"
+        ), "SequentialModelBuilder only accepts one input; try SequentialMultiIOModelBuilder for multiple inputs"
         out_op_list = kwargs.pop("outputs_op")
-        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
+        output_op = [Operation(**x) if not isinstance(x, Operation) else x for x in out_op_list]
         assert (
             len(output_op) == 1
-        ), "KerasModelBuilder only accepts one output; try KerasMultiIOModelBuilder for multiple outputs"
-        model_fn = KerasModelBuilder(
+        ), "SequentialModelBuilder only accepts one output; try SequentialMultiIOModelBuilder for multiple outputs"
+        model_fn = SequentialModelBuilder(
             inputs_op=inputs_op[0],
             output_op=output_op[0],
             model_space=model_space,
             *args,
             **kwargs
         )
-    elif model_fn_type == "KerasMultiIOModelBuilder":
-        from .modeler import KerasMultiIOModelBuilder
+    elif model_fn_type in ("KerasMultiIOModelBuilder", "SequentialMultiIOModelBuilder"):
+        from .modeler.sequential import SequentialMultiIOModelBuilder
 
         inp_op_list = kwargs.pop("inputs_op")
-        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        inputs_op = [Operation(**x) if not isinstance(x, Operation) else x for x in inp_op_list]
         out_op_list = kwargs.pop("outputs_op")
-        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
-        model_fn = KerasMultiIOModelBuilder(
+        output_op = [Operation(**x) if not isinstance(x, Operation) else x for x in out_op_list]
+        model_fn = SequentialMultiIOModelBuilder(
             model_space=model_space,
             inputs_op=inputs_op,
             output_op=output_op,
@@ -498,15 +499,15 @@ def get_modeler(model_fn_type, model_space, session, *args, **kwargs):
             **kwargs
         )
 
-    elif model_fn_type == "KerasBranchModelBuilder":
-        from .modeler import KerasBranchModelBuilder
+    elif model_fn_type in ("KerasBranchModelBuilder", "SequentialBranchModelBuilder"):
+        from .modeler.sequential import SequentialBranchModelBuilder
 
         inp_op_list = kwargs.pop("inputs_op")
-        inputs_op = [State(**x) if not isinstance(x, State) else x for x in inp_op_list]
+        inputs_op = [Operation(**x) if not isinstance(x, Operation) else x for x in inp_op_list]
         out_op_list = kwargs.pop("outputs_op")
-        output_op = [State(**x) if not isinstance(x, State) else x for x in out_op_list]
+        output_op = [Operation(**x) if not isinstance(x, Operation) else x for x in out_op_list]
         assert len(output_op) == 1
-        model_fn = KerasBranchModelBuilder(
+        model_fn = SequentialBranchModelBuilder(
             model_space=model_space,
             inputs_op=inputs_op,
             output_op=output_op[0],
@@ -565,10 +566,10 @@ def get_reward_fn(reward_fn_type, knowledge_fn, *args, **kwargs):
     neural networks `arXiv <https://arxiv.org/abs/1909.00337>`_.
 
     """
-    from .architect.reward import Reward
-    assert isinstance(reward_fn_type, (str,)) or issubclass(reward_fn_type, Reward), TypeError("reward_fn_type must be a subclass amber.architect.reward.Reward, or string")
+    from .architect.base import BaseReward
+    assert isinstance(reward_fn_type, (str,)) or issubclass(reward_fn_type, BaseReward), TypeError("reward_fn_type must be a subclass amber.architect.reward.Reward, or string")
 
-    if (not isinstance(reward_fn_type, (str,))) and issubclass(reward_fn_type, Reward):
+    if (not isinstance(reward_fn_type, (str,))) and issubclass(reward_fn_type, BaseReward):
         reward_fn = reward_fn_type(knowledge_function=knowledge_fn, *args, **kwargs)
     elif reward_fn_type == "KnowledgeReward":
         from .architect.reward import KnowledgeReward
@@ -582,7 +583,7 @@ def get_reward_fn(reward_fn_type, knowledge_fn, *args, **kwargs):
             % knowledge_fn
         )
         reward_fn = LossReward(*args, **kwargs)
-    elif reward_fn_type == "Mock_Reward":
+    elif reward_fn_type in ("MockReward", "Mock_Reward"):
         from .architect.reward import MockReward
 
         reward_fn = MockReward(*args, **kwargs)
@@ -612,25 +613,25 @@ def get_knowledge_fn(knowledge_fn_type, knowledge_data_dict, *args, **kwargs):
     """
     if knowledge_data_dict is not None:
         knowledge_data_dict = load_data_dict(knowledge_data_dict)
-    if knowledge_fn_type == "ght" or knowledge_fn_type == "GraphHierarchyTree":
-        from .objective import GraphHierarchyTree
+    # if knowledge_fn_type == "ght" or knowledge_fn_type == "GraphHierarchyTree":
+    #     from .objective import GraphHierarchyTree
 
-        k_fn = GraphHierarchyTree(*args, **kwargs)
-    elif (
-        knowledge_fn_type == "ghtal" or knowledge_fn_type == "GraphHierarchyTreeAuxLoss"
-    ):
-        from .objective import GraphHierarchyTreeAuxLoss
+    #     k_fn = GraphHierarchyTree(*args, **kwargs)
+    # elif (
+    #     knowledge_fn_type == "ghtal" or knowledge_fn_type == "GraphHierarchyTreeAuxLoss"
+    # ):
+    #     from .objective import GraphHierarchyTreeAuxLoss
 
-        k_fn = GraphHierarchyTreeAuxLoss(*args, **kwargs)
-    elif knowledge_fn_type == "Motif":
-        from .objective import MotifKLDivergence
+    #     k_fn = GraphHierarchyTreeAuxLoss(*args, **kwargs)
+    # elif knowledge_fn_type == "Motif":
+    #     from .objective import MotifKLDivergence
 
-        k_fn = MotifKLDivergence(*args, **kwargs)
-    elif knowledge_fn_type == "AuxilaryAcc":
-        from .objective import AuxilaryAcc
+    #     k_fn = MotifKLDivergence(*args, **kwargs)
+    # elif knowledge_fn_type == "AuxilaryAcc":
+    #     from .objective import AuxilaryAcc
 
-        k_fn = AuxilaryAcc(*args, **kwargs)
-    elif knowledge_fn_type == "None" or knowledge_fn_type == "zero":
+    #     k_fn = AuxilaryAcc(*args, **kwargs)
+    if knowledge_fn_type == "None" or knowledge_fn_type == "zero":
         k_fn = None
     else:
         raise Exception("cannot understand knowledge_fn type: %s" % knowledge_fn_type)
@@ -639,133 +640,3 @@ def get_knowledge_fn(knowledge_fn_type, knowledge_data_dict, *args, **kwargs):
             k_fn.knowledge_encoder(**knowledge_data_dict)
     print("knowledge = %s" % knowledge_fn_type)
     return k_fn
-
-
-def get_model_and_io_nodes(model_space_arg):
-    """work-in-progress : maps GUI inputs to construct an AMBER object, for input and output nodes, and model space"""
-    import json
-    import ast
-
-    def eval_shape(d_):
-        for j in range(len(d_)):
-            if "shape" in d_[j] and type(d_[j]["shape"]) is str:
-                d_[j]["shape"] = ast.literal_eval(d_[j]["shape"])
-        return d_
-
-    if os.path.isfile(model_space_arg):
-        with open(model_space_arg, "r") as f:
-            d = json.load(f)
-        # model_space = get_model_space(d['model_space'])
-        model_space = d["model_space"]
-        d["input_states"] = eval_shape(d["input_states"])
-        input_states = d["input_states"]
-        d["output_state"] = eval_shape([d["output_state"]])[0]
-        output_state = d["output_state"]
-        return model_space, input_states, output_state
-    else:
-        raise Exception("cannot open file: %s" % model_space_arg)
-
-
-# mapping gui var_dict to bionas
-def gui_mapper(var_dict):
-    """work-in-progress : maps GUI inputs to construct an AMBER object"""
-    # import ast
-    wd = var_dict["wd"]
-    train_data = DataToParse(var_dict["train_data"])
-    val_data = DataToParse(var_dict["validation_data"])
-    model_space, input_states, output_state = get_model_and_io_nodes(
-        var_dict["model_space"]
-    )
-    model_compile_dict = {
-        "optimizer": var_dict["optimizer"],
-        "loss": var_dict["child_loss"],
-        "metrics": [
-            x.strip()
-            for x in var_dict["child_metrics"].strip("[]").split(",")
-            if len(x.strip())
-        ],
-    }
-    # this creates a safety issue...
-    # might just work for now.. ZZJ 11.9.2019
-    # knowledge_params = ast.literal_eval(var_dict['knowledge_specific_settings'])
-    knowledge_params = eval(var_dict["knowledge_specific_settings"])
-    assert type(knowledge_params) is dict, (
-        "Error in parsing `knowledge_specific settings`, must be a dict:\n "
-        "%s" % knowledge_params
-    )
-    knowledge_data = DataToParse(var_dict["knowledge_data"]).unpack()
-
-    type_dict = {
-        "controller_type": var_dict["controller_type"],
-        "model_fn_type": var_dict["model_builder"],
-        "knowledge_fn_type": var_dict["knowledge_fn"],
-        "reward_fn_type": var_dict["reward_fn"],
-        "manager_type": var_dict["manager_type"],
-        "env_type": var_dict["env_type"],
-    }
-
-    specs = {
-        "controller": {
-            "use_ppo_loss": var_dict["optim_method"] == "PPO",
-            # 'with_skip_connection': True,
-            # 'with_input_blocks': True,
-            "num_input_blocks": len(input_states),
-            # 'input_block_unique_connection': True,
-            "lstm_size": int(var_dict["lstm_size"]),
-            "lstm_num_layers": int(var_dict["lstm_layers"]),
-            "kl_threshold": float(var_dict["kl_cutoff"]),
-            "train_pi_iter": int(var_dict["ctrl_epoch"]),
-            # 'skip_weight': None,
-            "lr_init": float(var_dict["ctrl_lr"]),
-            "buffer_size": int(var_dict["ctrl_buffer_size"]),
-            "batch_size": int(var_dict["ctrl_batch_size"]),
-        },
-        "model_space": model_space,
-        "model_builder": {
-            "input_states": input_states,
-            "output_state": output_state,
-            # 'with_input_blocks': True,
-            # 'with_skip_connection': True,
-            "model_compile_dict": model_compile_dict,
-            "dag_func": var_dict["dag_func"],
-        },
-        "knowledge_fn": {"params": knowledge_params, "data": knowledge_data},
-        "reward_fn": {
-            "Lambda": float(var_dict["knowledge_weight"]),
-            "knowledge_c": None
-            if var_dict["knowledge_c"] == "None"
-            else float(var_dict["knowledge_c"]),
-            "loss_c": None
-            if var_dict["loss_c"] == "None"
-            else float(var_dict["loss_c"]),
-        },
-        "manager": {
-            "params": {
-                "working_dir": wd,
-                "model_compile_dict": model_compile_dict,
-                "post_processing_fn": var_dict["postprocessing_fn"],
-                "epochs": int(var_dict["child_epochs"]),
-                "verbose": int(var_dict["manager_verbosity"]),
-                "child_batchsize": int(var_dict["child_batch_size"]),
-            },
-            "data": {
-                "train_data": train_data,
-                "validation_data": val_data,
-            },
-        },
-        "train_env": {
-            "max_episode": int(var_dict["total_steps"]),
-            "max_step_per_ep": int(var_dict["samples_per_step"]),
-            # 'with_input_blocks': True,
-            # 'with_skip_connection': True,
-            # 'logger': None,
-            # 'resume_prev_run': False,
-            "should_plot": True,
-            "working_dir": wd,
-            "squeezed_action": True,
-            # 'save_controller': False,
-            # 'continuous_run': False
-        },
-    }
-
-    return type_dict, specs
