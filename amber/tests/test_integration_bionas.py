@@ -1,5 +1,5 @@
 from amber.utils import testing_utils
-from amber.architect.controller import GeneralController
+from amber.architect.optim.controller import GeneralController
 from amber.architect.trainEnv import ControllerTrainEnvironment
 from amber.offline_learn.mock_manager import MockManager
 from amber.utils.testing_utils import get_bionas_model_space as get_state_space

@@ -51,18 +51,11 @@ def batchify(x, y=None, batch_size=None, shuffle=True, drop_remainder=False):
             yield tmp_x
 
 
-def numpy_shuffle_in_unison(List):
-    rng_state = np.random.get_state()
-    for x in List:
-        np.random.set_state(rng_state)
-        np.random.shuffle(x)
-
-
-def count_model_params(model_params):
-    num_vars = 0
-    for var in model_params:
-        num_vars += np.prod([dim.value for dim in var.get_shape()])
-    return num_vars
+# def numpy_shuffle_in_unison(List):
+#     rng_state = np.random.get_state()
+#     for x in List:
+#         np.random.set_state(rng_state)
+#         np.random.shuffle(x)
 
 
 def get_kl_divergence_n_entropy(curr_prediction, curr_onehot, old_prediction, old_onehotpred):

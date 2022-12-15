@@ -6,7 +6,7 @@ import numpy as np
 import warnings
 import h5py
 import datetime
-from amber.architect.commonOps import batchify, numpy_shuffle_in_unison
+from amber.architect.commonOps import batchify
 from tqdm import trange, tqdm
 from .base import BaseEnasConv1dDAG
 from ... import backend as F

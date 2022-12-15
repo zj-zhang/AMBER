@@ -43,6 +43,9 @@ def get_train_op(loss, variables, optimizer, **kwargs) -> Tuple: # type: ignore
 def get_layer(x, op) -> Callable: # type: ignore
     pass
 
+def plot_model(model, to_file): # type:ignore
+    pass
+
 # tensor
 def data_type_dict() -> Dict: # type: ignore
     pass

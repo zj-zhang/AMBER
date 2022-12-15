@@ -81,13 +81,13 @@ def get_layer(x=None, op=None, custom_objects=None, with_bn=False):
         layer = tf.keras.layers.Lambda(sparsek_vec, **op.Layer_attributes)
 
     elif op.Layer_type in ('maxpool1d','maxpooling1d'):
-        layer = tf.keras.layers.MaxPooling1D(**op.Layer_attributes)
+        layer = tf.keras.layers.MaxPooling1D(pool_size=op.Layer_attributes.get('pool_size',2), strides=op.Layer_attributes.get('strides', None), padding=op.Layer_attributes.get('padding', "valid"), data_format=op.Layer_attributes.get('data_format', 'channels_last'))
 
     elif op.Layer_type in ('maxpool2d','maxpooling2d'):
         layer = tf.keras.layers.MaxPooling2D(**op.Layer_attributes)
 
     elif op.Layer_type in ('avgpool1d', 'avgpooling1d', 'averagepooling1d'):
-        layer = tf.keras.layers.AveragePooling1D(**op.Layer_attributes)
+        layer = tf.keras.layers.AveragePooling1D(pool_size=op.Layer_attributes.get('pool_size',2), strides=op.Layer_attributes.get('strides', None), padding=op.Layer_attributes.get('padding', "valid"), data_format=op.Layer_attributes.get('data_format', 'channels_last'))
 
     elif op.Layer_type in ('avgpool2d', 'avgpooling2d', 'averagepooling2d'):
         layer = tf.keras.layers.AveragePooling2D(**op.Layer_attributes)
@@ -226,6 +226,9 @@ def get_train_op(loss, variables, optimizer, **kwargs):
     except:  # for newer version of keras
         learning_rate = config['learning_rate']
     return train_op, learning_rate, opt
+
+def plot_model(model, to_file):
+    tf.keras.utils.plot_model(model, to_file=to_file, show_shapes=True, show_layer_names=True)
 
 
 # alias

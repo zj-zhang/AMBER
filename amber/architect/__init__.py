@@ -2,9 +2,9 @@
 provides search algorithms and helpers for neural network architecture
 """
 
-
-from .controller import BaseController, GeneralController, MultiInputController, MultiIOController, OperationController, \
-    ZeroShotController
+from .optim import pmbga
+from .optim import controller
+from .optim.controller import BaseController, GeneralController, MultiInputController, MultiIOController, OperationController, ZeroShotController
 from .modelSpace import State, ModelSpace
 from .manager import GeneralManager, EnasManager, DistributedGeneralManager
 from .trainEnv import ControllerTrainEnvironment, EnasTrainEnv, MultiManagerEnvironment, ParallelMultiManagerEnvironment

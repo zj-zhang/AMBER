@@ -24,13 +24,13 @@ from ..utils.io import save_action_weights, save_stats
 from ..utils.logging import setup_logger
 from .base import BaseSearchEnvironment
 
-def get_controller_states(model):
-    return [K.get_value(s) for s, _ in model.state_updates]
+# def get_controller_states(model):
+#     return [K.get_value(s) for s, _ in model.state_updates]
 
 
-def set_controller_states(model, states):
-    for (d, _), s in zip(model.state_updates, states):
-        K.set_value(d, s)
+# def set_controller_states(model, states):
+#     for (d, _), s in zip(model.state_updates, states):
+#         K.set_value(d, s)
 
 
 def get_controller_history(fn='train_history.csv'):

@@ -6,7 +6,7 @@ from parameterized import parameterized, parameterized_class
 from amber.utils import testing_utils
 from amber import modeler
 from amber import architect
-from amber import backend
+from amber import backend as F
 import logging, sys, unittest
 logging.disable(sys.maxsize)
 
@@ -71,13 +71,13 @@ class TestKerasGetLayer(testing_utils.TestCase):
     ])
     def test_get_layers(self, input_shape, layer_name, layer_attr, exp_type=None, exp_error=None, kwargs=None):
         kwargs = kwargs or {}
-        x = backend.get_layer(x=None, op=architect.Operation('Input', shape=input_shape))
+        x = F.get_layer(x=None, op=architect.Operation('Input', shape=input_shape))
         operation = architect.Operation(layer_name, **layer_attr)
         if exp_error is None:
-            layer = backend.get_layer(x=x, op=operation, **kwargs)
+            layer = F.get_layer(x=x, op=operation, **kwargs)
             self.assertIsInstance(layer, exp_type)
         else:
-            self.assertRaises(exp_error, backend.get_layer, x=x, op=operation, **kwargs)
+            self.assertRaises(exp_error, F.get_layer, x=x, op=operation, **kwargs)
 
     @parameterized.expand([
         # undef should throw error, or return None
@@ -86,15 +86,15 @@ class TestKerasGetLayer(testing_utils.TestCase):
         ((100,), architect.Operation('concatenate'), ValueError),
     ])
     def test_get_layers_catch_exception(self, input_shape, operation, exp_error):
-        x = backend.get_layer(x=None, op=architect.Operation('Input', shape=input_shape))
-        self.assertRaises(exp_error, backend.get_layer, x=x, op=operation)
+        x = F.get_layer(x=None, op=architect.Operation('Input', shape=input_shape))
+        self.assertRaises(exp_error, F.get_layer, x=x, op=operation)
 
 
 
 @parameterized_class(attrs=('model_builder',), input_values=[
-    (modeler.sparse_ffnn.SparseFfnnModelBuilder,),
-    (modeler.sparse_ffnn.MulInpSparseFfnnModelBuilder,),
-    (modeler.sparse_ffnn.MulInpAuxLossModelBuilder,)
+   (modeler.sparse_ffnn.SparseFfnnModelBuilder,),
+   (modeler.sparse_ffnn.MulInpSparseFfnnModelBuilder,),
+   (modeler.sparse_ffnn.MulInpAuxLossModelBuilder,)
 ])
 class TestKerasDAG(testing_utils.TestCase):
     with_input_blocks = True
@@ -182,6 +182,64 @@ class TestKerasDAG(testing_utils.TestCase):
             m1_train, m1_test = self.model_fit(m1)
             m2_train, m2_test = self.model_fit(m2)
             # self.assertLess(m1_test, m2_test)  # this needs a lot more fit_epochs
+
+
+class TestSequentialBranchModelBuilder(testing_utils.TestCase):
+    def setUp(self):
+        branch1, _ = testing_utils.get_example_conv1d_space(num_layers=3, num_pool=2)
+        branch2, _ = testing_utils.get_example_conv1d_space(num_layers=3, num_pool=2)
+        stem, _ = testing_utils.get_example_sparse_model_space(num_layers=2)
+        self.model_space = architect.modelSpace.BranchedModelSpace(
+            subspaces=[[branch1, branch2], stem]
+        )
+        self.inputs_op = [
+            F.Operation('input', shape=(100,4)), # for branch 1
+            F.Operation('input', shape=(100,4)), # for branch 2
+        ]
+        self.outputs_op = [F.Operation('dense', units=1)]
+        self.model_compile_dict = {'loss':'mse', 'optimizer':'adam'}
+    
+    def test_build(self):
+        arc = [0,1,0, 1,0,0, 1,0]
+        model_fn = modeler.sequential.SequentialBranchModelBuilder(
+            inputs_op=self.inputs_op, output_op=self.outputs_op, 
+            model_compile_dict=self.model_compile_dict, model_space=self.model_space
+        )
+        model = model_fn(arc)
+        assert isinstance(model, F.Model)
+
+
+@parameterized_class([
+    {'num_inputs': 3},
+    {'num_outputs': 3},
+    {'num_inputs': 3, 'num_outputs': 3},
+    {'wsf': 2}
+])
+class TestSequentialMultiIOModelBuilder(testing_utils.TestCase):
+    num_inputs = 1
+    num_outputs = 1
+    wsf = 1
+    def setUp(self):
+        self.model_space, _ = testing_utils.get_example_sparse_model_space(num_layers=3)
+        self.inputs_op = [F.Operation('input', shape=(5,)) for _ in range(self.num_inputs)]
+        self.outputs_op = [F.Operation('dense', units=1) for _ in range(self.num_outputs)]
+        self.model_compile_dict = {'loss':'mse', 'optimizer':'adam'}
+        self.decoder = modeler.architectureDecoder.MultiIOArchitecture(model_space=self.model_space,
+            num_inputs=self.num_inputs, num_outputs=self.num_outputs
+            )
+
+    def test_build(self):
+        model_fn = modeler.sequential.SequentialMultiIOModelBuilder(
+            inputs_op=self.inputs_op,
+            output_op=self.outputs_op,
+            model_compile_dict=self.model_compile_dict,
+            model_space=self.model_space,
+            with_input_blocks = self.num_inputs>1,
+            with_output_blocks = self.num_outputs>1,
+        )
+        arc =  self.decoder.sample(seed=777)
+        model = model_fn(arc)
+        assert isinstance(model, F.Model)
 
 
 if __name__ == '__main__':

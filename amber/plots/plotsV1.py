@@ -248,35 +248,3 @@ def plot_stats2(working_dir):
     else:
         raise IOError('File not found')
 
-
-def plot_hessian(gkf, save_fn):
-    h = np.apply_along_axis(np.mean, 0, gkf.W_model)
-    h_var = np.apply_along_axis(np.var, 0, gkf.W_model)
-
-    plt.clf()
-    # change the label to mean, and cell-size to represent variance
-    vmax = np.max(h) * 1.5
-    vmin = np.min(h) * 1.5
-    cellsize_vmax = np.max(h_var) * 1.2
-    g_ratio = h
-    g_size = h_var
-    annot = np.vectorize(lambda x: "" if np.isnan(x) else "{:.2f}".format(x))(g_ratio)
-
-    # adjust visual balance
-    figsize = (g_ratio.shape[1], g_ratio.shape[0])
-    cbar_width = 0.02 * 6.0 / figsize[0]
-
-    f, ax = plt.subplots(1, 1, figsize=figsize)
-    cbar_ax = f.add_axes([0.9, 0.1, cbar_width, 0.8])
-    cbar_ax.tick_params(length=0.5, labelsize='x-small')
-    
-    from .heatmap2 import heatmap2
-    heatmap2(g_ratio, ax=ax,
-             cbar_ax=cbar_ax,
-             vmax=vmax, vmin=vmin,
-             cmap='Spectral_r',
-             annot=annot, fmt="s", annot_kws={"fontsize": "medium"},
-             cellsize=g_size, cellsize_vmax=cellsize_vmax,
-             square=True, ax_kws={"title": "Model Hessian"})
-    f.savefig(save_fn)
-

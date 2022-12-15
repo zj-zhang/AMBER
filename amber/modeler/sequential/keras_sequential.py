@@ -58,7 +58,7 @@ class SequentialModelBuilder(BaseModelBuilder):
         elif isinstance(self.gpus, int):
             with F.device_scope('/cpu:0'):
                 vanilla_model = self.build(model_states)
-            model = multi_gpu_model(vanilla_model, gpus=gpus)
+            model = multi_gpu_model(vanilla_model, gpus=self.gpus)
         elif isinstance(self.gpus, list):
             mirrored_strategy = tf.distribute.MirroredStrategy(
                 devices=self.gpus)
@@ -82,7 +82,11 @@ class SequentialBranchModelBuilder(BaseModelBuilder):
         assert isinstance(model_space, BranchedModelSpace)
         assert len(inputs_op) == len(model_space.subspaces[0])
         self.inputs_op = inputs_op
-        self.output_op = output_op
+        if type(output_op) in (tuple, list):
+            assert len(output_op) == 1
+            self.output_op = output_op[0]
+        else:
+            self.output_op = output_op
         self.model_space = model_space
         self.model_compile_dict = model_compile_dict
         self.with_bn = with_bn
@@ -142,11 +146,6 @@ class SequentialBranchModelBuilder(BaseModelBuilder):
 
 
 class SequentialMultiIOModelBuilder(BaseModelBuilder):
-    """
-    Note:
-        Still not working if num_outputs=0
-    """
-
     def __init__(self, inputs_op, output_op, model_compile_dict, model_space,
                  with_input_blocks=False, with_output_blocks=False, dropout_rate=0.2, wsf=1, **kwargs):
         self.model_compile_dict = model_compile_dict
@@ -243,7 +242,7 @@ class SequentialMultiIOModelBuilder(BaseModelBuilder):
         for m, o in enumerate(out):
             idx = [i for i in np.where(o)[0] if prev_layers[i] is not None]
             if len(idx) > 1:
-                outputs_inputs.append(Concatenate()(
+                outputs_inputs.append(F.concat(
                     [prev_layers[i] for i in idx]))
             elif len(idx) == 1:
                 outputs_inputs.append(prev_layers[idx[0]])

@@ -201,29 +201,29 @@ def get_controller(controller_type, model_space, session, **kwargs):
     kwargs : dict
         keyword arguments for controller, such as buffer type
     """
-    from .architect.controller import BaseController
+    from .architect.optim.controller import BaseController
     assert isinstance(controller_type, (str,)) or issubclass(controller_type, BaseController), TypeError("controller_type must be a subclass amber.architect.BaseController, or string")
 
     if (not isinstance(controller_type, (str,))) and issubclass(controller_type, BaseController):
         controller = controller_type(model_space=model_space, session=session, **kwargs)
     elif controller_type == "General" or controller_type == "GeneralController":
-        from .architect import GeneralController
+        from .architect.optim.controller import GeneralController
 
         controller = GeneralController(
             model_space=model_space, session=session, **kwargs
         )
     elif controller_type == "Operation" or controller_type == "OperationController":
-        from .architect import OperationController
+        from .architect.optim.controller import OperationController
 
         controller = OperationController(model_space=model_space, **kwargs)
     elif controller_type == "MultiIO" or controller_type == "MultiIOController":
-        from .architect import MultiIOController
+        from .architect.optim.controller import MultiIOController
 
         controller = MultiIOController(
             model_space=model_space, session=session, **kwargs
         )
     elif controller_type == "ZeroShot" or controller_type == "ZeroShotController":
-        from .architect import ZeroShotController
+        from .architect.optim.controller import ZeroShotController
 
         controller = ZeroShotController(
             model_space=model_space, session=session, **kwargs
