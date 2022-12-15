@@ -4,15 +4,7 @@
 Overall wrapper class for building an AMBER App.
 """
 
-import tensorflow as tf
-from keras import backend as K
-
-try:
-    from tensorflow import Session
-except ImportError:
-    from tensorflow.compat.v1 import Session
-
-    tf.compat.v1.disable_eager_execution()
+from . import backend as F
 import os
 from . import getter
 
@@ -47,7 +39,7 @@ class Amber:
     ----------
     type_dict: dict
     is_built: bool
-    session : tf.Session, or None
+    session : amber.backend.Session, or None
     model_space: amber.architect.ModelSpace
     controller: amber.architect.BaseController
     manager : amber.architect.GeneralManager
@@ -69,12 +61,14 @@ class Amber:
         self.manager = None
         self.env = None
 
-        # use one tf.Session throughout one DA instance
-        self.session = Session()
-        try:
-            K.set_session(self.session)
-        except Exception as e:
-            print("Failed to set Keras backend becasue of %s" % e)
+        # use one amber.backend.Session throughout one DA instance
+        self.session = F.Session()
+        if F.mod_name=='tensorflow_1':
+            try:
+                from tensorflow.keras import backend as K
+                K.set_session(self.session)
+            except Exception as e:
+                print("Failed to set Keras backend becasue of %s" % e)
 
         if specs is not None:
             self.from_dict(specs)

@@ -31,8 +31,8 @@ Genomics and Bioinformatics.
 
 🤝**Supported backend deep-learning libraries:**
 - 🟢 Tensorflow 1.X / Keras
-- 🟡 Tensorflow 2
 - 🟡 PyTorch / Pytorch-Lightning
+- 🟡 Tensorflow 2
 
 *Legend*
 🟢: Running & Tested; 🟡: Release soon; 🔴: Work in Progress
@@ -42,7 +42,7 @@ Genomics and Bioinformatics.
 The overview, tutorials, API documentation can be found at:
 https://amber-automl.readthedocs.io/en/latest/
 
-To get quick started, use this Google Colab notebook. 
+To get quick started, see this [example](https://github.com/zj-zhang/AMBER/blob/master/examples/digits_sklearn/digits_sklearn.py) on handwritten digits classification, or use this Google Colab notebook on DeepSEA. 
 <a href="https://colab.research.google.com/gist/zj-zhang/48689d8bdc8adf3375719911f7e41989/amber-epigenetics-tutorial-v2.ipynb" target="_blank"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
 
 Finally, you can read the AMBER paper for epigenetics regulatory modelling published in [Nature Machine Intelligence](https://www.nature.com/articles/s42256-021-00316-z).
@@ -65,15 +65,33 @@ Currently AMBER is designed to be run in Linux-like environment. As a prerequisi
  environment.
  
 
-Please follow the steps below to install AMBER. There are two ways to install `AMBER`: 1) cloning the latest development
-from the GitHub repository and install with `Anaconda`; and 2) using `pypi` to install a versioned release.
+Please follow the steps below to install AMBER. To install `AMBER`, 
+you can use `conda` and `pypi` to install a versioned release (recommended).
 
 > NOTE
-We strongly encourage you to create a new conda environment by using the yaml file in this github repository, even if you are installing from PyPI.
-```
-conda env create -n amber -f conda_env.yml
+We strongly encourage you to create a new conda environment, regardless of the backend library you choose.
+
+
+### Installing with TF 1.X/Keras
+In the command-line terminal, type the following commands to get it installed:
+
+```{bash}
+conda create -n amber-tf1 -c anaconda tensorflow-gpu=1.15.0 keras scikit-learn numpy~=1.18.5 h5py~=2.10.0 matplotlib seaborn
+# if you don't have CUDA-enabled GPU, or on MacOS, replace tensorflow-gpu=1.15.0 with tensorflow=1.15.0
+conda activate amber-tf1
+pip install amber-automl
+# if you plan to run tests
+pip install pytest coverage parameterized pydot graphviz
 ```
 
+### Installing with PyTorch/Lightning
+```{bash}
+conda create -n amber-torch -c conda-forge pytorch=1.11.0 scikit-learn numpy scipy matplotlib seaborn tqdm h5py
+conda activate amber-torch
+pip install pytorch-lightning==1.6.5 amber-automl
+# if you plan to run tests
+pip install pytest coverage parameterized expecttest hypothesis
+```
 
 ### Get the latest source code
 First, clone the Github Repository; if you have previous versions, make sure you pull the latest commits/changes:
@@ -82,28 +100,10 @@ First, clone the Github Repository; if you have previous versions, make sure you
 git clone https://github.com/zj-zhang/AMBER.git
 cd AMBER
 git pull
-```
-
-If you see `Already up to date` in your terminal, that means the code is at the latest change.
-
-### Installing with Anaconda
-The easiest way to install AMBER is by ``Anaconda``. It is recommended to create a new conda
-environment for AMBER using the yaml file `conda_env.yml` in this repo:
-
-```
-conda env create -n amber -f conda_env.yml 
 python setup.py develop
 ```
 
-### Installing with Pip
-As of version `0.1.0`, AMBER is on pypi. In the command-line terminal, type the following commands to get it installed:
-
-```{bash}
-pip install amber-automl
-```
-
-This will also install the required dependencies automatically. The pip install is still in its beta phase, so if you
-encouter any issues, please send me a bug report, and try installing with Anaconda as above.
+If you see `Already up to date` in your terminal, that means the code is at the latest change.
 
 
 ### Testing your installation

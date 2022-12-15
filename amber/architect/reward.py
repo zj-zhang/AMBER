@@ -13,14 +13,7 @@ import numpy as np
 import copy
 from .commonOps import unpack_data
 from ..utils.io import read_history
-
-
-class Reward:
-    def __init__(self, *args, **kwargs):
-        raise NotImplemented("Abstract method.")
-
-    def __call__(self, model, data, *args, **kwargs):
-        raise NotImplemented("Abstract method.")
+from .base import BaseReward as Reward
 
 
 class KnowledgeReward(Reward):
@@ -34,7 +27,7 @@ class KnowledgeReward(Reward):
     knowledge_c
     """
 
-    def __init__(self, knowledge_function, Lambda, loss_c=None, knowledge_c=None):
+    def __init__(self, knowledge_function, Lambda=1.0, loss_c=None, knowledge_c=None):
         self.knowledge_function = knowledge_function
         self.Lambda = Lambda
         self.loss_c = float(loss_c) if loss_c is not None else None

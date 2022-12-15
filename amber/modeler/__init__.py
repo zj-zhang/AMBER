@@ -4,28 +4,12 @@ Modeler is an interface class that interacts outside with manager, and inside co
 - child facilitates training and evaluating
 """
 
-from . import child, dag
-
-from .pytorchModeler import PytorchResidualCnnBuilder
-from .enasModeler import DAGModelBuilder, EnasAnnModelBuilder, EnasCnnModelBuilder
-from .kerasModeler import ModelBuilder, KerasModelBuilder, KerasMultiIOModelBuilder, KerasResidualCnnBuilder, \
-    build_sequential_model, build_multi_gpu_sequential_model, \
-    build_multi_gpu_sequential_model_from_string, build_sequential_model_from_string, \
-    KerasBranchModelBuilder
-
+from . import resnet, supernet, sequential, sparse_ffnn
+from . import architectureDecoder
 
 __all__ = [
-    'ModelBuilder',
-    'DAGModelBuilder',
-    'EnasCnnModelBuilder',
-    'EnasAnnModelBuilder',
-    'KerasModelBuilder',
-    'KerasMultiIOModelBuilder',
-    'KerasResidualCnnBuilder',
-    'KerasBranchModelBuilder',
-    'PytorchResidualCnnBuilder',
-    'build_sequential_model',
-    'build_sequential_model_from_string',
-    'build_multi_gpu_sequential_model_from_string',
-    'build_multi_gpu_sequential_model'
+    'resnet',
+    'supernet',
+    'sequential',
+    'sparse_ffnn'
 ]
