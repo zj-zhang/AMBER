@@ -54,9 +54,9 @@ class BaseTorchModel(LightningModule):
     """BaseTorchModel is a subclass of pytorch_lightning.LightningModule
 
     It implements a basic functions of `step`, `configure_optimizers` but provides a similar
-    user i/o arguments as tensorflow.keras.Model 
+    user i/o arguments as tensorflow.keras.Model
 
-    A module builder will add `torch.nn.Module`s to this instance, and define its forward 
+    A module builder will add `torch.nn.Module`s to this instance, and define its forward
     pass function. Then this instance is responsible for training and evaluations.
     add module: use torch.nn.Module.add_module
     define forward pass: how?
@@ -79,16 +79,16 @@ class BaseTorchModel(LightningModule):
             layer_id, operation, input_ids = layer[0], layer[1], layer[2] if len(layer)>2 else None
             self.add(layer_id=layer_id, operation=operation, input_ids=input_ids)
         self.save_hyperparameters()
-    
+
     @property
     def forward_tracker(self):
         # return a read-only view
         return copy.copy(self.__forward_pass_tracker)
-    
+
     def add(self, layer_id: str, operation, input_ids: Union[str, List, Tuple] = None):
         self.layers[layer_id] = operation
         self.__forward_pass_tracker.append((layer_id, input_ids))
-    
+
     def compile(self, loss, optimizer, metrics=None, *args, **kwargs):
         if callable(loss):
             self.criterion = loss
@@ -99,10 +99,11 @@ class BaseTorchModel(LightningModule):
         self.optimizer = optimizer
         self.metrics = metrics or {}
         self.is_compiled = True
-    
-    def fit(self, train_data, validation_data=None, epochs=1, callbacks=None, verbose=False):
+
+    def fit(self, train_data, validation_data=None, epochs=1, callbacks=None, verbose=False, logger=None):
         assert self.is_compiled, ValueError("this model instance has not been compiled yet")
-        logger = InMemoryLogger()
+        if logger is None:
+            logger = InMemoryLogger()
         trainer = pl.Trainer(
             accelerator="auto",
             max_epochs=epochs,
@@ -110,10 +111,10 @@ class BaseTorchModel(LightningModule):
             enable_progress_bar=verbose,
             logger=logger,
             # deterministic=True,
-        )            
+        )
         trainer.fit(self, train_data, validation_data)
         return logger
-    
+
     def evaluate(self, data, verbose=False):
         trainer = pl.Trainer(
             accelerator="auto",
@@ -160,15 +161,18 @@ class BaseTorchModel(LightningModule):
             opt =  self.optimizer(self.parameters(), lr=0.001)
         else:
             raise ValueError(f"unknown torch optim {self.optimizer}")
-        d = d.update({
+        d.update({
             "optimizer": opt,
-            "monitor": "val_loss",
-            "frequency": 1,
+            "scheduler":
+                {
+                    "monitor": "val_loss",
+                    "frequency": 1,
+                }
         })
         return d
-    
+
     def forward(self, x, verbose=False):
-        """Scaffold forward-pass function that follows the operations in 
+        """Scaffold forward-pass function that follows the operations in
         the pre-set in self.__forward_pass_tracker
         """
         # permute input, if data_format has channel last
@@ -190,7 +194,7 @@ class BaseTorchModel(LightningModule):
             self.hs[layer_id] = out
             x = out
         return out
-    
+
     def step(self, batch, kind: str) -> dict:
         """Generic step function that runs the network on a batch and outputs loss
         and accuracy information that will be aggregated at epoch end.
@@ -265,7 +269,7 @@ class BaseTorchModel(LightningModule):
 class ExperimentWriter:
     """In-memory experiment writer.
     Currently this supports logging hyperparameters and metrics.
-    
+
     Borrowing from @ttesileanu https://github.com/ttesileanu/cancer-net
     """
 
@@ -297,7 +301,7 @@ class ExperimentWriter:
 
 
 class InMemoryLogger(LightningLoggerBase):
-    """In-memory logger -- when you want to access your learning trajectory directly after learning. 
+    """In-memory logger -- when you want to access your learning trajectory directly after learning.
     Borrowing from @ttesileanu https://github.com/ttesileanu/cancer-net
 
     :param name: experiment name
