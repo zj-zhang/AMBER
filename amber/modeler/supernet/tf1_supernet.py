@@ -334,12 +334,8 @@ class EnasAnnModelBuilder:
                     layer_mask = []
                 row_mask = F.concat([inp_mask, layer_mask], axis=0)
             else:
-                if layer_id > 0:
-                    # keep last/closest layer, mask all others
-                    layer_masks = [F.zeros(shape=(self._weight_max_units*(layer_id-1)), dtype=F.int32), F.ones(shape=(self._weight_max_units), dtype=F.int32)]
-                else:
-                    layer_masks = []
-
+                # if layer_id > 0, keep last/closest layer, mask all others
+                layer_masks = [F.zeros(shape=(self._weight_max_units*(layer_id-1)), dtype=F.int32), F.ones(shape=(self._weight_max_units), dtype=F.int32)] if layer_id>0 else []
                 row_mask = F.concat([inp_mask] + layer_masks, axis=0)
             w_mask = F.matmul(F.expand_dims(row_mask, -1), F.expand_dims(col_mask, 0))
 
@@ -856,10 +852,10 @@ class EnasCnnModelBuilder(BaseEnasConv1dDAG):
         inputs = prev_layers[-1]
         if self.data_format == "NWC":
             inp_w = F.get_shape(inputs)[1]
-            inp_c = F.get_shape(inputs)[2]
+            #inp_c = F.get_shape(inputs)[2]
 
         elif self.data_format == "NCW":
-            inp_c = F.get_shape(inputs)[1]
+            #inp_c = F.get_shape(inputs)[1]
             inp_w = F.get_shape(inputs)[2]
         else:
             raise Exception("cannot understand data format: %s" % self.data_format)
@@ -1123,7 +1119,7 @@ class EnasAnnModel:
 
     def _make_feed_dict(self, x=None, y=None, is_training_phase=False):
         assert x is None or type(x) is list, "x arg for _make_feed_dict must be List"
-        assert y is None or type(y) is list, "x arg for _make_feed_dict must be List"
+        assert y is None or type(y) is list, "y arg for _make_feed_dict must be List"
         if self.arc_seq is None:
             feed_dict = {}
         else:
@@ -1157,7 +1153,7 @@ class EnasAnnModel:
                       workers=1,
                       use_multiprocessing=False,
                       shuffle=True):
-        if workers > 0:
+        if workers > 1:
             from keras.utils.data_utils import GeneratorEnqueuer
             enqueuer = GeneratorEnqueuer(
                 generator,
@@ -1171,7 +1167,8 @@ class EnasAnnModel:
         callback_list = F.get_callback('CallbackList')(callbacks=callbacks)
         callback_list.set_model(self)
         callback_list.on_train_begin()
-
+        if steps_per_epoch is None: steps_per_epoch = len(generator)
+        assert steps_per_epoch is not None
         hist = {'loss': [], 'val_loss': []}
         for epoch in range(epochs):
             seen = 0
@@ -1186,10 +1183,12 @@ class EnasAnnModel:
                     batch_size = 1
                 elif isinstance(x, list):
                     batch_size = x[0].shape[0]
-                elif isinstance(x, dict):
-                    batch_size = list(x.values())[0].shape[0]
+                # elif isinstance(x, dict):
+                #     batch_size = list(x.values())[0].shape[0]
                 else:
                     batch_size = x.shape[0]
+                    x = [x]
+                    y = [y]
                 batch_loss, batch_metrics = self.train_on_batch(x, y)
                 epoch_logs['loss'] += batch_loss * batch_size
                 seen += batch_size
@@ -1207,7 +1206,7 @@ class EnasAnnModel:
 
             if self.stop_training:
                 break
-        if workers > 0:
+        if workers > 1:
             enqueuer.stop()
         return hist
 
@@ -1247,11 +1246,8 @@ class EnasAnnModel:
                 curr_loss = batch_loss if curr_loss is None else curr_loss * 0.95 + batch_loss * 0.05
                 if verbose == 1:
                     t.set_postfix(loss="%.4f" % curr_loss)
-                if verbose == 2:
-                    if it % 1000 == 0:
-                        print(
-                        "%s %i/%i, loss=%.5f" % (datetime.datetime.now().strftime("%H:%M:%S"), it, nsteps, curr_loss),
-                        flush=True)
+                if verbose == 2 and it % 1000 == 0:
+                    print("%s %i/%i, loss=%.5f" % (datetime.datetime.now().strftime("%H:%M:%S"), it, nsteps, curr_loss), flush=True)
 
             hist['loss'].append(curr_loss)
             logs = {'loss': curr_loss}
@@ -1523,7 +1519,7 @@ class EnasCnnModel:
         return hist.history
 
     def fit_generator(self):
-        pass
+        raise NotImplementedError("not implemented")
 
     def train_on_batch(self, x=None, y=None):
         assert self.is_compiled, "Must compile model first"

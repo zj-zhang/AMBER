@@ -46,6 +46,7 @@ class TestEnvDryRun(testing_utils.TestCase):
     controller_getter = architect.GeneralController
     modeler_getter = modeler.resnet.ResidualCnnBuilder
     trainenv_getter = architect.ControllerTrainEnvironment
+    save_controller_every = 1
 
     def __init__(self, *args, **kwargs):
         super(TestEnvDryRun, self).__init__(*args, **kwargs)
@@ -96,17 +97,7 @@ class TestEnvDryRun(testing_utils.TestCase):
             epochs=1,
             verbose=0
         )
-        self.env = self.trainenv_getter(
-            self.controller,
-            self.manager,
-            max_episode=5,
-            max_step_per_ep=1,
-            logger=None,
-            resume_prev_run=False,
-            should_plot=True,
-            working_dir=self.tempdir.name,
-            with_skip_connection=True
-        )
+
 
     def tearDown(self):
         super(TestEnvDryRun, self).tearDown()
@@ -117,16 +108,39 @@ class TestEnvDryRun(testing_utils.TestCase):
         self.tempdir.cleanup()
 
     def test_build(self):
+        self.env = self.trainenv_getter(
+            self.controller,
+            self.manager,
+            max_episode=3,
+            max_step_per_ep=1,
+            logger=None,
+            resume_prev_run=False,
+            should_plot=True,
+            working_dir=self.tempdir.name,
+            with_skip_connection=True,
+            save_controller_every=self.save_controller_every
+        )
         self.env.train()
         self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'controller_weights.h5')))
         self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'train_history.csv')))
-
+        # test resume
+        self.env_resume = self.trainenv_getter(
+            self.controller,
+            self.manager,
+            max_episode=5,
+            max_step_per_ep=1,
+            logger=None,
+            resume_prev_run=True,
+            should_plot=True,
+            working_dir=self.tempdir.name,
+            with_skip_connection=True
+        )
+        self.env_resume.train()
 
 # https://github.com/zj-zhang/AMBER/blob/89cdd45f8803014cadb131159d8bea804bfefcbc/examples/AMBIENT/sim_data/zero_shot_nas.sim_data.py
-@parameterized_class(attrs=('manager_getter', 'controller_getter', 'modeler_getter', 'trainenv_getter'), input_values=[
-    (architect.GeneralManager, architect.ZeroShotController, modeler.resnet.ResidualCnnBuilder, architect.MultiManagerEnvironment),
-    (architect.EnasManager, architect.ZeroShotController, modeler.supernet.EnasCNNwDataDescriptor, architect.MultiManagerEnvironment),
-    #(architect.GeneralManager, architect.ZeroShotController, modeler.resnet.ResidualCnnBuilder, architect.ParallelMultiManagerEnvironment),
+@parameterized_class(attrs=('manager_getter', 'controller_getter', 'modeler_getter', 'trainenv_getter', 'child_warmup_epochs'), input_values=[
+    (architect.GeneralManager, architect.ZeroShotController, modeler.resnet.ResidualCnnBuilder, architect.MultiManagerEnvironment, 0),
+    (architect.EnasManager, architect.ZeroShotController, modeler.supernet.EnasCNNwDataDescriptor, architect.MultiManagerEnvironment, 1),
 ])
 @unittest.skipIf(F.mod_name!='tensorflow_1', "only implemented in TF1 backend")
 class TestMultiManagerEnv(TestEnvDryRun):
@@ -136,6 +150,7 @@ class TestMultiManagerEnv(TestEnvDryRun):
     trainenv_getter = architect.MultiManagerEnvironment
     data_description = np.eye(2)
     data_description_len = 2
+    child_warm_up_epochs = 0
 
     def __init__(self, *args, **kwargs):
         super(TestEnvDryRun, self).__init__(*args, **kwargs)
@@ -230,7 +245,7 @@ class TestMultiManagerEnv(TestEnvDryRun):
             data_descriptive_features=self.data_description,
             controller=controller,
             manager=managers,
-            max_episode=5,
+            max_episode=3,
             max_step_per_ep=1,
             working_dir=self.tempdir.name,
             time_budget="0:03:00",
@@ -241,6 +256,22 @@ class TestMultiManagerEnv(TestEnvDryRun):
             save_controller=True
         )
         env.train()
+        # test resume
+        env2 = self.trainenv_getter(
+            data_descriptive_features=self.data_description,
+            controller=controller,
+            manager=managers,
+            max_episode=5,
+            max_step_per_ep=1,
+            working_dir=self.tempdir.name,
+            time_budget="0:03:00",
+            with_input_blocks=False,
+            with_skip_connection=False,
+            child_warm_up_epochs=2 if is_enas else 0,
+            should_plot=False,
+            save_controller=True,
+            resume_prev_run=True
+        )
         sess.close()
         self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'controller_weights.h5')))
         self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'train_history.csv')))

@@ -104,7 +104,7 @@ class TestEnasConvModeler(testing_utils.TestCase):
         old_loss = model.evaluate(self.x, self.y)['val_loss']
         # train weights with sampled arcs from model2
         model2 = self.enas_modeler()
-        model2.fit(self.x, self.y, batch_size=1, epochs=100, verbose=0)
+        model2.fit(self.x, self.y, batch_size=1, epochs=100, verbose=2)
         # loss should reduce
         new_loss = model.evaluate(self.x, self.y)['val_loss']
         # XXX: this will often fail - may indicate dropouts are not turned off.
@@ -167,7 +167,7 @@ class TestSinglePathCnnSupernet(testing_utils.TestCase):
         #self.assertEqual(len(set(fix_preds)), 1)
         # test train & eval
         old_loss = model.evaluate(self.x, self.y)['val_loss']
-        model.fit(self.x, self.y, batch_size=1, epochs=10, verbose=0)
+        model.fit(self.x, self.y, batch_size=1, epochs=10, verbose=1)
         new_loss = model.evaluate(self.x, self.y)['val_loss']
         # seems dropout is not turned off yet
         #self.assertLess(new_loss, old_loss)

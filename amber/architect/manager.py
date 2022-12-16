@@ -316,7 +316,7 @@ class DistributedGeneralManager(GeneralManager):
                     self.file_connected = True
                 elapse_time = time.time() - start_time
                 sys.stderr.write("  %.3f sec\n"%elapse_time)
-                model_arc_ = tuple(model_arc)
+                model_arc_ = tuple(model_arc) if model_arc is not None else model_arc
                 if model_arc_ in self.arc_records and self.do_resample is True:
                     this_reward = self.arc_records[model_arc_]['reward']
                     old_trial = self.arc_records[model_arc_]['trial']

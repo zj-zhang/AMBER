@@ -9,11 +9,12 @@ import numpy as np
 def get_rand_data(n=1):
     return np.random.randn(n, 10, 4), np.random.randn(n,1)
 
-@pytest.mark.parametrize(['env_type', 'num_process'], [
-    ['ParallelMultiManagerEnvironment', 2],
-    ['ParallelMultiManagerEnvironment', 1],
+@pytest.mark.parametrize(['env_type', 'num_process', 'is_enas'], [
+    ['ParallelMultiManagerEnvironment', 2, False],
+    ['ParallelMultiManagerEnvironment', 1, False],
+    ['ParallelMultiManagerEnvironment', 1, True],
 ])
-def test_parallel_env(env_type, num_process):
+def test_parallel_env(env_type, num_process, is_enas):
     tempdir = tempfile.TemporaryDirectory()
     sess = F.Session()
     with F.session_scope(sess):
@@ -53,9 +54,26 @@ def test_parallel_env(env_type, num_process):
             processes=num_process,
             # reduce steps for test
             max_episode=3,
-            max_steps_per_ep=1
+            max_steps_per_ep=1,
+            is_enas=is_enas
             )
         env.train()
+        # test resume
+        env2 = getter.get_train_env(
+            env_type=env_type, 
+            controller=controller, 
+            manager=manager_list, 
+            working_dir=tempdir.name,
+            # specific to multi-manager
+            data_descriptive_features=data_descriptor,
+            devices=['/cpu:0'],
+            processes=num_process,
+            # reduce steps for test
+            max_episode=5,
+            max_steps_per_ep=1,
+            resume_prev_run=True,
+            )
+        env2.train()
         tempdir.cleanup()
 
 if __name__ == '__main__':

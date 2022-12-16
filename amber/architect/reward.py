@@ -146,17 +146,20 @@ class LossAucReward(Reward):
         self.pred = kwargs.pop('pred', None)
         self.pred_bs = kwargs.pop('batch_size', 256)
 
-    def __call__(self, model, data, *args, **kwargs):
+    def get_pred(self, model, data):
         X, y = unpack_data(data, unroll_generator_y=True)
         if self.pred is None:
             pred = model.predict(X, batch_size=self.pred_bs)
         else:
             pred = self.pred
-        auc_list = []
         if type(y) is not list:
             y = [y]
         if type(pred) is not list:
             pred = [pred]
+        return pred, y
+    
+    def call_scorer(self, pred, y):
+        auc_list = []
         for i in range(len(y)):
             tmp = []
             if len(y[i].shape) == 1: y[i] = np.expand_dims(y[i], axis=-1)
@@ -168,10 +171,9 @@ class LossAucReward(Reward):
                 except ValueError:  # only one-class present
                     pass
             auc_list.append(tmp)
-        L = np.nanmean(np.concatenate(auc_list, axis=0))
-        self.auc_list = auc_list
-        # metrics = [np.median(x) for x in auc_list]
-        # loss_and_metrics = [L] + metrics
+        return auc_list
+    
+    def normalize_loss_and_knowledge(self, L, model, data):
         if self.knowledge_function is not None:
             K = self.knowledge_function(model, data)
             if self.knowledge_c is not None:
@@ -182,6 +184,14 @@ class LossAucReward(Reward):
         if self.loss_c is not None:
             old_L = L
             L = old_L / self.loss_c
+        return L, K        
+
+    def __call__(self, model, data, *args, **kwargs):
+        pred, y = self.get_pred(model=model, data=data)
+        auc_list = self.call_scorer(pred=pred, y=y)
+        L = np.nanmean(np.concatenate(auc_list, axis=0))
+        self.auc_list = auc_list
+        L, K= self.normalize_loss_and_knowledge(L=L, model=model, data=data)
         reward = L + self.Lambda * K
         loss_and_metrics = [L]
         reward_metrics = {'knowledge': K}
@@ -200,43 +210,8 @@ class LossAucReward(Reward):
 
 
 class SparseCategoricalReward(LossAucReward):
-    def __call__(self, model, data, *args, **kwargs):
-        X, y = unpack_data(data, unroll_generator_y=True)
-        if self.pred is None:
-            pred = model.predict(X)
-        else:
-            pred = self.pred
-        auc_list = []
-        if type(y) is not list:
-            y = [y]
-        if type(pred) is not list:
-            pred = [pred]
-        for i in range(len(y)):
-            tmp = []
-            try:
-                score = self.scorer(y_true=y[i], y_score=pred[i])
-                tmp.append(score)
-            except ValueError:  # only one-class present
-                pass
-            auc_list.append(tmp)
-        L = np.nanmean(np.concatenate(auc_list, axis=0))
-        self.auc_list = auc_list
-        # metrics = [np.median(x) for x in auc_list]
-        # loss_and_metrics = [L] + metrics
-        if self.knowledge_function is not None:
-            K = self.knowledge_function(model, data)
-            if self.knowledge_c is not None:
-                old_K = K
-                K = old_K / self.knowledge_c
-        else:
-            K = 0
-        if self.loss_c is not None:
-            old_L = L
-            L = old_L / self.loss_c
-        reward = L + self.Lambda * K
-        loss_and_metrics = [L]
-        reward_metrics = {'knowledge': K}
-        return reward, loss_and_metrics, reward_metrics
+    def call_scorer(self, pred, y):
+        return [ [self.scorer(y_true=y[i], y_score=pred[i])] for i in range(len(y)) ]
 
 
 def MockReward(train_history_list, metric, stringify_states, metric_name_dict, Lambda=1.):

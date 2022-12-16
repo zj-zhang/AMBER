@@ -75,7 +75,7 @@ class TestEnasAnnDAG(testing_utils.TestCase):
             X_test = [X_test[:, i].reshape((-1, 1)) for i in range(4)]
         return (X_train, y_train), (X_valid, y_valid), (X_test, y_test)
     
-    def get_model_builder(self, sess):
+    def get_model_builder(self, sess, controller=None):
         model_fn = modeler.supernet.EnasAnnModelBuilder(
             session=sess,
             model_space=self.model_space,
@@ -84,7 +84,7 @@ class TestEnasAnnDAG(testing_utils.TestCase):
             l1_reg=self.reg,
             l2_reg=self.reg,
             model_compile_dict=self.model_compile_dict,
-            controller=None,
+            controller=controller,
             with_output_blocks=self.with_output_blocks,
             with_input_blocks=self.with_input_blocks,
             with_skip_connections=self.with_skip_connection,
@@ -128,7 +128,7 @@ class TestEnasAnnDAG(testing_utils.TestCase):
         # test_loss = model.evaluate(*self.testdata, verbose=0)
         test_loss = np.mean( (model.predict(self.testdata[0]).squeeze() - self.testdata[1]) ** 2)
         return train_loss, test_loss
-        
+
     def test_multi_input(self):
         with self.session() as sess:
             if self.with_input_blocks:
@@ -186,6 +186,34 @@ class TestEnasAnnDAG(testing_utils.TestCase):
             self.assertLess(new_loss[0], old_loss[0])
 
 
+class TestFitGenerator(TestEnasAnnDAG):
+    def test_fit_generator_single_worker(self):
+         with self.session() as sess:
+            controller = self.get_controller(sess=sess)
+            model_fn = self.get_model_builder(sess=sess, controller=controller)
+            def gen(bs=32):
+                for i in range(0, len(self.traindata[0]), bs):
+                    yield (self.traindata[0][i:(i+bs)], self.traindata[1][i:(i+bs)])
+            model = model_fn()
+            hist=model.fit_generator(gen(bs=32), steps_per_epoch=5, validation_data=self.validdata)
+            assert 'loss' in hist and 'val_loss' in hist
+
+    def test_fit_generator_multi_worker(self):
+         with self.session() as sess:
+            controller = self.get_controller(sess=sess)
+            model_fn = self.get_model_builder(sess=sess, controller=controller)
+            def gen(bs=32):
+                for i in range(0, len(self.traindata[0]), bs):
+                    yield ([self.traindata[0][i:(i+bs)]], [self.traindata[1][i:(i+bs)]])
+            model = model_fn()
+            hist=model.fit_generator(gen(bs=32), steps_per_epoch=5, workers=2)
+            assert 'loss' in hist and 'val_loss' in hist
+
+    def test_set_controller(self): pass
+
+    def test_multi_input(self): pass    
+
+
 class TestAnnModelIO(TestEnasAnnDAG):
     def test_model_save_load(self):
         tempdir = tempfile.TemporaryDirectory()
@@ -199,6 +227,10 @@ class TestAnnModelIO(TestEnasAnnDAG):
             model.save_weights(filepath=os.path.join(tempdir.name, "save_weights.h5"))
             model.load_weights(filepath=os.path.join(tempdir.name, "save_weights.h5"))
         tempdir.cleanup()
+    
+    def test_set_controller(self): pass
+
+    def test_multi_input(self): pass    
 
 
 if __name__ == '__main__':
