@@ -8,7 +8,8 @@ import shutil
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from ..plots import plot_hessian, plot_training_history
+from .. import backend as F
+from ..plots import plot_training_history
 from .commonOps import unpack_data
 
 
@@ -34,10 +35,6 @@ def get_store_fn(arg):
         return None
     elif arg.lower() == 'store_general' or arg.lower() == 'general':
         return store_general
-    elif arg.lower() == 'store_regression' or arg.lower() == 'regression':
-        return store_regression
-    elif arg.lower() == 'store_with_hessian' or arg.lower() == 'hessian':
-        return store_with_hessian
     elif arg.lower() == 'store_with_model_plot' or arg.lower() == 'model_plot':
         return store_with_model_plot
     elif arg.lower() == 'store_minimal' or arg.lower() == 'minimal':
@@ -68,41 +65,7 @@ def store_with_model_plot(
                   working_dir=working_dir,
                   save_full_model=save_full_model
                   )
-    from tensorflow.keras.utils import plot_model
-    plot_model(model, to_file=os.path.join(par_dir, "model_arc.png"), show_shapes=True, show_layer_names=True)
-
-
-def store_with_hessian(
-        trial,
-        model,
-        hist,
-        data,
-        pred,
-        loss_and_metrics,
-        working_dir='.',
-        save_full_model=False,
-        knowledge_func=None
-):
-    assert knowledge_func is not None, "`store_with_hessian` requires parsing the" \
-                                       "knowledge function used."
-    par_dir = os.path.join(working_dir, 'weights', 'trial_%s' % trial)
-    store_general(trial=trial,
-                  model=model,
-                  hist=hist,
-                  data=data,
-                  pred=pred,
-                  loss_and_metrics=loss_and_metrics,
-                  working_dir=working_dir,
-                  save_full_model=save_full_model
-                  )
-    # plot_training_history(hist, par_dir)
-    from keras.utils import plot_model
-    plot_model(model, to_file=os.path.join(par_dir, "model_arc.png"))
-
-    plot_hessian(knowledge_func, os.path.join(par_dir, "hess.png"))
-    knowledge_func._reset()
-    plt.close('all')
-    return
+    F.plot_model(model=model, to_file=os.path.join(par_dir, "model_arc.png"))
 
 
 def store_general(

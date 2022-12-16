@@ -42,50 +42,6 @@ def read_history(fn_list,
     return d
 
 
-def read_action_weights(fn):
-    """read 'weight_data.json' and derive the max likelihood
-    architecture for each run. 'weight_data.json' stores the weight probability
-    by function `save_action_weights` for a bunch of independent mock BioNAS
-    optimization runs.
-    """
-    with open(fn, 'r') as f:
-        data = json.load(f)
-    archs = []
-    tmp = list(data['L0']['operation'].keys())
-    B = len(data['L0']['operation'][tmp[0]])
-    for b in range(B):
-        this_arch = []
-        for l in range(len(data)):
-            this_layer = {k: data["L%i" % l]['operation'][k][b][-1] for k in data["L%i" % l]['operation']}
-            this_arch.append(
-                max(this_layer, key=this_layer.get)
-            )
-        archs.append(tuple(this_arch))
-    return archs
-
-
-def read_action_weights_old(fn):
-    """read 'weight_data.json' and derive the max likelihood
-    architecture for each run. 'weight_data.json' stores the weight probability
-    by function `save_action_weights` for a bunch of independent mock BioNAS
-    optimization runs.
-    """
-    with open(fn, 'r') as f:
-        data = json.load(f)
-    archs = []
-    tmp = list(data['L0'].keys())
-    B = len(data['L0'][tmp[0]])
-    for b in range(B):
-        this_arch = []
-        for l in range(len(data)):
-            this_layer = {k: data["L%i" % l][k][b][-1] for k in data["L%i" % l]}
-            this_arch.append(
-                max(this_layer, key=this_layer.get)
-            )
-        archs.append(tuple(this_arch))
-    return archs
-
-
 def annotate_probs_list(probs_list, model_space, with_input_blocks, with_skip_connection):
     """for a given probs_list, annotate what is each prob about
 
@@ -116,7 +72,7 @@ def annotate_probs_list(probs_list, model_space, with_input_blocks, with_skip_co
     return data_dict
 
 
-def save_action_weights(probs_list, state_space, working_dir, with_input_blocks=False, with_skip_connection=False,
+def save_action_weights(probs_list, state_space, working_dir, with_input_blocks=False, with_skip_connection=False, is_resume_run=False,
                         **kwargs):
     """
     Parameters
@@ -170,23 +126,32 @@ def save_action_weights(probs_list, state_space, working_dir, with_input_blocks=
         for i, d in enumerate(data_per_type):
             k = state_list[i]
             t = get_layer_shortname(k)
-            df['L' + str(layer)]['operation'][t].append(sma(d).tolist())
+            if is_resume_run:
+                df['L' + str(layer)]['operation'][t][-1].extend(sma(d).tolist())
+            else:
+                df['L' + str(layer)]['operation'][t].append(sma(d).tolist())
         if with_input_blocks:
             input_block_names = [n.Layer_attributes['name'] for n in kwargs['input_nodes']]
             ib_data = np.array(data_dict['L%i' % layer]['input_blocks'])[:, :, :, 1].squeeze().transpose()
             for j in range(len(input_block_names)):
-                df['L' + str(layer)]['input_blocks'][input_block_names[j]].append(sma(ib_data[j, :]).tolist())
+                if is_resume_run:
+                    df['L' + str(layer)]['input_blocks'][input_block_names[j]][-1].extend(sma(ib_data[j, :]).tolist())
+                else:
+                    df['L' + str(layer)]['input_blocks'][input_block_names[j]].append(sma(ib_data[j, :]).tolist())
         if with_skip_connection and layer > 0:
             sc_data = np.array(data_dict['L%i' % layer]['skip_connection'])[:, :, :, 1].squeeze().transpose()
             sc_data = sc_data.reshape((layer, total_len))
             for i in range(layer):
-                df['L' + str(layer)]['skip_connection']['from_L%i' % i].append(sma(sc_data[i, :]).tolist())
+                if is_resume_run:
+                    df['L' + str(layer)]['skip_connection']['from_L%i' % i][-1].extend(sma(sc_data[i, :]).tolist())
+                else:
+                    df['L' + str(layer)]['skip_connection']['from_L%i' % i].append(sma(sc_data[i, :]).tolist())
 
     with open(save_path, 'w') as f:
         json.dump(df, f)
 
 
-def save_stats(loss_and_metrics_list, working_dir):
+def save_stats(loss_and_metrics_list, working_dir, is_resume_run=False):
     save_path = os.path.join(working_dir, 'nas_training_stats.json')
     if not os.path.exists(save_path):
         df = {'Knowledge': [], 'Accuracy': [], 'Loss': []}
@@ -202,8 +167,12 @@ def save_stats(loss_and_metrics_list, working_dir):
     else:
         k_data = []
     loss_data = data_per_cat[keys.index('loss')]
-    df['Knowledge'].append(list(k_data))
-    df['Loss'].append(list(loss_data))
+    if is_resume_run:
+        df['Knowledge'][-1].extend(list(k_data))
+        df['Loss'][-1].extend(list(loss_data))
+    else:
+        df['Knowledge'].append(list(k_data))
+        df['Loss'].append(list(loss_data))
     # modified 2020.6.7 by ZZ: not every case will have the Accuracy metric..
     try:
         acc_data = data_per_cat[keys.index('acc')]

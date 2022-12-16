@@ -12,33 +12,20 @@ import os, sys
 import warnings
 
 import numpy as np
-import tensorflow.keras as keras
-from ..utils import corrected_tf as tf
-import tensorflow as tf2
-from tensorflow.keras import backend as K
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from tensorflow.keras.models import Model
+from .. import backend as F
 from packaging import version
 import time
 from datetime import datetime
 from collections import defaultdict
 from .commonOps import unpack_data
 from .store import get_store_fn
+from .base import BaseNetworkManager
 
 __all__ = [
     'BaseNetworkManager',
     'GeneralManager',
     'DistributedGeneralManager'
 ]
-
-
-class BaseNetworkManager:
-    def __init__(self, *args, **kwargs):
-        # abstract
-        pass
-
-    def get_rewards(self, trial, model_arc):
-        raise NotImplementedError("Abstract method.")
 
 
 class GeneralManager(BaseNetworkManager):
@@ -130,7 +117,7 @@ class GeneralManager(BaseNetworkManager):
                  validation_data,
                  model_fn,
                  reward_fn,
-                 store_fn,
+                 store_fn='general',
                  working_dir='.',
                  save_full_model=False,
                  epochs=5,
@@ -183,19 +170,13 @@ class GeneralManager(BaseNetworkManager):
             The reward signal as determined by ``reward_fn(model, val_data)``
 
         loss_and_metrics : dict
-            A dictionary of auxillary information for this model, such as loss, and other metrics (as in ``tf.keras.metrics``)
+            A dictionary of auxillary information for this model, such as loss, and other metrics
         """
         # print('-'*80, model_arc, '-'*80)
-        tf.reset_default_graph()
-        train_graph = tf.Graph()
-        train_sess = tf.Session(graph=train_graph)
-        with train_graph.as_default(), train_sess.as_default():
-            try:
-                K.set_session(train_sess)
-            except (RuntimeError, AttributeError): # keras 2.3.1 `set_session` not available for tf2.0
-                assert version.parse(keras.__version__) > version.parse('2.2.5')
-                pass
-            model = self.model_fn(model_arc)  # a compiled keras Model
+        train_sess = F.Session()
+        with F.session_scope(train_sess):
+            F.set_session(train_sess)
+            model = self.model_fn(model_arc)  # a compiled amber.backend.Model
             if model is None:
                 assert hasattr(self.reward_fn, "min"), "model_fn of type %s returned a non-valid model, but the given " \
                                                        "reward_fn of type %s does not have .min() method" % (type(
@@ -220,10 +201,10 @@ class GeneralManager(BaseNetworkManager):
                                  verbose=self.verbose,
                                  #shuffle=True,
                                  validation_data=self.validation_data,
-                                 callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
+                                 callbacks=[F.get_callback('ModelCheckpoint')(os.path.join(self.working_dir, 'temp_network.h5'),
                                                             monitor='val_loss', verbose=self.verbose,
                                                             save_best_only=True),
-                                            EarlyStopping(monitor='val_loss', patience=self._earlystop_patience, verbose=self.verbose)],
+                                            F.get_callback('EarlyStopping')(monitor='val_loss', patience=self._earlystop_patience, verbose=self.verbose)],
                                  **self.fit_kwargs
                                  )
                 # load best performance epoch in this training session
@@ -237,8 +218,8 @@ class GeneralManager(BaseNetworkManager):
                 # evaluate the model by `reward_fn`
                 this_reward, loss_and_metrics, reward_metrics = \
                     self.reward_fn(model, self.validation_data,
-                                   session=train_sess,
-                                   graph=train_graph)
+                                   session=train_sess,)
+                                   #graph=train_graph)
                 loss = loss_and_metrics.pop(0)
                 loss_and_metrics = {str(self.model_compile_dict['metrics'][i]): loss_and_metrics[i] for i in
                                     range(len(loss_and_metrics))}
@@ -265,20 +246,14 @@ class GeneralManager(BaseNetworkManager):
         # clean up resources and GPU memory
         del model
         del hist
-        try:
-            K.clear_session()
-        except (RuntimeError, AttributeError): # keras 2.3.1 `set_session` not available for tf2.0
-            assert keras.__version__ > '2.2.5'
-            pass
-
-        gc.collect()
+        F.clear_session()
         return this_reward, loss_and_metrics
 
 
 class DistributedGeneralManager(GeneralManager):
     """Distributed manager will place all tensors of any child models to a pre-assigned GPU device
     """
-    def __init__(self, devices, train_data_kwargs, validate_data_kwargs, do_resample=False, *args, **kwargs):
+    def __init__(self, devices=None, train_data_kwargs=None, validate_data_kwargs=None, do_resample=False, *args, **kwargs):
         self.devices = devices
         super().__init__(*args, **kwargs)
         assert devices is None or len(self.devices) == 1, "Only supports one GPU device currently"
@@ -294,45 +269,42 @@ class DistributedGeneralManager(GeneralManager):
 
     def close_handler(self):
         if self.file_connected:
-            self.train_x.close()
-            if self.train_y:
+            if hasattr(self.train_x, 'close'):
+                self.train_x.close()
+            del self.train_x
+            if self.train_y is not None and hasattr(self.train_y, 'close'):
                 self.train_y.close()
-            self._validation_data_gen.close()
+            del self.train_y
+            if hasattr(self._validation_data_gen, "close"):
+                self._validation_data_gen.close()
+            del self._validation_data_gen 
             self.train_x = None
             self.train_y = None
             self.file_connected = False
 
     def get_rewards(self, trial, model_arc, remap_device=None, **kwargs):
-        # TODO: use tensorflow distributed strategy
-        #strategy = tf2.distribute.MirroredStrategy(devices=self.devices)
-        #print('Number of devices: {} - {}'.format(strategy.num_replicas_in_sync, self.devices))
-        #with strategy.scope():
         pid = os.getpid()
         sys.stderr.write("[%s][%s] Preprocessing.."%(pid, datetime.now().strftime("%H:%M:%S") ))
         start_time = time.time()
-        train_graph = tf.Graph()
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
-        train_sess = tf.Session(graph=train_graph, config=config)
+        train_sess = F.Session()
         # remap device will overwrite the manager device
         if remap_device is not None:
             target_device = remap_device
         elif self.devices is None:
             from ..utils import get_available_gpus
             idle_gpus = get_available_gpus()
-            target_device = idle_gpus[0]
-            target_device = "/device:GPU:%i"%target_device
+            if len(idle_gpus):
+                target_device = idle_gpus[0]
+            else:
+                target_device = "/cpu:0"
             self.devices = [target_device]
             sys.stderr.write("[%s] Auto-assign device: %s" % (pid, target_device) )
         else:
             target_device = self.devices[0]
-        with train_graph.as_default(), train_sess.as_default():
-            with tf.device(target_device):
-                try:
-                    K.set_session(train_sess)
-                except (RuntimeError, AttributeError): # keras 2.3.1 `set_session` not available for tf2.0
-                    pass
-                model = self.model_fn(model_arc)  # a compiled keras Model
+        with F.session_scope(train_sess):
+            with F.device_scope(target_device):
+                F.set_session(train_sess)
+                model = self.model_fn(model_arc)  # a compiled Model
 
                 # unpack the dataset
                 if not self.file_connected:
@@ -344,7 +316,7 @@ class DistributedGeneralManager(GeneralManager):
                     self.file_connected = True
                 elapse_time = time.time() - start_time
                 sys.stderr.write("  %.3f sec\n"%elapse_time)
-                model_arc_ = tuple(model_arc)
+                model_arc_ = tuple(model_arc) if model_arc is not None else model_arc
                 if model_arc_ in self.arc_records and self.do_resample is True:
                     this_reward = self.arc_records[model_arc_]['reward']
                     old_trial = self.arc_records[model_arc_]['trial']
@@ -359,10 +331,10 @@ class DistributedGeneralManager(GeneralManager):
                                      epochs=self.epochs,
                                      verbose=self.verbose,
                                      validation_data=self._validation_data_gen,
-                                     callbacks=[ModelCheckpoint(os.path.join(self.working_dir, 'temp_network.h5'),
+                                     callbacks=[F.get_callback('ModelCheckpoint')(os.path.join(self.working_dir, 'temp_network.h5'),
                                                                 monitor='val_loss', verbose=self.verbose,
                                                                 save_best_only=True),
-                                                EarlyStopping(monitor='val_loss', patience=self._earlystop_patience, verbose=self.verbose)],
+                                                F.get_callback('EarlyStopping')(monitor='val_loss', patience=self._earlystop_patience, verbose=self.verbose)],
                                      **self.fit_kwargs
                                      )
 
@@ -401,7 +373,7 @@ class DistributedGeneralManager(GeneralManager):
                             loss_and_metrics=loss_and_metrics,
                             working_dir=self.working_dir,
                             save_full_model=self.save_full_model,
-                            knowledge_func=self.reward_fn.knowledge_function
+                            knowledge_func=getattr(self.reward_fn, "knowledge_function", None)
                         )
                     elapse_time = time.time() - start_time
                     sys.stderr.write("  %.3f sec\n"%elapse_time)
@@ -416,12 +388,12 @@ class DistributedGeneralManager(GeneralManager):
         sys.stderr.write("[%s] Cleaning up.."%pid)
         try:
             del train_sess
-            del train_graph
+            #del train_graph
             del model
             del hist
         except UnboundLocalError:
             pass
-        gc.collect()
+        F.clear_session()
         elapse_time = time.time() - start_time
         sys.stderr.write("  %.3f sec\n"%elapse_time)
         return this_reward, loss_and_metrics
@@ -532,9 +504,7 @@ class EnasManager(GeneralManager):
             The reward signal as determined by ``reward_fn(model, val_data)``
 
         loss_and_metrics : dict
-            A dictionary of auxillary information for this model, such as loss, and other metrics (as in ``tf.keras.metrics``)
-
-
+            A dictionary of auxillary information for this model, such as loss, and other metrics
         """
         if self.model is None:
             self.model = self.model_fn()
@@ -552,7 +522,7 @@ class EnasManager(GeneralManager):
                                   epochs=self.epochs,
                                   verbose=self.verbose,
                                   # comment out because of temporary
-                                  # incompatibility with tf.data.Dataset
+                                  # incompatibility with Dataset
                                   # validation_data=(X_val, y_val),
                                   )
 
