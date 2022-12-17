@@ -309,6 +309,5 @@ class GeneralController(BaseController):
             #for i, d in enumerate(weights):
             #    hf.create_dataset(name=self.weights[i].name, data=d)
 
-    def get_weights(self):
-        weights = self.session.run(self.weights)
-        return weights
+    def load_weights(self, *args):
+        pass

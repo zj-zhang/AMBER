@@ -147,7 +147,7 @@ class BaseController(BaseSearcher):
     
     def _stepwise_loss(self, logits, tokens, batch_size=None):
         # sparse NLL/CCE: logits are weights, labels are integers
-        log_prob = F.get_loss('NLLLoss_with_logits', y_true=tokens, y_pred=logits)
+        log_prob = F.get_loss('NLLLoss_with_logits', y_true=tokens, y_pred=logits, reduction='none')
         log_prob = F.reshape(log_prob, [batch_size, -1])
         log_prob = F.reduce_sum(log_prob, axis=-1)
         entropy = F.stop_gradient(F.reduce_sum(log_prob * F.exp(-log_prob)))

@@ -28,7 +28,7 @@ def trainable_variables(scope: str) -> Union[List, Tuple]: pass # type:ignore
 def get_optimizer(opt, parameters, opt_config=None): pass
     
 
-def get_loss(loss, y_true, y_pred) -> float: pass  # type: ignore
+def get_loss(loss, y_true, y_pred, reduction:str ='mean') -> float: pass  # type: ignore
     
 
 def get_metric(m: Union[str, Callable]) -> Callable: pass # type: ignore

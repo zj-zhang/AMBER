@@ -138,15 +138,16 @@ def trainable_variables(scope: str):
     return tf.trainable_variables(scope=scope)
 
 
-def get_loss(loss, y_true, y_pred):
+def get_loss(loss, y_true, y_pred, reduction='mean'):
+    assert reduction in ('mean', 'none')
     if type(loss) is str:
         loss = loss.lower()
         if loss == 'mse' or loss == 'mean_squared_error':
-            loss_ = tf.reduce_mean(tf.square(y_true - y_pred))
+            loss_ = tf.square(y_true - y_pred)
         elif loss == 'categorical_crossentropy':
-            loss_ = tf.reduce_mean(tf.keras.losses.categorical_crossentropy(y_true, y_pred))
+            loss_ = tf.keras.losses.categorical_crossentropy(y_true, y_pred)
         elif loss == 'binary_crossentropy':
-            loss_ = tf.reduce_mean(tf.keras.losses.binary_crossentropy(y_true, y_pred))
+            loss_ = tf.keras.losses.binary_crossentropy(y_true, y_pred)
         elif loss == 'nllloss_with_logits':
             loss_ = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=y_pred, labels=y_true)
         else:
@@ -155,6 +156,8 @@ def get_loss(loss, y_true, y_pred):
         loss_ = loss(y_true, y_pred)
     else:
         raise TypeError("Expect loss argument to be str or callable, got %s" % type(loss))
+    if reduction == 'mean':
+        loss_ = tf.reduce_mean(loss_)
     return loss_
 
 

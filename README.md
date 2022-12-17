@@ -42,7 +42,7 @@ Genomics and Bioinformatics.
 The overview, tutorials, API documentation can be found at:
 https://amber-automl.readthedocs.io/en/latest/
 
-To get quick started, see this [example](https://github.com/zj-zhang/AMBER/blob/master/examples/digits_sklearn/digits_sklearn.py) on handwritten digits classification, or use this Google Colab notebook on DeepSEA. 
+To get quick started, see this [example](https://github.com/zj-zhang/AMBER/blob/master/examples/digits_sklearn/digits_sklearn.py) on handwritten digits classification, or use this [example](https://colab.research.google.com/gist/zj-zhang/48689d8bdc8adf3375719911f7e41989/amber-epigenetics-tutorial-v2.ipynb) on DeepSEA. 
 <a href="https://colab.research.google.com/gist/zj-zhang/48689d8bdc8adf3375719911f7e41989/amber-epigenetics-tutorial-v2.ipynb" target="_blank"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
 
 Finally, you can read the AMBER paper for epigenetics regulatory modelling published in [Nature Machine Intelligence](https://www.nature.com/articles/s42256-021-00316-z).
@@ -60,7 +60,7 @@ Finally, you can read the AMBER paper for epigenetics regulatory modelling publi
 <a id='sec2'></a>
 ## Installation
 
-Currently AMBER is designed to be run in Linux-like environment. As a prerequisite, please make sure
+Currently AMBER is designed to be run in Unix-like environment. As a prerequisite, please make sure
  you have Anaconda/miniconda installed, as we provide the detailed dependencies through a conda 
  environment.
  
@@ -68,7 +68,7 @@ Currently AMBER is designed to be run in Linux-like environment. As a prerequisi
 Please follow the steps below to install AMBER. To install `AMBER`, 
 you can use `conda` and `pypi` to install a versioned release (recommended).
 
-> NOTE
+> NOTE:
 We strongly encourage you to create a new conda environment, regardless of the backend library you choose.
 
 

@@ -15,11 +15,8 @@ import logging, sys
 logging.disable(sys.maxsize)
 import unittest
 from parameterized import parameterized
-try:
-    import torch
-    from torch.utils.data import TensorDataset, DataLoader
-except ImportError:
-    torch = object
+import torch
+from torch.utils.data import TensorDataset, DataLoader
 try:
     from torchviz import make_dot
     has_torchviz = True
@@ -37,34 +34,28 @@ class TestEnasPyTorchConvDAG(testing_utils.TestCase):
         model_space, _ = testing_utils.get_example_conv1d_space(num_layers=12, num_pool=4)
         #self.controller = architect.GeneralController(model_space=model_space, buffer_type='ordinal', with_skip_connection=True, session=self.session)
         self.decoder = modeler.architectureDecoder.ResConvNetArchitecture(model_space=model_space)
-        self.dag = EnasCnnModelBuilder(model_space=model_space, input_node=input_op,  output_node=output_op, model_compile_dict={}, reduction_factor=2)
+        self.model_fn = EnasCnnModelBuilder(model_space=model_space, inputs_op=input_op,  output_op=output_op, model_compile_dict={'loss':'mse', 'optimizer':'adam'}, reduction_factor=2)
 
     def test_1forward(self):
         x = torch.randn((10, 100, 4))
-        self.dag.eval()
         for _ in range(10):
             #arc, p = self.controller.get_action()
             arc = self.decoder.sample()
-            y_pred = self.dag(arc, x)
+            model = self.model_fn(arc)
+            model.eval()
+            y_pred = model.predict(x)
             self.assertTrue(y_pred.shape == (10,1))
     
     def test_2backward(self):
         x = torch.randn((10, 100, 4))
         y = torch.ones((10, 1))
-        loss_fn = torch.nn.MSELoss()
-        optimizer = torch.optim.Adam(self.dag.parameters(), lr=0.001)
         #arc, p = self.controller.get_action()
         arc = self.decoder.sample()
+        model = self.model_fn(arc)
         losses = []
-        self.dag.train()
         for _ in tqdm(range(3)):
-            optimizer.zero_grad()
-            y_pred = self.dag(arc, x)
-            self.assertTrue(y_pred.shape == (10,1))
-            loss = loss_fn(y_pred, y)
-            losses.append(loss.item())
-            loss.backward()
-            optimizer.step()
+            hist = model.fit(x,y)
+            losses.append(model.evaluate(x,y)['val_loss'])
         self.assertLess(losses[-1], losses[0])    
 
 
@@ -95,7 +86,7 @@ class TestPyTorchResConvModelBuilder(unittest.TestCase):
         ('mse', 'adam'),
         ('mae', 'adam'),
         ('mse', 'sgd'),
-        #('mse', torch.optim.Adam)
+        ('mse', torch.optim.Adam)
     ])
     def test_2backward(self, loss, optimizer):
         x = torch.randn((50, 1000, 4))

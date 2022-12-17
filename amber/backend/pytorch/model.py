@@ -19,7 +19,7 @@ class Model(pl.LightningModule):
         if callable(loss):
             self.criterion = loss
         elif type(loss) is str:
-            self.criterion = get_loss(loss)
+            self.criterion = get_loss(loss, reduction='mean')
         else:
             raise ValueError(f"unknown loss: {loss}")
         self.optimizer = optimizer
@@ -54,7 +54,6 @@ class Model(pl.LightningModule):
                 validation_data = self._make_dataloader(x=validation_data[0], y=validation_data[1], batch_size=batch_size)
             else:
                 validation_data = self._make_dataloader(x=validation_data, batch_size=batch_size)
-        logger = InMemoryLogger()
         trainer = pl.Trainer(
             accelerator="auto",
             max_epochs=epochs,
@@ -117,8 +116,11 @@ class Model(pl.LightningModule):
             raise ValueError(f"unknown torch optim {self.optimizer}")
         d.update({
             "optimizer": opt,
-            "monitor": "val_loss",
-            "frequency": 1,
+            "scheduler":
+                {
+                    "monitor": "val_loss",
+                    "frequency": 1,
+                }
         })
         return d
 
@@ -201,7 +203,7 @@ class Sequential(torch.nn.Sequential):
         layers = layers or []
         super().__init__(*layers)
     
-    def add(layer):
+    def add(self, layer):
         super().append(layer)
 
 
@@ -213,23 +215,28 @@ def get_metric(m):
     else:
         raise Exception("cannot understand metric type: %s" % m)
 
-def get_loss(loss, y_true=None, y_pred=None):
+def get_loss(loss, y_true=None, y_pred=None, reduction='mean'):
+    assert reduction in ('mean', 'none')
     compute_loss =  (y_true is not None) and (y_pred is not None)
     if type(loss) is str:
         loss = loss.lower()
         if loss == 'mse' or loss == 'mean_squared_error':
-            loss_ = torch.nn.MSELoss()
+            loss_ = torch.nn.MSELoss(reduction=reduction)
+            if compute_loss:
+                loss_ = loss_(input=y_pred, target=y_true)
+        elif loss =='mae' or loss == 'mean_absolute_error':
+            loss_ = torch.nn.L1Loss(reduction=reduction)
             if compute_loss:
                 loss_ = loss_(input=y_pred, target=y_true)
         elif loss == 'categorical_crossentropy':
-            loss_ = torch.nn.CrossEntropyLoss(reduction='none')
+            loss_ = torch.nn.CrossEntropyLoss(reduction=reduction)
         elif loss == 'binary_crossentropy':
-            loss_ = torch.nn.BCELoss(reduction='none')
+            loss_ = torch.nn.BCELoss(reduction=reduction)
             if compute_loss:
                loss_ = loss_(input=y_pred, target=y_true.float())
         elif loss == 'nllloss_with_logits':
             # loss computed with NLL and LogSoftmax is equivalent to categorical_crossentropy, but more efficient for sparse classes
-            loss_ = torch.nn.NLLLoss(reduction='none')
+            loss_ = torch.nn.NLLLoss(reduction=reduction)
             if compute_loss:
                 loss_ = loss_(input=torch.nn.LogSoftmax(dim=-1)(y_pred), target=y_true.long())
         else:
