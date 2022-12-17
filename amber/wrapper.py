@@ -63,12 +63,7 @@ class Amber:
 
         # use one amber.backend.Session throughout one DA instance
         self.session = F.Session()
-        if F.mod_name=='tensorflow_1':
-            try:
-                from tensorflow.keras import backend as K
-                K.set_session(self.session)
-            except Exception as e:
-                print("Failed to set Keras backend becasue of %s" % e)
+        F.set_session(self.session)
 
         if specs is not None:
             self.from_dict(specs)
