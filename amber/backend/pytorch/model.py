@@ -103,7 +103,7 @@ class Model(pl.LightningModule):
                 scheduler = self.optimizer[2](
                     opt, **self.optimizer[3]
                 )
-                d['scheduler'] = scheduler
+                d['lr_scheduler'] = scheduler
         elif self.optimizer == 'adam':
             opt = torch.optim.Adam(self.parameters(), lr=0.001)
         elif self.optimizer == 'sgd':
@@ -116,11 +116,8 @@ class Model(pl.LightningModule):
             raise ValueError(f"unknown torch optim {self.optimizer}")
         d.update({
             "optimizer": opt,
-            "scheduler":
-                {
-                    "monitor": "val_loss",
-                    "frequency": 1,
-                }
+            "monitor": "val_loss",
+            "frequency": 1,
         })
         return d
 
