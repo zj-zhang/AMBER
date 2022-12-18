@@ -245,10 +245,10 @@ class EnasCnnModelBuilder(F.Model, BaseEnasConv1dDAG):
             "loss": loss,
             "total": total,
         }
-        for metric in self.metrics:
-            batch_dict.update({
-                str(metric): metric.step(input=y_hat, target=y_true)
-            })
+        # handle metrics
+        metric_fns = self.train_metrics if kind == 'train' else self.valid_metrics
+        for metric in metric_fns:
+            metric.update(preds=y_hat, target=y_true)
         return batch_dict
     
     def _build_dag(self, *args, **kwargs):

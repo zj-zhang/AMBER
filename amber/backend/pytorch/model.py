@@ -1,6 +1,8 @@
 import torch
 import pytorch_lightning as pl
+import torchmetrics
 import os
+import numpy as np
 from . import cache
 from .utils import InMemoryLogger
 from .tensor import TensorType
@@ -12,8 +14,10 @@ class Model(pl.LightningModule):
         self.is_compiled = False
         self.criterion = None
         self.optimizer = None
-        self.metrics = {}
+        self.train_metrics = {}
+        self.valid_metrics = {}
         self.trainer = None
+        self.task = None
 
     def compile(self, loss, optimizer, metrics=None, *args, **kwargs):
         if callable(loss):
@@ -23,10 +27,29 @@ class Model(pl.LightningModule):
         else:
             raise ValueError(f"unknown loss: {loss}")
         self.optimizer = optimizer
-        self.metrics = metrics or {}
+        self._infer_task(loss=loss)
+        if metrics is None:
+            self.train_metrics = self.valid_metrics = {}
+            self._metric_names = []
+        else:
+            self.train_metrics = [get_metric(m)(task=self.task, average='macro') for m in metrics]
+            self.valid_metrics = [get_metric(m)(task=self.task, average='macro') for m in metrics]
+            self._metric_names = [str(m) for m in metrics]
+            #for name, metric in zip(self._metric_names, self.metrics):
+            #    setattr(self, "__"+str(name), metric)
         cache.CURRENT_GRAPH.add_model(self)
+        self.losses = AverageMeter()
         self.is_compiled = True
-    
+
+    def _infer_task(self, loss):
+        """This could be wrong a lot of times... we need a smarter way to do this"""
+        if loss in ('mse', 'mae', 'binary_crossentropy'):
+            self.task = 'binary'
+        elif loss in ('categorical_crossentropy'):
+            self.task = 'multiclass'
+        else:
+            raise ValueError('failed to infer task type from loss for %s' % loss)
+
     @staticmethod
     def _make_dataloader(x, y=None, batch_size=32):
         if isinstance(x, torch.utils.data.DataLoader) and y is None:
@@ -54,15 +77,15 @@ class Model(pl.LightningModule):
                 validation_data = self._make_dataloader(x=validation_data[0], y=validation_data[1], batch_size=batch_size)
             else:
                 validation_data = self._make_dataloader(x=validation_data, batch_size=batch_size)
-        trainer = pl.Trainer(
+        self.trainer = pl.Trainer(
             accelerator="auto",
             max_epochs=epochs,
             callbacks=callbacks,
             enable_progress_bar=verbose,
             logger=logger,
             # deterministic=True,
-        )            
-        trainer.fit(self, train_data, validation_data)
+        )
+        self.trainer.fit(self, train_data, validation_data)
         return logger
     
     def predict(self, x, y=None, batch_size=32, verbose=False):
@@ -138,16 +161,34 @@ class Model(pl.LightningModule):
         y_hat = self.forward(batch_x)
         # be explicit about observation and score
         loss = self.criterion(input=y_hat, target=y_true)
-        total = len(y_true)
+        total = y_true.size(0)
+        self.losses.update(val=loss.item(), n=total)
+        # overwrite loss on pbar
+        self.log(f"loss", self.losses.avg, prog_bar=True, on_step=True, on_epoch=False)
         batch_dict = {
             "loss": loss,
             "total": total,
         }
-        for metric in self.metrics:
-            batch_dict.update({
-                str(metric): metric.step(input=y_hat, target=y_true)
-            })
+        # handle metrics
+        metric_fns = self.train_metrics if kind == 'train' else self.valid_metrics
+        for metric, name in zip(metric_fns, self._metric_names):
+            metric.update(preds=y_hat, target=y_true)
+        # log learning rate
+        try:
+            cur_lr = self.trainer.optimizers[0].param_groups[0]['lr']
+        except IndexError:
+            cur_lr = np.nan
+        self.log("lr", cur_lr, on_step=False, on_epoch=True, prog_bar=True)
         return batch_dict
+
+    def training_step(self, batch, batch_idx) -> dict:
+        return self.step(batch, "train")
+
+    def validation_step(self, batch, batch_idx) -> dict:
+        return self.step(batch, "val")
+
+    def test_step(self, batch, batch_idx) -> dict:
+        return self.step(batch, "test")
 
     def epoch_end(self, outputs, kind: str):
         """Generic function for summarizing and logging the loss and accuracy over an
@@ -161,35 +202,30 @@ class Model(pl.LightningModule):
             total_loss = sum(_["loss"] * _["total"] for _ in outputs)
             total = sum(_["total"] for _ in outputs)
             avg_loss = total_loss / total
-            metrics_tot = {}
-            for metric in self.metrics:
-                metrics_tot[str(metric)] = metric.on_epoch_end(
-                    [_[str(metric)] for _ in outputs],
-                    [_["total"] for _ in outputs]
-                )
-
         # log
-        self.log(f"{kind}_loss", avg_loss)
-        for metric in metrics_tot:
-            self.log(f"{kind}_{metric}", metrics_tot[metric])
-
-    def training_step(self, batch, batch_idx) -> dict:
-        return self.step(batch, "train")
-
-    def validation_step(self, batch, batch_idx) -> dict:
-        return self.step(batch, "val")
-
-    def test_step(self, batch, batch_idx) -> dict:
-        return self.step(batch, "test")
+        self.log(f"{kind}_loss", avg_loss, prog_bar=True)
 
     def training_epoch_end(self, outputs):
         self.epoch_end(outputs, "train")
+        self.losses.reset()
+        with torch.no_grad():
+            for metric, name in zip(self.train_metrics, self._metric_names):
+                self.log(f"train_{name}", metric.compute(), prog_bar=True)
+                metric.reset()
 
     def validation_epoch_end(self, outputs):
         self.epoch_end(outputs, "val")
+        with torch.no_grad():
+            for metric, name in zip(self.valid_metrics, self._metric_names):
+                self.log(f"val_{name}", metric.compute(), prog_bar=True)
+                metric.reset()
 
     def test_epoch_end(self, outputs):
         self.epoch_end(outputs, "test")
+        with torch.no_grad():
+            for metric, name in zip(self.valid_metrics, self._metric_names):
+                self.log(f"test_{name}", metric.compute(), prog_bar=True)
+                metric.reset()
 
     def save_weights(self, *args):
         pass
@@ -205,10 +241,23 @@ class Sequential(torch.nn.Sequential):
 
 
 def get_metric(m):
+    """we rely on TorchMetrics for handling batch update and aggregation: https://torchmetrics.readthedocs.io/en/stable/pages/quickstart.html 
+    """
     if callable(m):
         return m
-    elif m.lower() == 'kl_div':
-        return torch.nn.KLDivLoss()
+    elif type(m) is str:
+        if m.lower() == 'kl_div':
+            return torch.nn.KLDivLoss()
+        elif m.lower() in ('acc', 'accuracy'):
+            return torchmetrics.Accuracy
+        elif m.lower() in ('f1', 'f1_score'):
+            return torchmetrics.F1Score
+        elif m.lower() in ('auc', 'auroc'):
+            return torchmetrics.AUROC
+        elif m.lower() in ('aupr', 'average_precision'):
+            return torchmetrics.AveragePrecision
+        else:
+            raise Exception("cannot understand metric string: %s" % m)
     else:
         raise Exception("cannot understand metric type: %s" % m)
 
@@ -293,3 +342,31 @@ def get_train_op(loss, variables, optimizer):
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
+
+
+# mean accuracy over classes
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+        self.vec2sca_avg = 0
+        self.vec2sca_val = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+        if torch.is_tensor(self.val) and torch.numel(self.val) != 1:
+            self.avg[self.count == 0] = 0
+            self.vec2sca_avg = self.avg.sum() / len(self.avg)
+            self.vec2sca_val = self.val.sum() / len(self.val)
+    
+    def compute(self):
+        return self.avg
