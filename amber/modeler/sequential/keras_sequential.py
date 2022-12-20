@@ -6,7 +6,10 @@ from ..architectureDecoder import MultiIOArchitecture
 import copy
 from ...architect.modelSpace import BranchedModelSpace
 import tensorflow as tf
-from tensorflow.keras.utils import multi_gpu_model
+try:
+    from tensorflow.keras.utils import multi_gpu_model
+except ImportError:
+    multi_gpu_model = None
 
 
 class SequentialModelBuilder(BaseModelBuilder):

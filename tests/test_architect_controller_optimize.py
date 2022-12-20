@@ -93,7 +93,7 @@ class TestGeneralController(testing_utils.TestCase):
                 i += 1
             i += 1
 
-    @unittest.skipIf(F.mod_name!='pytorch', "only implemented in PyTorch backend")
+    @unittest.skipIf(F.mod_name=='tensorflow_1', "only implemented in dynamic backend")
     def test_optimizer_dynamic(self):
         a1, p1 = self.controller.get_action()
         a2, p2 = self.controller.get_action()
@@ -104,13 +104,13 @@ class TestGeneralController(testing_utils.TestCase):
         losses = []
         max_iter = 100
         for i in range(max_iter):
-            loss = self.controller._build_train_op(
+            loss, _, _ = self.controller._build_train_op(
                 input_arc=a_batch, 
                 advantage=F.Variable([1,-1], trainable=False),
                 old_probs=p_batch
             )
             if i % (max_iter//5) == 0:
-                losses.append(loss)
+                losses.append(F.to_numpy(loss))
         new_log_probs, new_probs = F.to_numpy(self.controller._build_trainer(input_arc=a_batch))
         # loss should decrease over time
         self.assertLess(losses[-1], losses[0])
@@ -119,7 +119,7 @@ class TestGeneralController(testing_utils.TestCase):
         # 2nd index negative reward should increase/increase the loss
         self.assertLess(old_log_probs[1], new_log_probs[1])
     
-    @unittest.skipIf(F.mod_name!='tensorflow_1', "only implemented in TF1 backend")
+    @unittest.skipIf(F.mod_name!='tensorflow_1', "only implemented in static/TF1 backend")
     def test_optimize_static(self):
         a1, p1 = self.controller.get_action()
         a2, p2 = self.controller.get_action()

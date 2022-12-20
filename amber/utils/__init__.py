@@ -5,7 +5,7 @@ try:
     import tensorflow as static_tf
     if static_tf.__version__.startswith("2"):
         print("detected tf2 - using compatibility mode")
-        static_tf.compat.v1.disable_eager_execution()
+        #static_tf.compat.v1.disable_eager_execution()
         import tensorflow.compat.v1 as static_tf
 except ImportError:
     static_tf = object

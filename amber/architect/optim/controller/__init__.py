@@ -16,18 +16,22 @@ import sys
 from .base import BaseController
 from ....backend import mod_name, _gen_missing_api
 
-lib_types = {
-    'tensorflow_1': 'static',
-    'pytorch': 'dynamic',
-    'tensorflow_2': 'dynamic'
-}
+# lib_types = {
+#     'tensorflow_1': 'static',
+#     'pytorch': 'dynamic',
+#     'tensorflow_2': 'dynamic'
+# }
 
 controller_cls = ['GeneralController', 'MultiInputController', 'MultiIOController', 'OperationController', 'ZeroShotController']
 
-if lib_types[mod_name] == 'static':
-    from . import static as mod
-elif lib_types[mod_name] == 'dynamic':
-    from . import dynamic as mod
+#if lib_types[mod_name] == 'static':
+if mod_name == 'tensorflow_1':
+    from . import tf1 as mod
+elif mod_name == 'tensorflow_2':
+    from . import tf2 as mod
+#elif lib_types[mod_name] == 'dynamic':
+elif mod_name == 'pytorch':
+    from . import pytorch as mod
 else:
     raise Exception(f"Unsupported {mod_name} for supernet; must be in {list(lib_types.keys())}")
 

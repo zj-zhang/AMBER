@@ -1,6 +1,6 @@
 import tensorflow as tf
 from ._operators import Layer_deNovo, SeparableFC, sparsek_vec
-
+from . import cache
 
 def get_layer(x=None, op=None, custom_objects=None, with_bn=False):
     """Getter method for a Keras layer, including native Keras implementation and custom layers that are not included in
@@ -135,24 +135,34 @@ def get_layer(x=None, op=None, custom_objects=None, with_bn=False):
 
 
 def trainable_variables(scope: str):
-    return tf.compat.v1.trainable_variables(scope=scope)
+    #return tf.compat.v1.trainable_variables(scope=scope)
+    scope = scope or ''
+    if isinstance(scope, tf.Module):
+        return scope.trainable_variables()
+    elif type(scope) is str:
+        return [param for name, param in cache.CURRENT_GRAPH.param_cache.items() if scope in name]
 
 
-def get_loss(loss, y_true, y_pred):
+def get_loss(loss, y_true, y_pred, reduction='mean'):
+    assert reduction in ('mean', 'none')
     if type(loss) is str:
         loss = loss.lower()
         if loss == 'mse' or loss == 'mean_squared_error':
-            loss_ = tf.reduce_mean(tf.square(y_true - y_pred))
+            loss_ = tf.square(y_true - y_pred)
         elif loss == 'categorical_crossentropy':
-            loss_ = tf.reduce_mean(tf.keras.losses.categorical_crossentropy(y_true, y_pred))
+            loss_ = tf.keras.losses.categorical_crossentropy(y_true, y_pred)
         elif loss == 'binary_crossentropy':
-            loss_ = tf.reduce_mean(tf.keras.losses.binary_crossentropy(y_true, y_pred))
+            loss_ = tf.keras.losses.binary_crossentropy(y_true, y_pred)
+        elif loss == 'nllloss_with_logits':
+            loss_ = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=y_pred, labels=y_true)
         else:
             raise Exception("cannot understand string loss: %s" % loss)
-    elif type(loss) is callable:
+    elif callable(loss):
         loss_ = loss(y_true, y_pred)
     else:
         raise TypeError("Expect loss argument to be str or callable, got %s" % type(loss))
+    if reduction == 'mean':
+        loss_ = tf.reduce_mean(loss_)
     return loss_
 
 
@@ -175,37 +185,25 @@ def get_metric(m):
     else:
         raise Exception("cannot understand metric type: %s" % m)
 
-
-def get_train_op(loss, variables, optimizer, **kwargs):
-    assert tf.keras.backend.backend() == 'tensorflow'
-    # TODO: change to TF.keras
-    from keras.optimizers import get as get_opt
-    grads = tf.gradients(loss, variables)
-    grad_var = []
-    no_grad_var = []
-    for g, v in zip(grads, variables):
-        if g is None:
-            # get sub-scope name; if is optimizer-related, ignore
-            if 'compile' in v.name.split('/'):
-                continue
-            no_grad_var.append(v)
+def get_optimizer(opt, parameters, opt_config=None):
+    opt_config = opt_config or {'lr':0.01}
+    if callable(opt):
+        opt_ = opt
+    elif type(opt) is str:
+        if opt.lower() == 'adam':
+            opt_ = tf.keras.optimizers.Adam
+        elif opt.lower() == 'sgd':
+            opt_ = tf.keras.optimizers.SGD
         else:
-            grad_var.append(v)
-    # if no_grad_var:
-    #    warnings.warn(
-    #        "\n" + "=" * 80 + "\nWarning: the following tf.variables have no gradients"
-    #                   " and have been discarded: \n %s" % no_grad_var, stacklevel=2)
-    opt = get_opt(optimizer)
-    train_op = opt.get_updates(loss, grad_var) # type: ignore
-    try:
-        config = opt.get_config() # type: ignore
-    except NotImplementedError:  # if cannot get learning-rate when eager-execution is disableed
-        config = {'lr':None}
-    try:
-        learning_rate = config['lr']
-    except:  # for newer version of keras
-        learning_rate = config['learning_rate']
-    return train_op, learning_rate, opt
+            raise Exception(f"unknown opt {opt}")
+    else:
+        raise Exception(f"unknown opt {opt}")
+    return opt_(**opt_config)
+
+
+def get_train_op(loss, variables, optimizer, tape=None):
+    tape = tf.GradientTape() if tape is None else tape
+    optimizer.minimize(loss, variables, tape=tape)
 
 
 # alias

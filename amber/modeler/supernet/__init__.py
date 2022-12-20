@@ -1,17 +1,12 @@
 from ...backend import mod_name, _gen_missing_api
 import sys
 
-lib_types = {
-    'tensorflow_1': 'static',
-    'pytorch': 'dynamic',
-    'tensorflow_2': 'dynamic'
-}
 
 supernet_cls = ('EnasAnnModelBuilder', 'EnasCnnModelBuilder', 'EnasCNNwDataDescriptor')
 
-if lib_types[mod_name] == 'static':
+if mod_name in ('tensorflow_1', 'tensorflow_2'):
     from . import tf1_supernet as mod
-elif lib_types[mod_name] == 'dynamic':
+elif mod_name == 'pytorch':
     from . import pytorch_supernet as mod
 else:
     raise Exception(f"Unsupported {mod_name} for supernet; must be in {list(lib_types.keys())}")
