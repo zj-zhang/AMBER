@@ -1,0 +1,74 @@
+#!/bin/usr/env python
+# -*- coding: utf-8 -*-
+BANNER = """
+ █████╗ ███╗   ███╗██████╗ ███████╗██████╗ 
+██╔══██╗████╗ ████║██╔══██╗██╔════╝██╔══██╗
+███████║██╔████╔██║██████╔╝█████╗  ██████╔╝
+██╔══██║██║╚██╔╝██║██╔══██╗██╔══╝  ██╔══██╗
+██║  ██║██║ ╚═╝ ██║██████╔╝███████╗██║  ██║
+╚═╝  ╚═╝╚═╝     ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝
+"""
+
+import os
+import sys
+import json
+import argparse as ap
+
+def get_arg_parser():
+	description = "%(prog)s -- Automated Modeling of Biological Evidence-based Research"
+	epilog = "For command line options of each sub-command, type: %(prog)s COMMAND -h"
+	
+	argparser = ap.ArgumentParser(description=description, epilog=epilog)
+	argparser.add_argument('-v', '--version',
+						action='store_true', help="show version and exit")
+	subparsers = argparser.add_subparsers(dest="subcommand")
+	
+	add_config(subparsers)
+	add_build(subparsers)
+	add_run(subparsers)
+	return argparser
+
+def add_config(subparsers):
+	ag = subparsers.add_parser("config", help="config amber backend")	
+	ag.add_argument("--backend", "-b", dest="backend", type=str, required=True, choices=['pytorch', 'tensorflow_1', 'tensorflow_2'],
+		help="AMBER backend")
+	ag.add_argument("--default-dir", "-dir", dest="default_dir", type=str, required=False, default=os.path.join(os.path.expanduser("~"), ".amber"),
+		help="config default dir")
+
+def add_build(subparsers):
+	ag = subparsers.add_parser("build", help="build a new amber run")	
+	ag.add_argument( "-searcher", dest="searcher", type=str, required=True, help="NAS searcher")
+	ag.add_argument("-modeler", dest="modeler", type=str, required=True, help="NAS modeler")
+
+def add_run(subparsers):
+	ag = subparsers.add_parser("run", help="run amber search")	
+	ag.add_argument("-config",  dest="config", type=str, required=True, help="config file")
+	ag.add_argument("-data", dest="data", type=str, required=True, help="data")
+
+def main():
+	argparser = get_arg_parser()
+	args = argparser.parse_args()
+	if len(sys.argv)==1:
+		argparser.print_help(sys.stderr)
+		sys.exit(0)
+	
+	if args.version is True:
+		import amber
+		print(BANNER)
+		print(f"Automated Modeling of Biological Evidence-based Research\nVersion {amber.__version__}")
+		sys.exit(0)
+	
+	subcommand = args.subcommand
+	
+	if subcommand == 'config':
+		default_dir=args.default_dir
+		config_path = os.path.join(default_dir, "config.json")
+		with open(config_path, "w") as config_file:
+			json.dump({"backend": args.backend.lower()}, config_file)
+			print('Setting the default backend to "{}".\n'.format(args.backend))
+		
+
+if __name__ == '__main__':
+	main()
+
+

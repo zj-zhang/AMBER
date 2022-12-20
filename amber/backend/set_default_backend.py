@@ -17,7 +17,7 @@ def set_default_backend(default_dir, backend_name):
     )
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--default_dir",
@@ -34,3 +34,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     set_default_backend(args.default_dir, args.backend[0])
 
+if __name__ == '__main__':
+    main()

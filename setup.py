@@ -17,6 +17,7 @@ config = {
         #'seaborn',
         ],
     'dependency_links': [],
+    'scripts': ['bin/amber-cli'],
     'name': 'amber-automl',
 }
 

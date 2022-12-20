@@ -93,7 +93,7 @@ pip install pytorch-lightning==1.6.5 torchmetrics==0.11.0 amber-automl
 pip install pytest coverage parameterized expecttest hypothesis
 ```
 
-## Installing with Tensorflow 2
+### Installing with Tensorflow 2
 ```{bash}
 conda create -n amber-tf2 -c conda-forge tensorflow-gpu scikit-learn seaborn
 # if you are on MacOS, or don't have CUDA-enabled GPU, replace tensorflow-gpu with tensorflow
