@@ -15,7 +15,7 @@ def Session():
     return sess
 
 def set_session(sess):
-    tf.keras.backend.set_session(sess)
+    tf.compat.v1.keras.backend.set_session(sess)
 
 def clear_session():
     tf.keras.backend.clear_session()

@@ -4,6 +4,7 @@ import torchmetrics
 import os
 import numpy as np
 from . import cache
+from .layer import get_layer
 from .utils import InMemoryLogger
 from .tensor import TensorType
 
@@ -231,13 +232,19 @@ class Model(pl.LightningModule):
         pass
 
 
-class Sequential(torch.nn.Sequential):
+class Sequential(Model):
     def __init__(self, layers=None):
         layers = layers or []
-        super().__init__(*layers)
+        super().__init__()
+        self.layers = torch.nn.ModuleList(layers)
     
     def add(self, layer):
-        super().append(layer)
+        self.layers.append(layer)
+    
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer(x)
+        return x
 
 
 def get_metric(m):
@@ -256,6 +263,10 @@ def get_metric(m):
             return torchmetrics.AUROC
         elif m.lower() in ('aupr', 'average_precision'):
             return torchmetrics.AveragePrecision
+        elif m.lower() in ('mae', 'MeanAbsoluteError'.lower()):
+            return torchmetrics.MeanAbsoluteError
+        elif m.lower() in ('mse', 'MeanSquaredError'.lower()):
+            return torchmetrics.MeanSquaredError
         else:
             raise Exception("cannot understand metric string: %s" % m)
     else:

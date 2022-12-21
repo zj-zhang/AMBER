@@ -117,7 +117,7 @@ def get_layer(x=None, op=None, custom_objects=None, with_bn=False):
             seed=op.Layer_attributes.get('seed', None))(x, training=op.Layer_attributes.get("training", True))
 
     elif op.Layer_type == 'identity':
-        layer = tf.keras.layers.Lambda(lambda t: t, **op.Layer_attributes)
+        layer = tf.keras.layers.Lambda(lambda t: t, name=op.Layer_attributes.get('name', None))
 
     elif op.Layer_type == 'gaussian_noise':
         layer = tf.keras.layers.GaussianNoise(**op.Layer_attributes)

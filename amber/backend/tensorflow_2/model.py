@@ -81,13 +81,13 @@ def get_layer(x=None, op=None, custom_objects=None, with_bn=False):
         layer = tf.keras.layers.Lambda(sparsek_vec, **op.Layer_attributes)
 
     elif op.Layer_type in ('maxpool1d','maxpooling1d'):
-        layer = tf.keras.layers.MaxPooling1D(**op.Layer_attributes)
+        layer = tf.keras.layers.MaxPooling1D(pool_size=op.Layer_attributes.get('pool_size',2), strides=op.Layer_attributes.get('strides', None), padding=op.Layer_attributes.get('padding', "valid"), data_format=op.Layer_attributes.get('data_format', 'channels_last'))
 
     elif op.Layer_type in ('maxpool2d','maxpooling2d'):
         layer = tf.keras.layers.MaxPooling2D(**op.Layer_attributes)
 
     elif op.Layer_type in ('avgpool1d', 'avgpooling1d', 'averagepooling1d'):
-        layer = tf.keras.layers.AveragePooling1D(**op.Layer_attributes)
+        layer = tf.keras.layers.AveragePooling1D(pool_size=op.Layer_attributes.get('pool_size',2), strides=op.Layer_attributes.get('strides', None), padding=op.Layer_attributes.get('padding', "valid"), data_format=op.Layer_attributes.get('data_format', 'channels_last'))
 
     elif op.Layer_type in ('avgpool2d', 'avgpooling2d', 'averagepooling2d'):
         layer = tf.keras.layers.AveragePooling2D(**op.Layer_attributes)
@@ -117,7 +117,7 @@ def get_layer(x=None, op=None, custom_objects=None, with_bn=False):
             seed=op.Layer_attributes.get('seed', None))(x, training=op.Layer_attributes.get("training", True))
 
     elif op.Layer_type == 'identity':
-        layer = tf.keras.layers.Lambda(lambda t: t, **op.Layer_attributes)
+        layer = tf.keras.layers.Lambda(lambda t: t, name=op.Layer_attributes.get('name', None))
 
     elif op.Layer_type == 'gaussian_noise':
         layer = tf.keras.layers.GaussianNoise(**op.Layer_attributes)
@@ -186,7 +186,7 @@ def get_metric(m):
         raise Exception("cannot understand metric type: %s" % m)
 
 def get_optimizer(opt, parameters, opt_config=None):
-    opt_config = opt_config or {'lr':0.01}
+    opt_config = opt_config or {'learning_rate':0.01}
     if callable(opt):
         opt_ = opt
     elif type(opt) is str:
@@ -205,6 +205,23 @@ def get_train_op(loss, variables, optimizer, tape=None):
     tape = tf.GradientTape() if tape is None else tape
     optimizer.minimize(loss, variables, tape=tape)
 
+
+def get_callback(m):
+    if callable(m):
+        return m
+    elif m == 'EarlyStopping':
+        return tf.keras.callbacks.EarlyStopping
+    elif m == 'ModelCheckpoint':
+        return tf.keras.callbacks.ModelCheckpoint
+    elif m == 'CallbackList':
+        from keras.callbacks import CallbackList
+        return CallbackList
+    elif m == 'BaseLogger':
+        return tf.keras.callbacks.BaseLogger
+    elif m == 'History':
+        return tf.keras.callbacks.History
+    else:
+        raise Exception("cannot understand callback: %s" % m)
 
 # alias
 Model = tf.keras.models.Model

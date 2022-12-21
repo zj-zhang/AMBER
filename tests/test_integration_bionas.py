@@ -3,7 +3,7 @@ from amber.architect.optim.controller import GeneralController
 from amber.architect.trainEnv import ControllerTrainEnvironment
 from amber.offline_learn.mock_manager import MockManager
 from amber.utils.testing_utils import get_bionas_model_space as get_state_space
-from amber.utils import static_tf as tf
+import unittest
 from amber import backend as F
 import numpy as np
 import os
@@ -22,22 +22,21 @@ def get_controller(state_space, sess):
     layer given the previous layer and all previous layers (as stored in the hidden cell states). The
     controller model is trained by policy gradients as in reinforcement learning.
     """
-    with tf.device("/cpu:0"):
-        controller = GeneralController(
-            model_space=state_space,
-            lstm_size=16,
-            lstm_num_layers=1,
-            with_skip_connection=False,
-            kl_threshold=0.05,
-            train_pi_iter=50,
-            optim_algo='adam',
-            # tanh_constant=1.5,
-            buffer_size=5,
-            batch_size=5,
-            session=sess,
-            use_ppo_loss=False,
-            verbose=0
-        )
+    controller = GeneralController(
+        model_space=state_space,
+        lstm_size=16,
+        lstm_num_layers=1,
+        with_skip_connection=False,
+        kl_threshold=0.05,
+        train_pi_iter=10,
+        optim_algo='adam',
+        # tanh_constant=1.5,
+        buffer_size=5,
+        batch_size=5,
+        session=sess,
+        use_ppo_loss=False,
+        verbose=0
+    )
     return controller
 
 
@@ -106,14 +105,16 @@ class TestBootstrap(testing_utils.TestCase):
             self.env = get_environment(self.controller, self.manager, wd=self.tempdir.name)
 
             old_rewards = self._sample_rewards()
+            print(f"old_rewards: {np.mean(old_rewards)}")
             self.env.train()
             self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'train_history.csv')))
             self.assertTrue(os.path.isfile(os.path.join(self.tempdir.name, 'controller_weights.h5')))
             new_rewards = self._sample_rewards()
+            print(f"new_rewards: {np.mean(new_rewards)}")
             self.assertLess(np.mean(old_rewards), np.mean(new_rewards))
         self.tempdir.cleanup()
 
 
 if __name__ == '__main__':
-    tf.test.main()
+    unittest.main()
 

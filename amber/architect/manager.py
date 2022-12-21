@@ -230,7 +230,10 @@ class GeneralManager(BaseNetworkManager):
                 # do any post processing,
                 # e.g. save child net, plot training history, plot scattered prediction.
                 if self.store_fn:
-                    val_pred = model.predict(self.validation_data, verbose=self.verbose, **self.predict_kwargs)
+                    if type(self.validation_data) in (tuple, list) and len(self.validation_data) == 2:
+                        val_pred = model.predict(self.validation_data[0], verbose=self.verbose, **self.predict_kwargs)
+                    else:
+                        val_pred = model.predict(self.validation_data, verbose=self.verbose, **self.predict_kwargs)
                     self.store_fn(
                         trial=trial,
                         model=model,

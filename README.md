@@ -103,6 +103,18 @@ pip install pytorch-lightning==1.6.5 torchmetrics==0.11.0 amber-automl
 pip install pytest coverage parameterized pydot graphviz
 ```
 
+### Switching between Backends
+```{bash}
+amber-cli config --backend pytorch
+```
+
+A second approach is to temporarily append an ENV variable, such as 
+
+```{bash}
+AMBBACKEND=tensorflow_1 amber-cli run -config config.pkl -data data.h5
+```
+
+
 ### Get the latest source code
 First, clone the Github Repository; if you have previous versions, make sure you pull the latest commits/changes:
 
@@ -121,7 +133,7 @@ You can test if AMBER can be imported to your new `conda` environment by:
 
 ```bash
 conda activate amber
-python -c "import amber; print(amber.__version__)"
+amber-cli --version
 ```
 
 If the version number is printed out, and no errors pop up, that means you have successfully installed AMBER.

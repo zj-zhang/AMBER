@@ -24,8 +24,7 @@ except ImportError:
     has_torchviz = False
 
 
-#@unittest.skipIf(backend.mod_name!="pytorch", reason="skipped because non-pytorch backend")
-@unittest.skip
+@unittest.skipIf(backend.mod_name!="pytorch", reason="skipped because non-pytorch backend")
 class TestEnasPyTorchConvDAG(testing_utils.TestCase):
     def setUp(self):
         self.session = F.Session()

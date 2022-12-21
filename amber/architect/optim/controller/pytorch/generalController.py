@@ -186,8 +186,9 @@ class GeneralController(BaseController):
         self.sample_entropy = F.reduce_sum(entropys)
         log_probs = F.stack(log_probs)
         self.sample_log_prob = F.reduce_sum(log_probs)
-        skip_count = F.stack(skip_count)
-        self.skip_count = F.reduce_sum(skip_count)
+        if self.with_skip_connection:
+            skip_count = F.stack(skip_count)
+            self.skip_count = F.reduce_sum(skip_count)
         self.sample_probs = probs_
     
     def _build_trainer(self, input_arc):
@@ -200,10 +201,11 @@ class GeneralController(BaseController):
         log_probs = F.stack(log_probs)
         onehot_log_prob = F.reshape(F.reduce_sum(log_probs, axis=0), [-1]) # (batch_size,)
         self.onehot_log_prob = onehot_log_prob
-        skip_count = F.stack(skip_count)
-        self.onehot_skip_count = F.reduce_sum(skip_count, axis=0)
-        skip_penaltys_flat = [F.reduce_mean(x, axis=1) for x in skip_penaltys] # from (num_layer-1, batch_size, layer_id) to (num_layer-1, batch_size); layer_id makes each tensor of varying lengths in the list
-        self.onehot_skip_penaltys = F.reduce_mean(skip_penaltys_flat, axis=0)  # (batch_size,)
+        if self.with_skip_connection:
+            skip_count = F.stack(skip_count)
+            self.onehot_skip_count = F.reduce_sum(skip_count, axis=0)
+            skip_penaltys_flat = [F.reduce_mean(x, axis=1) for x in skip_penaltys] # from (num_layer-1, batch_size, layer_id) to (num_layer-1, batch_size); layer_id makes each tensor of varying lengths in the list
+            self.onehot_skip_penaltys = F.reduce_mean(skip_penaltys_flat, axis=0)  # (batch_size,)
         return onehot_log_prob, probs_
 
     def _build_train_op(self, input_arc, advantage, old_probs):
@@ -215,7 +217,7 @@ class GeneralController(BaseController):
         normalize = F.cast(self.num_layers * (self.num_layers - 1) / 2, F.float32)
         self.skip_rate = F.cast(self.skip_count, F.float32) / normalize
         loss = 0
-        if self.skip_weight is not None:
+        if self.with_skip_connection is True and self.skip_weight is not None:
             loss += self.skip_weight * F.reduce_mean(self.onehot_skip_penaltys)
         if self.use_ppo_loss:
             raise NotImplementedError(f"No PPO support for {F.mod_name} yet")

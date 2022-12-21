@@ -14,9 +14,10 @@ from ... import backend as F
 # for general child
 from .base import BaseEnasConv1dDAG
 from ..architectureDecoder import ResConvNetArchitecture
+from ...backend.pytorch.layer import LambdaLayer, ConcatLayer, GlobalAveragePooling1DLayer
 
 
-def get_torch_layer(fn_str):
+def get_torch_actv_fn(fn_str):
     if fn_str == "relu":
         return torch.nn.ReLU()
     elif fn_str == "softmax":
@@ -24,36 +25,8 @@ def get_torch_layer(fn_str):
     elif fn_str == "sigmoid":
         return torch.nn.Sigmoid()
     else:
-        raise Exception("cannot get torch layer for: %s" % fn_str)
+        raise Exception("cannot get torch activation function for: %s" % fn_str)
 
-
-class LambdaLayer(Module):
-    def __init__(self, lambd):
-        super(LambdaLayer, self).__init__()
-        self.lambd = lambd
-
-    def forward(self, x):
-        return self.lambd(x)
-
-
-class ConcatLayer(Module):
-    def __init__(self, take_sum=False):
-        super(ConcatLayer, self).__init__()
-        self.take_sum = take_sum
-
-    def forward(self, x):
-        out = torch.stack(x, dim=0)
-        if self.take_sum:
-            out = out.sum(dim=0)
-        return out
-
-
-class GlobalAveragePooling1DLayer(Module):
-    def __init__(self):
-        super(GlobalAveragePooling1DLayer, self).__init__()
-
-    def forward(self, x):
-        return torch.mean(x, dim=-1)
 
 
 class EnasCnnModelBuilder(F.Model, BaseEnasConv1dDAG):
@@ -332,7 +305,7 @@ class EnasCnnModelBuilder(F.Model, BaseEnasConv1dDAG):
         ])
         layers["out"] = F.Sequential([
             torch.nn.Linear(fc_units, self.output_node.Layer_attributes["units"]),
-            get_torch_layer(self.output_node.Layer_attributes["activation"]),
+            get_torch_actv_fn(self.output_node.Layer_attributes["activation"]),
         ])
         return layers
 
@@ -415,7 +388,7 @@ class EnasCnnModelBuilder(F.Model, BaseEnasConv1dDAG):
                 padding="same",
             ),
             torch.nn.BatchNorm1d(filters),
-            get_torch_layer(activation_fn),
+            get_torch_actv_fn(activation_fn),
         ])
         return x
 

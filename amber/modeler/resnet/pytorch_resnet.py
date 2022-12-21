@@ -8,7 +8,7 @@ from typing import Optional, Union, List, Dict, Any
 from ... import backend as F
 from ..base import BaseModelBuilder
 from ..architectureDecoder import ResConvNetArchitecture
-from ..supernet.pytorch_supernet import ConcatLayer, GlobalAveragePooling1DLayer, get_torch_layer
+from ..supernet.pytorch_supernet import ConcatLayer, GlobalAveragePooling1DLayer, get_torch_actv_fn
 
 
 class ResidualCnnBuilder(BaseModelBuilder):
@@ -203,7 +203,7 @@ class ResidualCnnBuilder(BaseModelBuilder):
         #model.add
         layers.append(("out", torch.nn.Sequential(
             torch.nn.Linear(self.fc_units, self.outputs.Layer_attributes["units"]),
-            get_torch_layer(self.outputs.Layer_attributes["activation"]),
+            get_torch_actv_fn(self.outputs.Layer_attributes["activation"]),
         )))
         model = LightningResNet(layers=layers, model_compile_dict=self.model_compile_dict)
         return model
@@ -225,7 +225,7 @@ class ResidualCnnBuilder(BaseModelBuilder):
                     padding="same",
                 ),
                 torch.nn.BatchNorm1d(filters),
-                get_torch_layer(activation),
+                get_torch_actv_fn(activation),
             )
         elif layer.Layer_type in ('maxpool1d', 'avgpool1d'):
             pool_size = layer.Layer_attributes["pool_size"]
