@@ -72,3 +72,7 @@ class TestCase(torch_testCase):
     @staticmethod
     def assertAllEqual(a,b):
         assert all(a==b)
+
+    @staticmethod
+    def assertAllGreater(a,b):
+        assert all(a>b)

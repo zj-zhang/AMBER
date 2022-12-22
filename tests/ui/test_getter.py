@@ -143,7 +143,7 @@ def test_get_model_space(arg):
 @pytest.mark.parametrize(['manager_type', 'init_kws'], [
     ['GeneralManager', {}],
     ['EnasManager', {}],
-    ['MockManager', {'history_fn_list':[os.path.join(os.path.dirname(__file__), "mock_black_box/tmp_%i/train_history.csv.gz" % i)
+    ['MockManager', {'history_fn_list':[os.path.join(os.path.dirname(__file__),"../integration", "mock_black_box/tmp_%i/train_history.csv.gz" % i)
                                for i in range(1, 3)], 'model_compile_dict':{'metrics': ['acc']}}],
     ['DistributedManager', {}],
     [architect.manager.GeneralManager, {}]

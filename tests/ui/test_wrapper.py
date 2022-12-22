@@ -7,6 +7,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 
 from amber import architect, modeler
+from amber import backend
 from amber import Amber, AmberSpecifications, DataToParse
 
 
@@ -103,7 +104,7 @@ def get_verbose_specs():
     specs = {
         "model_space": model_space,
         "controller": {
-            "share_embedding": {1: 0},
+            #"share_embedding": {1: 0},
             "with_skip_connection": False,
             "num_input_blocks": 1,
             "lstm_size": 32,

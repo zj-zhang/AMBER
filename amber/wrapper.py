@@ -62,6 +62,7 @@ class Amber:
         self.env = None
 
         # use one amber.backend.Session throughout one DA instance
+        F.clear_session()
         self.session = F.Session()
         F.set_session(self.session)
 

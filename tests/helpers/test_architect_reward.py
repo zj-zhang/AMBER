@@ -3,7 +3,7 @@ from amber import architect
 from amber.utils import testing_utils
 
 def test_mock_reward():
-    hist_file_list = [os.path.join(os.path.dirname(__file__), "mock_black_box/tmp_%i/train_history.csv.gz" % i)
+    hist_file_list = [os.path.join(os.path.dirname(__file__),"../integration/", "mock_black_box/tmp_%i/train_history.csv.gz" % i)
                                for i in range(1, 21)]
     reward_fn = architect.reward.MockReward(
         train_history_list=hist_file_list,
