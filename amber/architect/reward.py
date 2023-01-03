@@ -14,6 +14,7 @@ import copy
 from .commonOps import unpack_data
 from ..utils.io import read_history
 from .base import BaseReward as Reward
+from .training_free import get_ntk
 
 
 class KnowledgeReward(Reward):
@@ -82,6 +83,25 @@ class LossReward(Reward):
         else:
             raise Exception("Cannot understand return type of model.evaluate; got %s" % type(loss_and_metrics))
         return -L, loss_and_metrics, None
+    # return self.c/L, loss_and_metrics, None
+
+
+class NTKReward(Reward):
+    """The most basic reward function; returns negative loss as rewards
+    """
+
+    def __init__(self, criterion=None, *args, **kwargs):
+        self.knowledge_function = None
+        self.criterion = criterion
+        super(NTKReward, self).__init__()
+
+    def __call__(self, model, data, *args, **kwargs):
+        X, y = unpack_data(data)
+        y_hat = model.forward(X)
+        # be explicit about observation and score
+        cond, loss = get_ntk(X, y, model, criterion=self.criterion)
+        loss_and_metrics = [loss]
+        return -cond, loss_and_metrics, None
     # return self.c/L, loss_and_metrics, None
 
 
@@ -157,7 +177,7 @@ class LossAucReward(Reward):
         if type(pred) is not list:
             pred = [pred]
         return pred, y
-    
+
     def call_scorer(self, pred, y):
         auc_list = []
         for i in range(len(y)):
@@ -172,7 +192,7 @@ class LossAucReward(Reward):
                     pass
             auc_list.append(tmp)
         return auc_list
-    
+
     def normalize_loss_and_knowledge(self, L, model, data):
         if self.knowledge_function is not None:
             K = self.knowledge_function(model, data)
@@ -184,7 +204,7 @@ class LossAucReward(Reward):
         if self.loss_c is not None:
             old_L = L
             L = old_L / self.loss_c
-        return L, K        
+        return L, K
 
     def __call__(self, model, data, *args, **kwargs):
         pred, y = self.get_pred(model=model, data=data)
@@ -196,7 +216,7 @@ class LossAucReward(Reward):
         loss_and_metrics = [L]
         reward_metrics = {'knowledge': K}
         return reward, loss_and_metrics, reward_metrics
-    
+
     def min(self, data):
         """For dealing with non-valid model"""
         X, y = unpack_data(data, unroll_generator_y=True)
