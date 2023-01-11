@@ -17,21 +17,25 @@ def get_ntk(inputs, targets, network, criterion=torch.nn.BCELoss(reduction='none
     grads_x = [] # size: #training samples. grads of all W from each sample
     inputs = torch.Tensor(inputs).cuda(device=device, non_blocking=True)
     targets = torch.Tensor(targets).cuda(device=device, non_blocking=True)
-    logit = network(inputs)
-    # choose specific class for loss
-    loss = criterion(logit, targets)
-    for _idx in range(len(inputs)):
-        # logit[_idx:_idx+1].backward(torch.ones_like(logit[_idx:_idx+1]), retain_graph=True)
-        # use criterion to get gradient
-        loss[_idx:_idx+1].backward(torch.ones_like(loss[_idx:_idx+1]), retain_graph=True)
-        grad = []
-        for name, W in network.named_parameters():
-            if 'classifier' in name or 'fc' in name or 'out' in name: continue
-            if 'weight' in name and W.grad is not None:
-                grad.append(W.grad.view(-1).detach())
-        grads_x.append(torch.cat(grad, -1).detach())
-        network.zero_grad()
-        torch.cuda.empty_cache()
+
+    ch = 16
+    for idx in np.arange(0, len(inputs), ch):
+        logit = network(inputs[idx:idx+ch])
+        # choose specific class for loss
+        loss = criterion(logit, targets[idx:idx+ch])
+        for _idx in range(len(inputs[idx:idx+ch])):
+            # logit[_idx:_idx+1].backward(torch.ones_like(logit[_idx:_idx+1]), retain_graph=True)
+            # use criterion to get gradient
+            loss[_idx:_idx+1].backward(torch.ones_like(loss[_idx:_idx+1]), retain_graph=_idx < len(inputs[idx:idx+ch])-1)
+            grad = []
+            for name, W in network.named_parameters():
+                if 'classifier' in name or 'fc' in name or 'out' in name: continue
+                if 'weight' in name and W.grad is not None:
+                    grad.append(W.grad.view(-1).detach())
+            grads_x.append(torch.cat(grad, -1).detach())
+            network.zero_grad()
+            torch.cuda.empty_cache()
+
     torch.cuda.empty_cache()
     _grads_x = torch.stack([item.cuda() for item in grads_x], 0)
     torch.cuda.empty_cache()
