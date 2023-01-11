@@ -15,8 +15,9 @@ def get_ntk(inputs, targets, network, criterion=torch.nn.BCELoss(reduction='none
     else:
         network.eval()
     grads_x = [] # size: #training samples. grads of all W from each sample
-    inputs = torch.Tensor(inputs).cuda(device=device, non_blocking=True)
-    targets = torch.Tensor(targets).cuda(device=device, non_blocking=True)
+    # device management should happen outside of get_ntk
+    #inputs = torch.Tensor(inputs).cuda(device=device, non_blocking=True)
+    #targets = torch.Tensor(targets).cuda(device=device, non_blocking=True)
 
     ch = 16
     for idx in np.arange(0, len(inputs), ch):
