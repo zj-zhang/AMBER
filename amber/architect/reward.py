@@ -14,7 +14,7 @@ import copy
 from .commonOps import unpack_data
 from ..utils.io import read_history
 from .base import BaseReward as Reward
-from .training_free import get_ntk
+from .training_free import get_ntk, Linear_Region_Collector
 
 
 class KnowledgeReward(Reward):
@@ -87,7 +87,7 @@ class LossReward(Reward):
 
 
 class NTKReward(Reward):
-    """The most basic reward function; returns negative loss as rewards
+    """Reward function based on NTK
     """
 
     def __init__(self, criterion=None, *args, **kwargs):
@@ -99,6 +99,27 @@ class NTKReward(Reward):
         X, y = unpack_data(data)
         y_hat = model.forward(X)
         # be explicit about observation and score
+        cond, loss = get_ntk(X, y, model, criterion=self.criterion)
+        loss_and_metrics = [loss]
+        return -cond, loss_and_metrics, None
+    # return self.c/L, loss_and_metrics, None
+
+
+class LRReward(Reward):
+    """Reward function based on Linear Regions
+    """
+
+    def __init__(self, criterion=None, *args, **kwargs):
+        self.knowledge_function = None
+        self.criterion = criterion
+        super(NTKReward, self).__init__()
+
+    def __call__(self, model, data, *args, **kwargs):
+        # be explicit about observation and score
+        assert isinstance(data, list) # multiple batch of samples
+        lrc_model = Linear_Region_Collector(data, model, train_mode=True)
+        lrc_model.forward_batch_sample()
+        lrc_model.clear()
         cond, loss = get_ntk(X, y, model, criterion=self.criterion)
         loss_and_metrics = [loss]
         return -cond, loss_and_metrics, None
