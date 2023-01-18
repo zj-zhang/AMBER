@@ -222,14 +222,14 @@ def plot_stats2(working_dir):
         d = np.stack(list(map(lambda x: sma(x), np.array(data))), axis=0)
         avg = np.apply_along_axis(np.mean, 0, d)
         ax = sns.lineplot(x=np.arange(1, len(avg) + 1), y=avg,
-                          color='b', label='Loss', legend=False)
+                          color='b', label='Loss/Reward', legend=False)
         if d.shape[0] >= 6:
             std = np.apply_along_axis(np.std, 0, d) / np.sqrt(d.shape[0])
             min_, max_ = avg - 1.96 * std, avg + 1.96 * std
             ax.fill_between(range(avg.shape[0]), min_, max_, alpha=0.2)
 
         data = df['Knowledge']
-        if np.array(data).shape[1] > 0: # if have data
+        if np.array(data).shape[1] > 0 and np.std(data) > 0: # if have data
             ax2 = ax.twinx()
             d = np.stack(list(map(lambda x: sma(x), np.array(data))), axis=0)
             avg = np.apply_along_axis(np.mean, 0, d)

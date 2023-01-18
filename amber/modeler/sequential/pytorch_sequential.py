@@ -37,7 +37,6 @@ class SequentialModelBuilder(BaseModelBuilder):
         # permute x if not a vector to match channel_last data format
         if len(curr_shape) > 1:
             dims = [0, len(curr_shape)] + np.arange(1, len(curr_shape)).tolist()
-            print(dims)
             layer = F.get_layer(op=F.Operation('permute', dims=dims))
             model.add(layer)
             x = layer(x)
