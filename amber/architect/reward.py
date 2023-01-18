@@ -112,17 +112,16 @@ class LRReward(Reward):
     def __init__(self, criterion=None, *args, **kwargs):
         self.knowledge_function = None
         self.criterion = criterion
-        super(NTKReward, self).__init__()
+        super(LRReward, self).__init__()
 
     def __call__(self, model, data, *args, **kwargs):
         # be explicit about observation and score
         assert isinstance(data, list) # multiple batch of samples
         lrc_model = Linear_Region_Collector(data, model, train_mode=True)
-        lrc_model.forward_batch_sample()
+        _lr = lrc_model.forward_batch_sample()
         lrc_model.clear()
-        cond, loss = get_ntk(X, y, model, criterion=self.criterion)
-        loss_and_metrics = [loss]
-        return -cond, loss_and_metrics, None
+        loss_and_metrics = None
+        return _lr, loss_and_metrics, None
     # return self.c/L, loss_and_metrics, None
 
 
