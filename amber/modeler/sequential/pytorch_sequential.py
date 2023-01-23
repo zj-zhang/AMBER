@@ -29,7 +29,7 @@ class SequentialModelBuilder(BaseModelBuilder):
         assert self.session is None or isinstance(self.session, F.SessionType)
 
     def build(self, model_states):
-        model = F.Sequential()
+        layers = []
         curr_shape = self.input_node.Layer_attributes['shape']
         x = torch.empty(*curr_shape, device='cpu')
         # add a batch dim
@@ -38,7 +38,7 @@ class SequentialModelBuilder(BaseModelBuilder):
         if len(curr_shape) > 1:
             dims = [0, len(curr_shape)] + np.arange(1, len(curr_shape)).tolist()
             layer = F.get_layer(op=F.Operation('permute', dims=dims))
-            model.add(layer)
+            layers.append(layer)
             x = layer(x)
         for i, state in enumerate(model_states):
             if issubclass(type(state), int) or np.issubclass_(type(state), np.integer):
@@ -51,9 +51,10 @@ class SequentialModelBuilder(BaseModelBuilder):
                 )
             layer = F.get_layer(torch.squeeze(x, dim=0), op, custom_objects=self.custom_objects)
             x = layer(x)
-            model.add(layer)
+            layers.append(layer)
         out = F.get_layer(torch.squeeze(x, dim=0), op=self.output_node, custom_objects=self.custom_objects)
-        model.add(out)
+        layers.append(out)
+        model = F.Sequential(layers=layers)
         return model
     
     def __call__(self, model_states):

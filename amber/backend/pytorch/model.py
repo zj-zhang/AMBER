@@ -25,6 +25,7 @@ class Model(pl.LightningModule):
         self.valid_metrics = {}
         self.trainer = None
         self.task = None
+        self.save_hyperparameters()
 
     def compile(self, loss, optimizer, metrics=None, *args, **kwargs):
         if callable(loss):
@@ -258,9 +259,10 @@ class Model(pl.LightningModule):
 
 class Sequential(Model):
     def __init__(self, layers=None):
-        layers = layers or []
         super().__init__()
+        layers = layers or []
         self.layers = torch.nn.ModuleList(layers)
+        self.save_hyperparameters()
     
     def add(self, layer):
         self.layers.append(layer)

@@ -20,9 +20,12 @@ def read_history_set(fn_list):
 
 
 def read_history(fn_list,
-                 metric_name_dict={'acc': 0, 'knowledge': 1, 'loss': 2}):
+                 metric_name_dict=None):
+    if not isinstance(fn_list, (list, tuple)):
+        fn_list = [fn_list]
     d = read_history_set(fn_list)
     d.columns = ['ID', 'metrics', 'reward'] + ['L%i' % i for i in range(1, d.shape[1] - 3)] + ['dir']
+    metric_name_dict = {} if metric_name_dict is None else metric_name_dict
     metrics = {x: [] for x in metric_name_dict}
     for i in range(d.shape[0]):
         tmp = d.iloc[i, 1].split(',')
