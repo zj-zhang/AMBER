@@ -3,10 +3,11 @@ import torch
 from torch import nn
 from operator import mul
 from functools import reduce
+from torch import autograd
 from pdb import set_trace as bp
 
 
-__all__ = ['get_ntk', 'Linear_Region_Collector']
+__all__ = ['get_ntk', 'Linear_Region_Collector', 'curve_complexity']
 
 
 def get_ntk(inputs, targets, network, criterion=torch.nn.BCELoss(reduction='none'), train_mode=True):
@@ -165,3 +166,37 @@ class Linear_Region_Collector:
             if self.mode == 'concat':
                 feature_data = torch.cat(feature_data, 1)
             LRCount.update2D(feature_data)
+
+
+def curve_complexity(data, network, train_mode=True, need_graph=True, reduction='mean', differentiable=False):
+    assert isinstance(data, list) # multiple batch of samples
+    data.requires_grad_(True)
+    LE = 0
+    network = network.cuda()
+    if train_mode:
+        network.train()
+    else:
+        network.eval()
+    network.zero_grad()
+    _idx = 0
+    for batch_data in data:
+        output = network(batch_data)
+        output = output.reshape(output.size(0), -1)
+        n, c = output.size()
+        jacobs = []
+        for coord in range(c):
+            _gradients = autograd.grad(outputs=output[:, coord].sum(), inputs=[ batch_data ], only_inputs=True, retain_graph=need_graph, create_graph=need_graph)
+            if differentiable:
+                jacobs.append(_gradients[0]) # select gradient of "theta"
+            else:
+                jacobs.append(_gradients[0].detach()) # select gradient of "theta"
+        jacobs = torch.stack(jacobs, 0)
+        jacobs = jacobs.permute(1, 0)
+        gE = torch.einsum('nd,nd->n', jacobs, jacobs).sqrt()
+        LE += gE.sum()
+        torch.cuda.empty_cache()
+    if reduction == 'mean':
+        return LE / len(data) / len(batch_data)
+    else:
+        return LE
+

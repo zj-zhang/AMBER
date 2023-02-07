@@ -14,7 +14,7 @@ import copy
 from .commonOps import unpack_data
 from ..utils.io import read_history
 from .base import BaseReward as Reward
-from .training_free import get_ntk, Linear_Region_Collector
+from .training_free import get_ntk, Linear_Region_Collector, curve_complexity
 
 
 class KnowledgeReward(Reward):
@@ -122,6 +122,24 @@ class LRReward(Reward):
         lrc_model.clear()
         loss_and_metrics = None
         return _lr, loss_and_metrics, None
+    # return self.c/L, loss_and_metrics, None
+
+
+class LengthReward(Reward):
+    """Reward function based on Length Distorsion
+    """
+
+    def __init__(self, criterion=None, *args, **kwargs):
+        self.knowledge_function = None
+        self.criterion = criterion
+        super(LengthReward, self).__init__()
+
+    def __call__(self, model, data, *args, **kwargs):
+        # be explicit about observation and score
+        assert isinstance(data, list) # multiple batch of samples
+        complexity = curve_complexity(data, model)
+        loss_and_metrics = None
+        return complexity, loss_and_metrics, None
     # return self.c/L, loss_and_metrics, None
 
 
