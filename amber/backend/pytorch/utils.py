@@ -101,6 +101,14 @@ class InMemoryLogger(LightningLoggerBase):
         """Log metrics, associating with given `step`."""
         metrics = _add_prefix(metrics, self._prefix, self.LOGGER_JOIN_CHAR)
         self.experiment.log_metrics(metrics, step)
+    
+    @property
+    def history(self) -> pd.DataFrame:
+        df = pd.DataFrame(self.experiment.metrics)
+        if len(df) > 0:
+            df.set_index("epoch", inplace=True)
+            df = df.groupby("epoch").mean()
+        return df        
 
     def pandas(self):
         """Return recorded metrics in a Pandas dataframe.

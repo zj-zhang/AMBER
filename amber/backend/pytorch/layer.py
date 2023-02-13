@@ -38,7 +38,7 @@ class GlobalAveragePooling1DLayer(torch.nn.Module):
 
 class GlobalMaxPooling1DLayer(torch.nn.Module):
     def forward(self, x):
-        return torch.max(x, dim=-1)
+        return torch.max(x, dim=-1).values
 
 
 def get_layer(x=None, op=None, custom_objects=None, with_bn=False):
@@ -79,7 +79,7 @@ def get_layer(x=None, op=None, custom_objects=None, with_bn=False):
             raise ValueError("unknown activation layer: %s" % actv_fn)
 
     elif op.Layer_type == 'dense':
-        actv_fn = op.Layer_attributes.pop('activation', 'linear')
+        actv_fn = op.Layer_attributes.get('activation', 'linear')
         curr_shape = np.array(x.shape) if isinstance(x, torch.Tensor) else x.out_features
         assert len(curr_shape)==1, ValueError("dense layer must have 1-d prev layers")
         _list = [torch.nn.Linear(in_features=curr_shape[0], out_features=op.Layer_attributes['units'])]
@@ -89,7 +89,7 @@ def get_layer(x=None, op=None, custom_objects=None, with_bn=False):
 
     elif op.Layer_type == 'conv1d':
         assert x is not None
-        actv_fn = op.Layer_attributes.pop('activation', 'linear')
+        actv_fn = op.Layer_attributes.get('activation', 'linear')
         curr_shape = np.array(x.shape) if isinstance(x, torch.Tensor) else x.out_features
         assert len(curr_shape)==2, ValueError("conv1d layer must have 2-d prev layers")
         # XXX: pytorch assumes channel_first, unlike keras
@@ -97,6 +97,7 @@ def get_layer(x=None, op=None, custom_objects=None, with_bn=False):
                     kernel_size=op.Layer_attributes.get('kernel_size',1),
                     stride=op.Layer_attributes.get('strides', 1),
                     padding=op.Layer_attributes.get('padding', 0),
+                    dilation=op.Layer_attributes.get('dilation_rate', 1),
                 )]
         if with_bn:   _list.append(get_layer(x=x, op=Operation("batchnorm")))
         _list.append(get_layer(op=Operation("activation", activation=actv_fn)))
@@ -105,7 +106,7 @@ def get_layer(x=None, op=None, custom_objects=None, with_bn=False):
     # elif op.Layer_type == 'conv2d':
     #     if with_bn is True:
     #         assert x is not None
-    #         actv_fn = op.Layer_attributes.pop('activation', 'linear')
+    #         actv_fn = op.Layer_attributes.get('activation', 'linear')
     #         x = tf.keras.layers.Conv2D(**op.Layer_attributes)(x)
     #         x = tf.keras.layers.BatchNormalization()(x)
     #         x = tf.keras.layers.Activation(actv_fn)(x)

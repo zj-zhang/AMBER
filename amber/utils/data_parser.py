@@ -40,35 +40,6 @@ def fetch_seq(chrom, start, end, strand, genome):
     return seq
 
 
-def fetch_seq_pygr(chr, start, end, strand, genome):
-    """Fetch a genmoic sequence upon calling `pygr`
-    `genome` is initialized and stored outside the function
-
-    Parameters
-    ----------
-    chr : str
-        chromosome
-    start : int
-        start locus
-    end : int
-        end locuse
-    strand : str
-        either '+' or '-'
-
-    Returns
-    --------
-    seq : str
-        genomic sequence in upper cases
-    """
-    try:
-        seq = genome[chr][start:end]
-        if strand == "-":
-            seq = -seq
-    except Exception as e:
-        raise Exception('pygr cannot fetch sequences; %s' % e)
-    return str(seq).upper()
-
-
 def seq_to_matrix(seq, letter_to_index=None):
     """Convert a list of characters to an N by 4 integer matrix
 
