@@ -10,7 +10,7 @@ Name                                                                            
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/__init__.py                                 0      0   100%
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/__init__.py                     18      6    67%   30-36, 43
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/base.py                        229     14    94%   54, 68, 235-238, 342, 346-350, 396, 399
-/Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/controllerTrainEnv.py          552     75    86%   151, 156, 161-163, 168, 173, 181-182, 192, 216, 273, 301, 339-341, 346-347, 360, 389, 394, 401, 415-420, 426, 460, 481-482, 489-491, 495-496, 512, 562-568, 572, 620, 639-640, 643-648, 653-654, 666, 679, 727, 732-733, 739-740, 788-789, 817, 872, 890-891, 895-900, 905-906
+/Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/controllerTrainEnv.py          562     76    86%   153, 158, 163-165, 170, 175, 183-184, 218, 276, 304, 335-337, 350-351, 353-354, 367, 396, 401, 408, 422-427, 433, 467, 488-489, 496-498, 502-503, 519, 569-575, 579, 627, 646-647, 650-655, 660-661, 673, 686, 734, 739-740, 746-747, 795-796, 824, 879, 897-898, 902-907, 912-913
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/tf1/__init__.py                  4      0   100%
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/tf1/generalController.py       141      6    96%   177-178, 231, 318-319, 322
 /Users/zzjfrank/workspace/AMBER/amber/architect/optim/controller/tf1/multiioController.py       350     22    94%   129, 131, 172, 174, 219, 221, 321, 323, 363, 365, 424, 426, 540-541, 572, 574, 618, 620, 645-648
@@ -53,7 +53,7 @@ Name                                                                            
 /Users/zzjfrank/workspace/AMBER/amber/offline_learn/mock_manager.py                              61     14    77%   19, 23-24, 42-49, 82, 89-90, 97
 /Users/zzjfrank/workspace/AMBER/amber/plots/__init__.py                                           2      0   100%
 /Users/zzjfrank/workspace/AMBER/amber/plots/plotsV1.py                                          167     42    75%   47-53, 87, 123, 128-130, 144, 158-181, 190, 195-197, 210, 227-229, 239-241, 249
-/Users/zzjfrank/workspace/AMBER/amber/utils/__init__.py                                          17      9    47%   7-11, 14-18
+/Users/zzjfrank/workspace/AMBER/amber/utils/__init__.py                                          16      8    50%   9-11, 14-18
 /Users/zzjfrank/workspace/AMBER/amber/utils/io.py                                               127     13    90%   64, 105-107, 120-122, 134-140
 /Users/zzjfrank/workspace/AMBER/amber/utils/logging.py                                           15      0   100%
 /Users/zzjfrank/workspace/AMBER/amber/utils/testing_utils.py                                     74      2    97%   27, 30
@@ -73,4 +73,4 @@ modelers/modeler_tf1/test_supernet_featmodel.py                                 
 ui/test_getter.py                                                                               111      2    98%   201, 233
 ui/test_wrapper.py                                                                               62      3    95%   32, 34, 160
 ---------------------------------------------------------------------------------------------------------------------------
-TOTAL                                                                                          7321    722    90%
+TOTAL                                                                                          7330    722    90%
