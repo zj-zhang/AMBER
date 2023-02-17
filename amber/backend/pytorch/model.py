@@ -200,7 +200,7 @@ class Model(pl.LightningModule):
         # handle metrics
         metric_fns = self.train_metrics if kind == 'train' else self.valid_metrics
         for metric, name in zip(metric_fns, self._metric_names):
-            metric.update(preds=y_hat, target=y_true)
+            metric.update(preds=y_hat.detach().cpu(), target=y_true.detach().cpu())
         # log learning rate
         try:
             cur_lr = self.trainer.optimizers[0].param_groups[0]['lr']
