@@ -114,15 +114,16 @@ class ControllerTrainEnvironment(BaseSearchEnvironment):
                  controller,
                  manager,
                  max_episode=100,
-                 max_step_per_ep=2,
+                 max_step_per_ep=3,
                  logger=None,
                  resume_prev_run=False,
                  should_plot=True,
-                 initial_buffering_queue=15,
-                 working_dir='.', entropy_converge_epsilon=0.01,
+                 initial_buffering_queue=10,
+                 working_dir='.', 
+                 early_stop_patience=None,
                  squeezed_action=True,
                  with_input_blocks=False,
-                 with_skip_connection=True,
+                 with_skip_connection=False,
                  save_controller=True,
                  continuous_run=False,
                  verbose=0,
@@ -136,7 +137,7 @@ class ControllerTrainEnvironment(BaseSearchEnvironment):
         self.working_dir = working_dir
         self.total_reward = 0
         self.entropy_record = []
-        self.entropy_converge_epsilon = entropy_converge_epsilon
+        self.early_stop_patience = int(early_stop_patience) if early_stop_patience is not None else np.inf
         self.squeezed_action = squeezed_action
         self.with_input_blocks = with_input_blocks
         self.with_skip_connection = with_skip_connection
@@ -146,6 +147,7 @@ class ControllerTrainEnvironment(BaseSearchEnvironment):
         self.verbose = verbose
         self.logger = logger if logger else setup_logger(working_dir)
 
+        self.logger.info(f"working directory: {os.path.realpath(self.working_dir)}")
         self.time_budget = kwargs.pop('time_budget', "72:00:00")
         if self.time_budget is None:
             pass
@@ -178,7 +180,7 @@ class ControllerTrainEnvironment(BaseSearchEnvironment):
             self.clean()
 
     def __str__(self):
-        s = 'ControllerTrainEnv for %i max steps, %i child mod. each step' % (self.max_episode, self.max_step_per_ep)
+        s = 'ControllerTrainEnv for %i max steps, %i child model each step' % (self.max_episode, self.max_step_per_ep)
         return s
 
     def restore(self):
@@ -248,17 +250,18 @@ class ControllerTrainEnvironment(BaseSearchEnvironment):
             f = open(os.path.join(self.working_dir, 'train_history.csv'), mode='w')
         writer = csv.writer(f)
         starttime = datetime.datetime.now()
+        best_reward = - np.inf
+        patience_cnt = 0
         for ep in range(self.start_ep, self.max_episode):
             try:
                 # reset env
                 state = self.reset()
-                ep_reward = 0
                 loss_and_metrics_ep = {'knowledge': 0, 'acc': 0, 'loss': 0}
                 if 'metrics' in self.manager.model_compile_dict:
                     loss_and_metrics_ep.update({x: 0 for x in self.manager.model_compile_dict['metrics']})
 
+                ep_reward = 0
                 ep_probs = []
-
                 for step in range(self.max_step_per_ep):
                     # value = self.controller.get_value(state)
                     actions, probs = self.controller.get_action(state)  # get an action for the previous state
@@ -329,21 +332,25 @@ class ControllerTrainEnvironment(BaseSearchEnvironment):
                     self.controller.save_weights(
                         os.path.join(self.working_dir, "controller_weights.h5"))
 
-                # TODO: add early-stopping
-                # check the entropy record and stop training if no progress was made
-                # (less than entropy_converge_epsilon)
-                # if ep >= self.max_episode//3 and \
-                # np.std(self.entropy_record[-(self.max_step_per_ep):])<self.entropy_converge_epsilon:
-                #    LOGGER.info("Controller converged at episode %i"%ep)
-                #    break
             except KeyboardInterrupt:
                 LOGGER.info("User disrupted training")
                 break
 
+            # add early-stopping
+            # check the best reward patience and stop training if no progress was made more than early_stop_patience
+            if ep_reward > best_reward:
+                best_reward = ep_reward
+                patience_cnt = 0
+            else:
+                patience_cnt += 1
             consumed_time = (datetime.datetime.now() - starttime).total_seconds()
-            LOGGER.info("used time: %.2f %%" % (consumed_time / self.time_budget * 100))
+            LOGGER.info("Iter %i, this reward: %.3f, best reward: %.3f, used time: %.2f %%" % (ep, ep_reward, best_reward, consumed_time / self.time_budget * 100))
+
             if consumed_time >= self.time_budget:
                 LOGGER.info("training ceased because run out of time budget")
+                break
+            if ep >= self.initial_buffering_queue+self.early_stop_patience and patience_cnt > self.early_stop_patience:
+                LOGGER.info("Controller search early-stopped at episode %i"%ep)
                 break
 
         LOGGER.debug("Total Reward : %s" % self.total_reward)
@@ -364,7 +371,7 @@ class ControllerTrainEnvironment(BaseSearchEnvironment):
                             **save_kwargs)
         save_stats(loss_and_metrics_list, self.working_dir, is_resume_run=self.resume_prev_run)
 
-        if self.should_plot:
+        if self.should_plot is True:
             plot_action_weights(self.working_dir)
             plot_wiring_weights(self.working_dir, self.with_input_blocks, self.with_skip_connection)
             plot_stats2(self.working_dir)

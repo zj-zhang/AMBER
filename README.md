@@ -17,8 +17,6 @@
 <a id='sec1'></a>
 AMBER is a toolkit for designing high-performance neural network models automatically in
 Genomics and Bioinformatics.
-AMBER is a toolkit for designing high-performance neral network models automatically in
-Genomics and Bioinformatics. 
 
 🧐**AMBER can be used to automatically build:**
 - 🟢 Convolution neural networks

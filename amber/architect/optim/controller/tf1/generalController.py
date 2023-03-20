@@ -114,7 +114,7 @@ class GeneralController(BaseController):
 
     """
 
-    def __init__(self, model_space, buffer_type='ordinal', with_skip_connection=True, share_embedding=None,
+    def __init__(self, model_space, buffer_type='ordinal', with_skip_connection=False, share_embedding=None,
                  use_ppo_loss=False, kl_threshold=0.05, skip_connection_unique_connection=False, buffer_size=15,
                  batch_size=5, session=None, train_pi_iter=20, lstm_size=32, lstm_num_layers=2, lstm_keep_prob=1.0,
                  tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=None,

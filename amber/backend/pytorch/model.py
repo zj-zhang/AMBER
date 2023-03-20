@@ -3,10 +3,16 @@ import pytorch_lightning as pl
 import torchmetrics
 import os
 import numpy as np
+import warnings
 from . import cache
 from .layer import get_layer
 from .utils import InMemoryLogger
 from .tensor import TensorType
+
+# disable lightning logging
+import logging
+logging.getLogger('lightning').setLevel(0)
+logging.getLogger("pytorch_lightning").setLevel(logging.WARNING)
 
 
 class Model(pl.LightningModule):
@@ -19,6 +25,7 @@ class Model(pl.LightningModule):
         self.valid_metrics = {}
         self.trainer = None
         self.task = None
+        self.save_hyperparameters()
 
     def compile(self, loss, optimizer, metrics=None, *args, **kwargs):
         if callable(loss):
@@ -84,9 +91,13 @@ class Model(pl.LightningModule):
             callbacks=callbacks,
             enable_progress_bar=verbose,
             logger=logger,
+            enable_model_summary=False,
             # deterministic=True,
         )
-        self.trainer.fit(self, train_data, validation_data)
+        # just too many UserWarnings from lightning
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.trainer.fit(self, train_data, validation_data)
         return logger
     
     def predict(self, x, y=None, batch_size=32, verbose=False):
@@ -97,8 +108,9 @@ class Model(pl.LightningModule):
             for batch_x in dataloader:
                 if isinstance(batch_x, (list, tuple)):
                     batch_x = batch_x[0]
-                preds.append(self.forward(batch_x))
-            preds = torch.concat(preds).detach().cpu().numpy()
+                batch_x = batch_x.to(self.device)
+                preds.append(self.forward(batch_x).detach().cpu().numpy())
+            preds = np.concatenate(preds, axis=0)
         return preds
 
     def evaluate(self, x, y=None, batch_size=32, verbose=False):
@@ -108,11 +120,27 @@ class Model(pl.LightningModule):
             accelerator="auto",
             max_epochs=1,
             enable_progress_bar=verbose,
+            enable_model_summary=False,
             # deterministic=True,
         )
         res = trainer.test(self, data, verbose=verbose)[0]
         res = {k.replace('test', 'val'):v for k,v in res.items()}
         return res
+
+    def save_weights(self, filepath: str):
+        torch.save(self.state_dict(), filepath)
+
+    def load_weights(self, filepath: str):
+        self.load_state_dict(torch.load(filepath), strict=False)
+
+    def save(self, filepath: str):
+        self.trainer.save_checkpoint(filepath)
+    
+    def load(self, filepath: str):
+        return self.load_from_checkpoint(filepath, strict=False)
+
+    def summary(self):
+        print(str(self))
 
     def configure_optimizers(self):
         """Set up optimizers and schedulers.
@@ -173,7 +201,7 @@ class Model(pl.LightningModule):
         # handle metrics
         metric_fns = self.train_metrics if kind == 'train' else self.valid_metrics
         for metric, name in zip(metric_fns, self._metric_names):
-            metric.update(preds=y_hat, target=y_true)
+            metric.update(preds=y_hat.detach().cpu(), target=y_true.detach().cpu())
         # log learning rate
         try:
             cur_lr = self.trainer.optimizers[0].param_groups[0]['lr']
@@ -228,15 +256,14 @@ class Model(pl.LightningModule):
                 self.log(f"test_{name}", metric.compute(), prog_bar=True)
                 metric.reset()
 
-    def save_weights(self, *args):
-        pass
 
 
 class Sequential(Model):
     def __init__(self, layers=None):
-        layers = layers or []
         super().__init__()
+        layers = layers or []
         self.layers = torch.nn.ModuleList(layers)
+        self.save_hyperparameters()
     
     def add(self, layer):
         self.layers.append(layer)
@@ -254,7 +281,7 @@ def get_metric(m):
         return m
     elif type(m) is str:
         if m.lower() == 'kl_div':
-            return torch.nn.KLDivLoss()
+            return torch.nn.KLDivLoss(reduction='batchmean')
         elif m.lower() in ('acc', 'accuracy'):
             return torchmetrics.Accuracy
         elif m.lower() in ('f1', 'f1_score'):
@@ -312,16 +339,21 @@ def get_callback(m):
         from pytorch_lightning.callbacks.early_stopping import EarlyStopping
         return EarlyStopping
     elif m == 'ModelCheckpoint':
+        # see more APIs in https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.ModelCheckpoint.html
         from pytorch_lightning.callbacks import ModelCheckpoint
         def ModelCheckpoint_(filename, monitor='val_loss', mode='min', save_best_only=True, verbose=False):
-            return ModelCheckpoint(
+            filename_prefix = '.'.join(filename.split('.')[:-1])
+            filename_suffix = filename.split('.')[-1]
+            model_ckpt = ModelCheckpoint(
                 dirpath=os.path.dirname(filename), 
-                filename=os.path.basename(filename),
+                filename=os.path.basename(filename_prefix),
                 save_top_k=1 if save_best_only else None,
                 monitor=monitor,
                 mode=mode,
                 verbose=verbose
-                )    
+                )
+            model_ckpt.FILE_EXTENSION = '.'+filename_suffix
+            return model_ckpt 
         return ModelCheckpoint_
 
 

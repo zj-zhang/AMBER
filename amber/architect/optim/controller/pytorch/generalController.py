@@ -113,7 +113,7 @@ class GeneralController(BaseController):
 
     """
 
-    def __init__(self, model_space, buffer_type='ordinal', with_skip_connection=True, share_embedding=None,
+    def __init__(self, model_space, buffer_type='ordinal', with_skip_connection=False, share_embedding=None,
                  use_ppo_loss=False, kl_threshold=0.05, skip_connection_unique_connection=False, buffer_size=15,
                  batch_size=5, session=None, train_pi_iter=20, lstm_size=32, lstm_num_layers=2, lstm_keep_prob=1.0,
                  tanh_constant=None, temperature=None, optim_algo="adam", skip_target=0.8, skip_weight=None,
@@ -215,7 +215,7 @@ class GeneralController(BaseController):
         old_probs = [F.cast(p, F.float32) for p in old_probs]
         self._build_trainer(input_arc=input_arc)
         normalize = F.cast(self.num_layers * (self.num_layers - 1) / 2, F.float32)
-        self.skip_rate = F.cast(self.skip_count, F.float32) / normalize
+        self.skip_rate = F.cast(self.skip_count, F.float32) / normalize if self.with_skip_connection else None
         loss = 0
         if self.with_skip_connection is True and self.skip_weight is not None:
             loss += self.skip_weight * F.reduce_mean(self.onehot_skip_penaltys)

@@ -21,7 +21,7 @@ def get_torch_actv_fn(fn_str):
     if fn_str == "relu":
         return torch.nn.ReLU()
     elif fn_str == "softmax":
-        return torch.nn.Softmax()
+        return torch.nn.Softmax(dim=-1)
     elif fn_str == "sigmoid":
         return torch.nn.Sigmoid()
     else:
