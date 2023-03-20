@@ -5,9 +5,6 @@
 Reward function takes in trained model and validation data as input, returns reward
 """
 
-# Author: ZZJ
-# Initial date : Nov. 18, 2018
-# Last update : Aug. 17, 2020
 
 import numpy as np
 import copy
@@ -83,7 +80,6 @@ class LossReward(Reward):
         else:
             raise Exception("Cannot understand return type of model.evaluate; got %s" % type(loss_and_metrics))
         return -L, loss_and_metrics, None
-    # return self.c/L, loss_and_metrics, None
 
 
 class NTKReward(Reward):
@@ -140,10 +136,9 @@ class LengthReward(Reward):
         complexity = curve_complexity(data, model)
         loss_and_metrics = None
         return complexity, loss_and_metrics, None
-    # return self.c/L, loss_and_metrics, None
 
 
-class LossAucReward(Reward):
+class AucReward(Reward):
     """Reward function for evaluating AUC as reward
 
     This reward function employs a scorer to evaluate a trained model's prediction. Scorers can be parsed as strings for
@@ -266,10 +261,43 @@ class LossAucReward(Reward):
         self.pred = None  # release self.pred after use
         return reward, loss_and_metrics, reward_metrics
 
+# alias
+LossAucReward = AucReward
 
-class SparseCategoricalReward(LossAucReward):
+
+class SparseCategoricalReward(AucReward):
     def call_scorer(self, pred, y):
         return [ [self.scorer(y_true=y[i], y_score=pred[i])] for i in range(len(y)) ]
+
+
+class F1Reward(AucReward):
+    def __init__(self, method='f1', average='macro', *args, **kwargs):
+        assert method == 'f1'
+        super().__init__(*args, **kwargs)
+        self.average = average
+        self.scorer = self.my_f1
+
+    def my_f1(self, y_true, y_score):
+        from sklearn.metrics import f1_score
+        return f1_score(y_true=y_true, y_pred=y_score, average=self.average)
+
+    @staticmethod
+    def _detect_reformat(x_):
+        """transform to sparse label integers (0/1/2) by handling different formatted target/prediction"""
+        x = np.array(x_).squeeze()
+        shape = x.shape
+        if len(shape) == 1:
+            return x
+        else:
+            x = np.argmax(x, axis=-1)
+            return x
+
+    def call_scorer(self, pred, y):
+        #print("before", np.array(pred).shape, np.array(y).shape)
+        y_ = self._detect_reformat(y)
+        pred_ = self._detect_reformat(pred)
+        #print("after", pred_.shape, y_.shape)
+        return [[ self.scorer(y_true=y_, y_score=pred_) ]]
 
 
 def MockReward(train_history_list, metric, stringify_states, metric_name_dict, Lambda=1.):

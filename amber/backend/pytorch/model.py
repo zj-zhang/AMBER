@@ -108,8 +108,9 @@ class Model(pl.LightningModule):
             for batch_x in dataloader:
                 if isinstance(batch_x, (list, tuple)):
                     batch_x = batch_x[0]
-                preds.append(self.forward(batch_x))
-            preds = torch.concat(preds).detach().cpu().numpy()
+                batch_x = batch_x.to(self.device)
+                preds.append(self.forward(batch_x).detach().cpu().numpy())
+            preds = np.concatenate(preds, axis=0)
         return preds
 
     def evaluate(self, x, y=None, batch_size=32, verbose=False):

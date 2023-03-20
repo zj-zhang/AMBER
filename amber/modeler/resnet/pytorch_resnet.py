@@ -146,7 +146,7 @@ class ResidualCnnBuilder(BaseModelBuilder):
                             if verbose:
                                 print(skip_id, f"layer_{skip_layer}-b{prev_block-1}")
                             #model.add
-                            layers.append((
+                            layers.append(( 
                                 skip_id, 
                                 skip_op, 
                                 f"layer_{skip_layer}-b{prev_block-1}"
@@ -338,6 +338,7 @@ class LightningResNet(F.Model):
                 print(layer_id)
                 print([self.hs[layer_id].shape for layer_id in self.hs])
                 print(input_ids)
+                print(self.layers[layer_id])
             this_inputs = x if input_ids is None else self.hs[input_ids] if type(input_ids) is str else [self.hs[i] for i in input_ids]
             out = self.layers[layer_id](this_inputs)
             self.hs[layer_id] = out
