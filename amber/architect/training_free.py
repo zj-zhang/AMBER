@@ -10,7 +10,7 @@ from pdb import set_trace as bp
 __all__ = ['get_ntk', 'Linear_Region_Collector', 'curve_complexity']
 
 
-def get_ntk(inputs, targets, network, criterion=torch.nn.BCELoss(reduction='none'), train_mode=True):
+def get_ntk(data, network, criterion=torch.nn.BCELoss(reduction='none'), train_mode=True):
     if not criterion:
         criterion = torch.nn.BCELoss(reduction='none')
     device = torch.cuda.current_device()
@@ -23,15 +23,15 @@ def get_ntk(inputs, targets, network, criterion=torch.nn.BCELoss(reduction='none
     #inputs = torch.Tensor(inputs).cuda(device=device, non_blocking=True)
     #targets = torch.Tensor(targets).cuda(device=device, non_blocking=True)
 
-    ch = 16
-    for idx in np.arange(0, len(inputs), ch):
-        logit = network(inputs[idx:idx+ch])
+    for i_b, batch in enumerate(data):
+        inputs, targets = batch
+        logit = network(batch)
         # choose specific class for loss
-        loss = criterion(logit, targets[idx:idx+ch])
-        for _idx in range(len(inputs[idx:idx+ch])):
+        loss = criterion(logit, targets)
+        for _idx in range(len(inputs)):
             # logit[_idx:_idx+1].backward(torch.ones_like(logit[_idx:_idx+1]), retain_graph=True)
             # use criterion to get gradient
-            loss[_idx:_idx+1].backward(torch.ones_like(loss[_idx:_idx+1]), retain_graph=_idx < len(inputs[idx:idx+ch])-1)
+            loss[_idx:_idx+1].backward(torch.ones_like(loss[_idx:_idx+1]), retain_graph= not (_idx == len(inputs)-1 and i_b == len(data)-1))
             grad = []
             for name, W in network.named_parameters():
                 if 'classifier' in name or 'fc' in name or 'out' in name: continue

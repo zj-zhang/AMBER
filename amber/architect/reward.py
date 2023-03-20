@@ -95,7 +95,7 @@ class NTKReward(Reward):
         X, y = unpack_data(data)
         y_hat = model.forward(X)
         # be explicit about observation and score
-        cond, loss = get_ntk(X, y, model, criterion=self.criterion)
+        cond, loss = get_ntk(data, model, criterion=self.criterion)
         loss_and_metrics = [loss]
         return -cond, loss_and_metrics, None
     # return self.c/L, loss_and_metrics, None
