@@ -2,7 +2,7 @@ from ...backend import mod_name, _gen_missing_api
 import sys
 
 
-resnet_cls = ('ResidualCnnBuilder', )
+resnet_cls = ('Residual1DCnnBuilder', 'Residual2DCnnBuilder', )
 
 if mod_name in ('tensorflow_1', 'tensorflow_2'):
     from . import keras_resnet as mod
