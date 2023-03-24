@@ -30,10 +30,10 @@ class Residual1DCnnBuilder(BaseModelBuilder):
         width scale factor
     reduction_factor : int
         reduce the feature dimension by this factor at each pool layer
-        
+
     Returns
     --------
-    amber.modeler.base.LightningResNet : 
+    amber.modeler.base.LightningResNet :
         a pytorch_lightning model
     """
 
@@ -84,7 +84,7 @@ class Residual1DCnnBuilder(BaseModelBuilder):
         if model is not None:
             model.compile(**self.model_compile_dict)
         return model
-    
+
     def _convert(self, arc_seq, verbose=False):
         # init a new Model instance
         out_filters, pool_layers, layerid_to_block, block_to_filters = self.get_out_filters(self.model_space)
@@ -117,12 +117,12 @@ class Residual1DCnnBuilder(BaseModelBuilder):
                 print(this_layer)
             # build conv
             conv_op = self.res_layer(
-                layer=this_layer, 
-                width_scale_factor=self.wsf, 
+                layer=this_layer,
+                width_scale_factor=self.wsf,
                 in_channels=out_filters[layer_id] * self.wsf)
             #model.add
             layers.append((
-                f"layer_{layer_id}-b{pool_block}", 
+                f"layer_{layer_id}-b{pool_block}",
                 conv_op,
             ))
             # build skip connections
@@ -146,9 +146,9 @@ class Residual1DCnnBuilder(BaseModelBuilder):
                             if verbose:
                                 print(skip_id, f"layer_{skip_layer}-b{prev_block-1}")
                             #model.add
-                            layers.append(( 
-                                skip_id, 
-                                skip_op, 
+                            layers.append((
+                                skip_id,
+                                skip_op,
                                 f"layer_{skip_layer}-b{prev_block-1}"
                             ))
                 # add residual sum to model, if any
@@ -159,8 +159,8 @@ class Residual1DCnnBuilder(BaseModelBuilder):
                     )
                     #model.add
                     layers.append((
-                        f"resid_{layer_id}", 
-                        res_sum, 
+                        f"resid_{layer_id}",
+                        res_sum,
                         [f"layer_{layer_id}-b{pool_block}"] + \
                             [f"layer_{skip_layer}-b{pool_block}" for skip_layer in skip_layers]
                     ))
@@ -176,7 +176,7 @@ class Residual1DCnnBuilder(BaseModelBuilder):
                     f"pool_from_{layer_id}_to_{layer_id+1}",
                     factor_op
                 ))
-        
+
         if self.flatten_mode == "global_avg_pool" or self.flatten_mode == "gap":
             inp_c = out_filters[-1] * self.wsf
             flatten_op = GlobalAveragePooling1DLayer()
@@ -191,7 +191,7 @@ class Residual1DCnnBuilder(BaseModelBuilder):
             raise Exception("cannot understand flatten_op: %s" % self.flatten_mode)
         #model.add
         layers.append(("flatten", flatten_op))
-        
+
         #model.add
         layers.append(("fc", torch.nn.Sequential(
             torch.nn.Dropout(self.dropout_rate),
@@ -264,7 +264,7 @@ class Residual1DCnnBuilder(BaseModelBuilder):
         elif layer.Layer_type == 'identity':
             conv_op = torch.nn.Sequential()
         else:
-            raise ValueError("Unknown pool {}".format(layer.Layer_type))        
+            raise ValueError("Unknown pool {}".format(layer.Layer_type))
         return conv_op
 
     @staticmethod
@@ -302,10 +302,10 @@ class Residual2DCnnBuilder(BaseModelBuilder):
         width scale factor
     reduction_factor : int
         reduce the feature dimension by this factor at each pool layer
-        
+
     Returns
     --------
-    amber.modeler.base.LightningResNet : 
+    amber.modeler.base.LightningResNet :
         a pytorch_lightning model
     """
 
@@ -356,7 +356,7 @@ class Residual2DCnnBuilder(BaseModelBuilder):
         if model is not None:
             model.compile(**self.model_compile_dict)
         return model
-    
+
     def _convert(self, arc_seq, verbose=False):
         # init a new Model instance
         out_filters, pool_layers, layerid_to_block, block_to_filters = self.get_out_filters(self.model_space)
@@ -392,12 +392,12 @@ class Residual2DCnnBuilder(BaseModelBuilder):
                 print(this_layer)
             # build conv
             conv_op = self.res_layer(
-                layer=this_layer, 
-                width_scale_factor=self.wsf, 
+                layer=this_layer,
+                width_scale_factor=self.wsf,
                 in_channels=out_filters[layer_id] * self.wsf)
             #model.add
             layers.append((
-                f"layer_{layer_id}-b{pool_block}", 
+                f"layer_{layer_id}-b{pool_block}",
                 conv_op,
             ))
             # build skip connections
@@ -421,9 +421,9 @@ class Residual2DCnnBuilder(BaseModelBuilder):
                             if verbose:
                                 print(skip_id, f"layer_{skip_layer}-b{prev_block-1}")
                             #model.add
-                            layers.append(( 
-                                skip_id, 
-                                skip_op, 
+                            layers.append((
+                                skip_id,
+                                skip_op,
                                 f"layer_{skip_layer}-b{prev_block-1}"
                             ))
                 # add residual sum to model, if any
@@ -435,8 +435,8 @@ class Residual2DCnnBuilder(BaseModelBuilder):
                     )
                     #model.add
                     layers.append((
-                        f"resid_{layer_id}", 
-                        res_sum, 
+                        f"resid_{layer_id}",
+                        res_sum,
                         [f"layer_{layer_id}-b{pool_block}"] + \
                             [f"layer_{skip_layer}-b{pool_block}" for skip_layer in skip_layers]
                     ))
@@ -452,7 +452,7 @@ class Residual2DCnnBuilder(BaseModelBuilder):
                     f"pool_from_{layer_id}_to_{layer_id+1}",
                     factor_op
                 ))
-        
+
         if self.flatten_mode == "global_avg_pool" or self.flatten_mode == "gap":
             inp_c = out_filters[-1] * self.wsf
             # flatten_op = torch.nn.AdaptiveAvgPool2d(output_size=inp_c)
@@ -469,7 +469,7 @@ class Residual2DCnnBuilder(BaseModelBuilder):
             raise Exception("cannot understand flatten_op: %s" % self.flatten_mode)
         #model.add
         layers.append(("flatten", flatten_op))
-        
+
         #model.add
         layers.append(("fc", torch.nn.Sequential(
             torch.nn.Dropout(self.dropout_rate),
@@ -538,11 +538,11 @@ class Residual2DCnnBuilder(BaseModelBuilder):
                         padding=(int((pool_size[0] - 1) / 2), int((pool_size[1] - 1) / 2))
                     )
                 )
-            conv_op = torch.nn.Sequential(*x)            
+            conv_op = torch.nn.Sequential(*x)
         elif layer.Layer_type == 'identity':
             conv_op = torch.nn.Sequential()
         else:
-            raise ValueError("Unknown pool {}".format(layer.Layer_type))        
+            raise ValueError("Unknown pool {}".format(layer.Layer_type))
         return conv_op
 
     @staticmethod
@@ -566,9 +566,9 @@ class LightningResNet(F.Model):
     """LightningResNet is a subclass of pytorch_lightning.LightningModule
 
     It implements a basic functions of `step`, `configure_optimizers` but provides a similar
-    user i/o arguments as tensorflow.keras.Model 
+    user i/o arguments as tensorflow.keras.Model
 
-    A module builder will add `torch.nn.Module`s to this instance, and define its forward 
+    A module builder will add `torch.nn.Module`s to this instance, and define its forward
     pass function. Then this instance is responsible for training and evaluations.
     add module: use torch.nn.Module.add_module
     define forward pass: private __forward_tracker list
@@ -589,18 +589,18 @@ class LightningResNet(F.Model):
             layer_id, operation, input_ids = layer[0], layer[1], layer[2] if len(layer)>2 else None
             self.add(layer_id=layer_id, operation=operation, input_ids=input_ids)
         self.save_hyperparameters()
-    
+
     @property
     def forward_tracker(self):
         # return a read-only view
         return copy.copy(self.__forward_pass_tracker)
-    
+
     def add(self, layer_id: str, operation, input_ids: Union[str, List, Tuple] = None):
         self.layers[layer_id] = operation
         self.__forward_pass_tracker.append((layer_id, input_ids))
-    
+
     def forward(self, x, verbose=False):
-        """Scaffold forward-pass function that follows the operations in 
+        """Scaffold forward-pass function that follows the operations in
         the pre-set in self.__forward_pass_tracker
         """
         # permute input, if data_format has channel last

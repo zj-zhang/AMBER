@@ -25,7 +25,7 @@ def get_ntk(data, network, criterion=torch.nn.BCELoss(reduction='none'), train_m
 
     for i_b, batch in enumerate(data):
         inputs, targets = batch
-        logit = network(batch)
+        logit = network(inputs)
         # choose specific class for loss
         loss = criterion(logit, targets)
         for _idx in range(len(inputs)):

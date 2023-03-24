@@ -92,8 +92,8 @@ class NTKReward(Reward):
         super(NTKReward, self).__init__()
 
     def __call__(self, model, data, *args, **kwargs):
-        X, y = unpack_data(data)
-        y_hat = model.forward(X)
+        # X, y = unpack_data(data)
+        # y_hat = model.forward(X)
         # be explicit about observation and score
         cond, loss = get_ntk(data, model, criterion=self.criterion)
         loss_and_metrics = [loss]

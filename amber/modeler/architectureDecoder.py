@@ -20,7 +20,7 @@ def get_decoder(m):
         elif m == 'ResConvNetArchitecture':
             return ResConvNetArchitecture
         else:
-            raise Exception('Unknown decoder %s' % m)        
+            raise Exception('Unknown decoder %s' % m)
     else:
         raise Exception('Unknown decoder %s' % m)
 
@@ -35,7 +35,7 @@ class MultiIOArchitecture(BaseArchitectDecoder):
     def decode(self, arc_seq):
         """arc_seq is ordered, in each layer, as
         [op, inp_0, inp_1, ..., con_0, con_1, ...,] X n_layers
-        [ 
+        [
             [layer0_to_out0, layer1_to_out0, ..., ] X n_outs
         ]
         """
