@@ -207,3 +207,131 @@ def curve_complexity(data, network, criterion=torch.nn.BCELoss(reduction='none')
     else:
         return LE.item()
 
+
+# https://github.com/SamsungLabs/zero-cost-nas/blob/main/foresight/pruners/p_utils.py#L56
+def get_layer_metric_array(net, metric):#, mode): 
+    metric_array = []
+
+    for layer in net.modules():
+        # if mode=='channel' and hasattr(layer,'dont_ch_prune'):
+        #     continue
+        if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
+            metric_array.append(metric(layer))
+    
+    return metric_array
+
+
+# https://github.com/SamsungLabs/zero-cost-nas/blob/main/foresight/pruners/measures/synflow.py
+def compute_synflow(data, net, criterion=torch.nn.BCELoss(reduction='none'), train_mode=True):
+
+    # device = inputs.device
+
+    #convert params to their abs. Keep sign for converting it back.
+    @torch.no_grad()
+    def linearize(net):
+        signs = {}
+        for name, param in net.state_dict().items():
+            signs[name] = torch.sign(param)
+            param.abs_()
+        return signs
+
+    #convert to orig values
+    @torch.no_grad()
+    def nonlinearize(net, signs):
+        for name, param in net.state_dict().items():
+            if 'weight_mask' not in name:
+                param.mul_(signs[name])
+
+    # keep signs of all params
+    signs = linearize(net)
+
+    # select the gradients that we want to use for search/prune
+    def synflow(layer):
+        if layer.weight.grad is not None:
+            return torch.abs(layer.weight * layer.weight.grad)
+        else:
+            return torch.zeros_like(layer.weight)
+
+    # https://github.com/SamsungLabs/zero-cost-nas/blob/main/foresight/pruners/predictive.py#L100
+    def sum_arr(arr):
+        sum = 0.
+        for i in range(len(arr)):
+            sum += torch.sum(arr[i])
+        return sum.item()
+    
+    net.zero_grad()
+    net.double()
+    for i, batch in enumerate(data):
+        # # Compute gradients with input of 1s 
+        # input_dim = list(inputs[0,:].shape)
+        # inputs = torch.ones([1] + input_dim).double().to(device)
+        # output = net.forward(inputs)
+        # torch.sum(output).backward() 
+
+        data,label = batch[0],batch[1]
+        data,label = data.cuda(), label.cuda()
+
+        logits = net(data)
+        loss = criterion(logits, label)
+        loss.backward()
+
+    grads_abs = get_layer_metric_array(net, synflow)#, mode)
+
+    # apply signs of all params
+    nonlinearize(net, signs)
+
+    # return grads_abs
+    return sum_arr(grads_abs)
+
+
+# https://github.com/SLDGroup/ZiCo/blob/main/ZeroShotProxy/compute_zico.py
+def getgrad(model:torch.nn.Module, grad_dict:dict, step_iter=0):
+    if step_iter==0:
+        for name,mod in model.named_modules():
+            if isinstance(mod, nn.Conv2d) or isinstance(mod, nn.Linear):
+                # print(mod.weight.grad.data.size())
+                # print(mod.weight.data.size())
+                grad_dict[name]=[mod.weight.grad.data.cpu().reshape(-1).numpy()]
+    else:
+        for name,mod in model.named_modules():
+            if isinstance(mod, nn.Conv2d) or isinstance(mod, nn.Linear):
+                grad_dict[name].append(mod.weight.grad.data.cpu().reshape( -1).numpy())
+    return grad_dict
+
+
+def caculate_zico(grad_dict):
+    allgrad_array = None
+    for i, modname in enumerate(grad_dict.keys()):
+        grad_dict[modname]= np.array(grad_dict[modname])
+    # nsr_mean_sum = 0
+    nsr_mean_sum_abs = 0
+    # nsr_mean_avg = 0
+    nsr_mean_avg_abs = 0
+    for j, modname in enumerate(grad_dict.keys()):
+        nsr_std = np.std(grad_dict[modname], axis=0)
+        nonzero_idx = np.nonzero(nsr_std)[0]
+        nsr_mean_abs = np.mean(np.abs(grad_dict[modname]), axis=0)
+        tmpsum = np.sum(nsr_mean_abs[nonzero_idx]/nsr_std[nonzero_idx])
+        if tmpsum==0:
+            pass
+        else:
+            nsr_mean_sum_abs += np.log(tmpsum)
+            nsr_mean_avg_abs += np.log(np.mean(nsr_mean_abs[nonzero_idx]/nsr_std[nonzero_idx]))
+    return nsr_mean_sum_abs
+
+
+def compute_zico(data, network, criterion=torch.nn.BCELoss(reduction='none'), train_mode=True):
+    grad_dict= {}
+    network.train()
+
+    network.cuda()
+    for i, batch in enumerate(data):
+        data,label = batch[0],batch[1]
+        data,label = data.cuda(), label.cuda()
+
+        logits = network(data)
+        loss = criterion(logits, label)
+        loss.backward()
+        grad_dict = getgrad(network, grad_dict, i)
+    res = caculate_zico(grad_dict)
+    return res
