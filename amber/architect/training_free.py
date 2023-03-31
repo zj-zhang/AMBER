@@ -222,7 +222,7 @@ def get_layer_metric_array(net, metric):#, mode):
 
 
 # https://github.com/SamsungLabs/zero-cost-nas/blob/main/foresight/pruners/measures/synflow.py
-def compute_synflow(data, net, criterion=torch.nn.BCELoss(reduction='none'), train_mode=True):
+def compute_synflow(data, net, criterion=torch.nn.BCELoss(reduction='mean'), train_mode=True):
 
     # device = inputs.device
 
@@ -320,7 +320,7 @@ def caculate_zico(grad_dict):
     return nsr_mean_sum_abs
 
 
-def compute_zico(data, network, criterion=torch.nn.BCELoss(reduction='none'), train_mode=True):
+def compute_zico(data, network, criterion=torch.nn.BCELoss(reduction='mean'), train_mode=True):
     grad_dict= {}
     network.train()
 
