@@ -260,7 +260,7 @@ def compute_synflow(data, net, criterion=torch.nn.BCELoss(reduction='mean'), tra
         return sum.item()
     
     net.zero_grad()
-    net.double()
+    # net.double()
     for i, batch in enumerate(data):
         # # Compute gradients with input of 1s 
         # input_dim = list(inputs[0,:].shape)
