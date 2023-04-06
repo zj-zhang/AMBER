@@ -147,7 +147,7 @@ class Linear_Region_Collector:
                 m.register_forward_hook(hook=self.hook_in_forward)
 
     def hook_in_forward(self, module, input, output):
-        if isinstance(input, tuple) and len(input[0].size()) == 3:
+        if isinstance(input, tuple) and len(input[0].size()) >= 3:
             self.interFeature.append(output.detach())  # for ReLU
 
     def forward_batch_sample(self):
