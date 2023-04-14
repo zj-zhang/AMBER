@@ -29,7 +29,7 @@ def get_ntk(data, network, criterion=torch.nn.BCELoss(reduction='none'), train_m
         # choose specific class for loss
         loss = criterion(logit, targets)
         for _idx in range(len(inputs)):
-            # logit[_idx:_idx+1].backward(torch.ones_like(logit[_idx:_idx+1]), retain_graph=True)
+            # logit[_idx:_idx+1].backward(torch.ones_like(logit[_idx:_idx+1]), retain_graph= not (_idx == len(inputs)-1 and i_b == len(data)-1))
             # use criterion to get gradient
             loss[_idx:_idx+1].backward(torch.ones_like(loss[_idx:_idx+1]), retain_graph= not (_idx == len(inputs)-1 and i_b == len(data)-1))
             grad = []
@@ -183,7 +183,6 @@ def curve_complexity(data, network, criterion=torch.nn.BCELoss(reduction='none')
     else:
         network.eval()
     network.zero_grad()
-    _idx = 0
     for batch_data in data:
         X, Y = batch_data
         output = network(X)
