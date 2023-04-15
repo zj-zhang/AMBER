@@ -24,6 +24,8 @@ def get_torch_actv_fn(fn_str):
         return torch.nn.Softmax(dim=-1)
     elif fn_str == "sigmoid":
         return torch.nn.Sigmoid()
+    elif fn_str == "linear":
+        return torch.nn.Sequential()
     else:
         raise Exception("cannot get torch activation function for: %s" % fn_str)
 
