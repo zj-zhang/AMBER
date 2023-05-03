@@ -56,6 +56,7 @@ def get_ntk(data, network, criterion=torch.nn.BCELoss(reduction='none'), train_m
     _cond = torch.div(eigenvalues[-1], eigenvalues[0])
     if torch.isnan(_cond):
         return -1, float(loss.mean().item) # bad gradients
+        # return -1, -1 # bad gradients
     else:
         return _cond.item(), float(loss.mean().item())
 
@@ -73,7 +74,7 @@ class LinearRegionCount(object):
     def update2D(self, activations):
         activations_list = activations
         if not isinstance(activations, list):
-            assert isinstance(activations, nn.Tensor)
+            assert isinstance(activations, torch.Tensor)
             activations_list = [activations]
         n_relu = len(activations_list)
         n_batch = activations_list[0].size()[0]
@@ -173,6 +174,7 @@ def curve_complexity(data, network, criterion=torch.nn.BCELoss(reduction='none')
     for _data in data:
         if isinstance(_data, list) or isinstance(_data, tuple):
             for _item in _data:
+                # _item = _item.float()
                 _item.requires_grad_(True)
         else:
             _data.requires_grad_(True)
@@ -208,7 +210,7 @@ def curve_complexity(data, network, criterion=torch.nn.BCELoss(reduction='none')
 
 
 # https://github.com/SamsungLabs/zero-cost-nas/blob/main/foresight/pruners/p_utils.py#L56
-def get_layer_metric_array(net, metric):#, mode): 
+def get_layer_metric_array(net, metric):#, mode):
     metric_array = []
 
     for layer in net.modules():
@@ -216,7 +218,7 @@ def get_layer_metric_array(net, metric):#, mode):
         #     continue
         if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
             metric_array.append(metric(layer))
-    
+
     return metric_array
 
 
@@ -257,22 +259,25 @@ def compute_synflow(data, net, criterion=torch.nn.BCELoss(reduction='mean'), tra
         for i in range(len(arr)):
             sum += torch.sum(arr[i])
         return sum.item()
-    
+
     net.zero_grad()
     # net.double()
     for i, batch in enumerate(data):
-        # # Compute gradients with input of 1s 
+        # # Compute gradients with input of 1s
         # input_dim = list(inputs[0,:].shape)
         # inputs = torch.ones([1] + input_dim).double().to(device)
         # output = net.forward(inputs)
-        # torch.sum(output).backward() 
+        # torch.sum(output).backward()
 
         data,label = batch[0],batch[1]
         data,label = data.cuda(), label.cuda()
 
         logits = net(data)
+        # use labels and loss
         loss = criterion(logits, label)
         loss.backward()
+        # use network outputs
+        # torch.sum(logits).backward()
 
     grads_abs = get_layer_metric_array(net, synflow)#, mode)
 
