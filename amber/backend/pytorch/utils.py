@@ -1,12 +1,11 @@
-from typing import Tuple, List, Union, Dict, Any, Optional
+from typing import Tuple, List, Union, Dict, Any, Optional, Mapping
 from argparse import Namespace
 import pandas as pd
 import numpy as np
 import os
 import torch
 import torch.nn.functional
-from pytorch_lightning.loggers.base import LightningLoggerBase, rank_zero_experiment
-from pytorch_lightning.utilities.logger import _add_prefix, _convert_params
+from pytorch_lightning.loggers.logger import Logger, rank_zero_experiment
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
 
@@ -44,7 +43,7 @@ class ExperimentWriter:
         self.metrics.append(metrics)
 
 
-class InMemoryLogger(LightningLoggerBase):
+class InMemoryLogger(Logger):
     """In-memory logger -- when you want to access your learning trajectory directly after learning. 
     Borrowing from @ttesileanu https://github.com/ttesileanu/cancer-net
 
@@ -205,3 +204,45 @@ class InMemoryLogger(LightningLoggerBase):
             return 0
 
         return max(existing_versions) + 1
+    
+
+def _add_prefix(
+    metrics: Mapping[str, Union[torch.Tensor, float]], prefix: str, separator: str
+) -> Mapping[str, Union[torch.Tensor, float]]:
+    """Insert prefix before each key in a dict, separated by the separator.
+    Code copied from PyTorch Lightning.
+    Args:
+        metrics: Dictionary with metric names as keys and measured quantities as values
+        prefix: Prefix to insert before each key
+        separator: Separates prefix and original key name
+    Returns:
+        Dictionary with prefix and separator inserted before each key
+
+    Borrowing from @ttesileanu https://github.com/ttesileanu/cancer-net
+    """
+    if prefix:
+        metrics = {f"{prefix}{separator}{k}": v for k, v in metrics.items()}
+
+    return metrics
+
+
+def _convert_params(
+    params: Optional[Union[Dict[str, Any], Namespace]]
+) -> Dict[str, Any]:
+    """Ensure parameters are a dict or convert to dict if necessary.
+    Code copied from PyTorch Lightning.
+    Args:
+        params: Target to be converted to a dictionary
+    Returns:
+        params as a dictionary
+
+    Borrowing from @ttesileanu https://github.com/ttesileanu/cancer-net
+    """
+    # in case converting from namespace
+    if isinstance(params, Namespace):
+        params = vars(params)
+
+    if params is None:
+        params = {}
+
+    return params

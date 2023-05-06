@@ -25,6 +25,11 @@ class Model(pl.LightningModule):
         self.valid_metrics = {}
         self.trainer = None
         self.task = None
+        self.outputs = {
+            'train': [],
+            'val': [],
+            'test': []
+        }
         self.save_hyperparameters()
 
     def compile(self, loss, optimizer, metrics=None, *args, **kwargs):
@@ -208,6 +213,7 @@ class Model(pl.LightningModule):
         except IndexError:
             cur_lr = np.nan
         self.log("lr", cur_lr, on_step=False, on_epoch=True, prog_bar=True)
+        self.outputs[kind].append(batch_dict)
         return batch_dict
 
     def training_step(self, batch, batch_idx) -> dict:
@@ -219,7 +225,7 @@ class Model(pl.LightningModule):
     def test_step(self, batch, batch_idx) -> dict:
         return self.step(batch, "test")
 
-    def epoch_end(self, outputs, kind: str):
+    def epoch_end(self, kind: str):
         """Generic function for summarizing and logging the loss and accuracy over an
         epoch.
         Creates log entries with name `f"{kind}_loss"` and `f"{kind}_accuracy"`.
@@ -228,29 +234,31 @@ class Model(pl.LightningModule):
         """
         with torch.no_grad():
             # calculate average loss and average accuracy
-            total_loss = sum(_["loss"] * _["total"] for _ in outputs)
-            total = sum(_["total"] for _ in outputs)
+            total_loss = sum(_["loss"] * _["total"] for _ in self.outputs[kind])
+            total = sum(_["total"] for _ in self.outputs[kind])
             avg_loss = total_loss / total
         # log
         self.log(f"{kind}_loss", avg_loss, prog_bar=True)
+        # clear memory
+        self.outputs[kind].clear()
 
-    def training_epoch_end(self, outputs):
-        self.epoch_end(outputs, "train")
+    def on_training_epoch_end(self):
+        self.epoch_end("train")
         self.losses.reset()
         with torch.no_grad():
             for metric, name in zip(self.train_metrics, self._metric_names):
                 self.log(f"train_{name}", metric.compute(), prog_bar=True)
                 metric.reset()
 
-    def validation_epoch_end(self, outputs):
-        self.epoch_end(outputs, "val")
+    def on_validation_epoch_end(self):
+        self.epoch_end("val")
         with torch.no_grad():
             for metric, name in zip(self.valid_metrics, self._metric_names):
                 self.log(f"val_{name}", metric.compute(), prog_bar=True)
                 metric.reset()
 
-    def test_epoch_end(self, outputs):
-        self.epoch_end(outputs, "test")
+    def on_test_epoch_end(self):
+        self.epoch_end("test")
         with torch.no_grad():
             for metric, name in zip(self.valid_metrics, self._metric_names):
                 self.log(f"test_{name}", metric.compute(), prog_bar=True)
