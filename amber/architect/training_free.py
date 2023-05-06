@@ -55,7 +55,7 @@ def get_ntk(data, network, criterion=torch.nn.BCELoss(reduction='none'), train_m
         eigenvalues, _ = torch.linalg.eigh(ntk + ntk.mean().item() * torch.eye(ntk.shape[0]).cuda() * 1e-4, UPLO='L')  # ascending
     _cond = torch.div(eigenvalues[-1], eigenvalues[0])
     if torch.isnan(_cond):
-        return -1, float(loss.mean().item) # bad gradients
+        return -1, float(loss.mean().item()) # bad gradients
         # return -1, -1 # bad gradients
     else:
         return _cond.item(), float(loss.mean().item())
