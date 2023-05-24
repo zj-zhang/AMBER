@@ -15,8 +15,8 @@ matplotlib.use('Agg')
 
 def reset_style():
     from matplotlib import rcParams
-    rcParams['font.family'] = 'serif'
-    rcParams['font.serif'] = ['Times New Roman']
+    #rcParams['font.family'] = 'serif'
+    #rcParams['font.serif'] = ['Times New Roman']
     rcParams['axes.titlesize'] = 14
     rcParams['axes.labelsize'] = 14
     rcParams['lines.linewidth'] = 1.5
