@@ -149,7 +149,7 @@ def less(x,y) -> Union[float, np.ndarray]: pass # type:ignore
 def greater(x,y) -> Union[float, np.ndarray]: pass # type:ignore
     
 
-def equal(x,y) -> np.bool: pass # type:ignore
+def equal(x,y) -> bool: pass # type:ignore
     
 
 def pow(x, y) -> Union[float, np.ndarray]: pass # type:ignore
