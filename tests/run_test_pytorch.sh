@@ -1,4 +1,4 @@
-export AMBBACKEND=tensorflow_1
+export AMBBACKEND=pytorch
 coverage erase
 find .. -name "*.pyc" -exec rm {} \;
 coverage run -m pytest -W ignore --ignore modelers/modeler_tf1/ --ignore modelers/modeler_tf2/

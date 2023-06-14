@@ -61,7 +61,7 @@ def plot_controller_performance(controller_hist_file, metrics_dict, save_fn=None
     """
     # plt.clf()
     reset_plot()
-    plt.grid(b=True, linestyle='--', linewidth=0.8)
+    plt.grid(True, linestyle='--', linewidth=0.8)
     df = pd.read_csv(controller_hist_file, header=None)
     #assert df.shape[0] > N_sma
     if df.shape[0] <= N_sma:
