@@ -1,6 +1,8 @@
 """amber_ops are universal amber operators; must be backend-agnostic
 """
 
+from typing import Optional, List
+
 
 def get_layer_shortname(layer):
     """Get the short name for a computational operation of a layer, useful in converting a Layer object to a string as
@@ -50,6 +52,8 @@ def get_layer_shortname(layer):
 
     else:
         sn = str(layer)
+    if layer.has_addons is True:
+        sn += ",".join([str(x) for x in layer.addons])
     return sn
 
 
@@ -86,7 +90,7 @@ class Operation(object):
 
     """
 
-    def __init__(self, Layer_type, **kwargs):
+    def __init__(self, Layer_type: str, addons: Optional[List]=None, **kwargs):
         Layer_type = Layer_type.lower()
         # assert Layer_type in [
         #    'conv1d', 'maxpool1d', 'avgpool1d',
@@ -100,10 +104,21 @@ class Operation(object):
         # ]
 
         self.Layer_type = Layer_type
+        self.addons = addons if addons is not None else []
         self.Layer_attributes = kwargs
+    
+    @property
+    def has_addons(self):
+        return len(self.addons) > 0
 
     def __str__(self):
-        return "{}:{}".format(self.Layer_type, self.Layer_attributes)
+        if len(self.addons) > 0:
+            return "{}:{}:{}".format(self.Layer_type, self.Layer_attributes, self.addons)
+        else:
+            return "{}:{}".format(self.Layer_type, self.Layer_attributes)
+
+    def __repr__(self):
+        return str(self)
 
     def __eq__(self, other):
         return self.Layer_type == other.Layer_type and self.Layer_attributes == other.Layer_attributes
@@ -112,7 +127,6 @@ class Operation(object):
         unroll_attr = ((x, self.Layer_attributes[x])
                        for x in self.Layer_attributes)
         return hash((self.Layer_type, unroll_attr))
-
 
 
 class ComputationNode:
@@ -168,3 +182,33 @@ class ComputationNode:
         self.operation.Layer_attributes['name'] = self.node_name
         self.operation_layer = F.get_layer(x=self.merge_layer, op=self.operation)
         self.is_built = True
+
+
+class AddOn:
+    """`amber.backend.AddOn` provides customizable add-on features to `amber.backend.Operation`
+    """
+    def __init__(self, AddOnType, **kwargs):
+        self.AddOnType = AddOnType
+        self.AddOn_attributes = kwargs
+
+        assert self.AddOnType in [
+            'L1WeightDecay', 'L2WeightDecay',
+            'BatchNorm',
+            # TODO: implement in the future
+            # dropout, weight_norm
+        ]
+    
+    def __str__(self):
+        return "{}:{}".format(self.AddOnType, self.AddOn_attributes)
+
+    def __repr__(self):
+        return str(self)
+
+    def __eq__(self, other):
+        return self.AddOnType == other.AddOnType and self.AddOn_attributes == other.AddOn_attributes
+
+    def __hash__(self):
+        unroll_attr = ((x, self.AddOn_attributes[x])
+                       for x in self.AddOn_attributes)
+        return hash((self.AddOnType, unroll_attr))
+

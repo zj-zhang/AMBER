@@ -31,9 +31,8 @@ class SequentialModelBuilder(BaseModelBuilder):
     def build(self, model_states):
         layers = []
         curr_shape = self.input_node.Layer_attributes['shape']
-        x = torch.empty(*curr_shape, device='cpu')
-        # add a batch dim
-        x = torch.unsqueeze(x, dim=0)
+        # add a batch dim with 2 samples for batch norm layers
+        x = torch.empty([2] + list(curr_shape), device='cpu')
         # permute x if not a vector to match channel_last data format
         if len(curr_shape) > 1:
             dims = [0, len(curr_shape)] + np.arange(1, len(curr_shape)).tolist()

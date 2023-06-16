@@ -1,7 +1,8 @@
 import torch
 import numpy as np
 from ..amber_ops import Operation
-
+from .addons import get_addons
+from typing import Tuple, List, Optional, Union, Callable
 
 class LambdaLayer(torch.nn.Module):
     def __init__(self, lambd):
@@ -81,8 +82,13 @@ def get_layer(x=None, op=None, custom_objects=None, with_bn=False):
     elif op.Layer_type == 'dense':
         actv_fn = op.Layer_attributes.get('activation', 'linear')
         curr_shape = np.array(x.shape) if isinstance(x, torch.Tensor) else x.out_features
-        assert len(curr_shape)==1, ValueError("dense layer must have 1-d prev layers")
-        _list = [torch.nn.Linear(in_features=curr_shape[0], out_features=op.Layer_attributes['units'])]
+        assert len(curr_shape)==2, ValueError("dense layer must have 1-d prev layers, expects (N, D); got {}".format(curr_shape))
+        _list = [torch.nn.Linear(in_features=curr_shape[-1], out_features=op.Layer_attributes['units'])]
+        # if has AddOns; currently only consider L1/L2 reg
+        if op.has_addons is True:
+            for addon in op.addons:
+                _list[0] = get_addons(addon=addon, base_layer = _list[0])
+        # TODO: generazlize `with_bn` to AddOns
         if with_bn:   _list.append(get_layer(x=x, op=Operation("batchnorm")))
         _list.append(get_layer(op=Operation("activation", activation=actv_fn)))
         layer = torch.nn.Sequential(* _list)
@@ -99,6 +105,11 @@ def get_layer(x=None, op=None, custom_objects=None, with_bn=False):
                     padding=op.Layer_attributes.get('padding', 0),
                     dilation=op.Layer_attributes.get('dilation_rate', 1),
                 )]
+        # if has AddOns; currently only consider L1/L2 reg
+        if op.has_addons is True:
+            for addon in op.addons:
+                _list[0] = get_addons(addon=addon, base_layer = _list[0])
+        # TODO: generazlize `with_bn` to AddOns                
         if with_bn:   _list.append(get_layer(x=x, op=Operation("batchnorm")))
         _list.append(get_layer(op=Operation("activation", activation=actv_fn)))
         layer = torch.nn.Sequential(* _list)

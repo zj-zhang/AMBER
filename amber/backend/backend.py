@@ -44,7 +44,10 @@ def get_layer(x, op) -> Callable: pass # type: ignore
     
 
 def plot_model(model, to_file): pass # type:ignore
-    
+
+# addons 
+def get_addon(s): pass # type:ignore   
+
 
 # tensor
 def data_type_dict() -> Dict: pass # type: ignore
