@@ -209,8 +209,7 @@ class Residual1DCnnBuilder(BaseModelBuilder):
         return model
 
 
-    @staticmethod
-    def res_layer(layer, width_scale_factor, in_channels, add_conv1_under_pool=True):
+    def res_layer(self, layer, width_scale_factor, in_channels, add_conv1_under_pool=True):
         if layer.Layer_type == 'conv1d':
             activation = layer.Layer_attributes['activation']
             filters = width_scale_factor * layer.Layer_attributes['filters']
@@ -226,6 +225,7 @@ class Residual1DCnnBuilder(BaseModelBuilder):
                 ),
                 torch.nn.BatchNorm1d(filters),
                 get_torch_actv_fn(activation),
+                torch.nn.Dropout(self.dropout_rate),
             )
         elif layer.Layer_type in ('maxpool1d', 'avgpool1d'):
             pool_size = layer.Layer_attributes["pool_size"]
@@ -252,6 +252,7 @@ class Residual1DCnnBuilder(BaseModelBuilder):
                         padding=int((pool_size - 1) / 2),
                     )
                 )
+                x.append(torch.nn.Dropout(self.dropout_rate))
             elif layer.Layer_type == "maxpool1d":
                 x.append(
                     torch.nn.MaxPool1d(
@@ -260,6 +261,9 @@ class Residual1DCnnBuilder(BaseModelBuilder):
                         padding=int((pool_size - 1) / 2),
                     )
                 )
+                x.append(torch.nn.Dropout(self.dropout_rate))
+            else:
+                raise ValueError("Unknown pool {}".format(layer.Layer_type))
             conv_op = torch.nn.Sequential(*x)
         elif layer.Layer_type == 'identity':
             conv_op = torch.nn.Sequential()
