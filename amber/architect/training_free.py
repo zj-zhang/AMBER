@@ -173,9 +173,10 @@ def curve_complexity(data, network, criterion=torch.nn.BCELoss(reduction='none')
     assert isinstance(data, list) # multiple batch of samples
     for _data in data:
         if isinstance(_data, list) or isinstance(_data, tuple):
-            for _item in _data:
-                # _item = _item.float()
-                _item.requires_grad_(True)
+            # for _item in _data:
+            #     # _item = _item.float()
+            #     _item.requires_grad_(True)
+            _data[0].requires_grad_(True)
         else:
             _data.requires_grad_(True)
     LE = 0
