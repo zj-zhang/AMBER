@@ -217,7 +217,7 @@ def get_layer_metric_array(net, metric):#, mode):
     for layer in net.modules():
         # if mode=='channel' and hasattr(layer,'dont_ch_prune'):
         #     continue
-        if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
+        if isinstance(layer, nn.Conv1d) or isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Conv3d) or isinstance(layer, nn.Linear):
             metric_array.append(metric(layer))
 
     return metric_array
@@ -293,14 +293,16 @@ def compute_synflow(data, net, criterion=torch.nn.BCELoss(reduction='mean'), tra
 def getgrad(model:torch.nn.Module, grad_dict:dict, step_iter=0):
     if step_iter==0:
         for name,mod in model.named_modules():
-            if isinstance(mod, nn.Conv2d) or isinstance(mod, nn.Linear):
+            if isinstance(mod, nn.Conv1d) or isinstance(mod, nn.Conv2d) or isinstance(mod, nn.Conv3d) or isinstance(mod, nn.Linear):
                 # print(mod.weight.grad.data.size())
                 # print(mod.weight.data.size())
-                grad_dict[name]=[mod.weight.grad.data.cpu().reshape(-1).numpy()]
+                if mod.weight.grad is not None:
+                    grad_dict[name]=[mod.weight.grad.data.cpu().reshape(-1).numpy()]
     else:
         for name,mod in model.named_modules():
-            if isinstance(mod, nn.Conv2d) or isinstance(mod, nn.Linear):
-                grad_dict[name].append(mod.weight.grad.data.cpu().reshape( -1).numpy())
+            if isinstance(mod, nn.Conv1d) or isinstance(mod, nn.Conv2d) or isinstance(mod, nn.Conv3d) or isinstance(mod, nn.Linear):
+                if mod.weight.grad is not None:
+                    grad_dict[name].append(mod.weight.grad.data.cpu().reshape( -1).numpy())
     return grad_dict
 
 
