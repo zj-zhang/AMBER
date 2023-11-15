@@ -45,8 +45,8 @@ class Model(pl.LightningModule):
             self.train_metrics = self.valid_metrics = {}
             self._metric_names = []
         else:
-            self.train_metrics = [get_metric(m)(task=self.task, average='macro') for m in metrics]
-            self.valid_metrics = [get_metric(m)(task=self.task, average='macro') for m in metrics]
+            self.train_metrics = [get_metric(m)(task=self.task, average='macro', num_classes=4) for m in metrics]
+            self.valid_metrics = [get_metric(m)(task=self.task, average='macro', num_classes=4) for m in metrics]
             self._metric_names = [str(m) for m in metrics]
             #for name, metric in zip(self._metric_names, self.metrics):
             #    setattr(self, "__"+str(name), metric)
@@ -90,15 +90,29 @@ class Model(pl.LightningModule):
                 validation_data = self._make_dataloader(x=validation_data[0], y=validation_data[1], batch_size=batch_size)
             else:
                 validation_data = self._make_dataloader(x=validation_data, batch_size=batch_size)
-        self.trainer = pl.Trainer(
-            accelerator="auto",
-            max_epochs=epochs,
-            callbacks=callbacks,
-            enable_progress_bar=verbose,
-            logger=logger,
-            enable_model_summary=False,
-            # deterministic=True,
-        )
+        # TODO: this is temporary for ECG with higher validation frequency
+        if self.task == 'binary':
+            self.trainer = pl.Trainer(
+                accelerator="auto",
+                max_epochs=epochs,
+                callbacks=callbacks,
+                enable_progress_bar=verbose,
+                logger=logger,
+                enable_model_summary=False,
+                # deterministic=True,
+            )
+        elif self.task == 'multiclass':
+            self.trainer = pl.Trainer(
+                accelerator="auto",
+                max_epochs=epochs,
+                callbacks=callbacks,
+                enable_progress_bar=verbose,
+                logger=logger,
+                enable_model_summary=False,
+                log_every_n_steps=100, 
+                val_check_interval=100,
+                # deterministic=True,
+            )
         # just too many UserWarnings from lightning
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
